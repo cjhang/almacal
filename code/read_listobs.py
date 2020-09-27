@@ -27,8 +27,10 @@ def date_format(date):
     return date_new
     
 
-def read_obstime(all_lines):
+def read_obstime(listobs):
     # read the obstime information
+    with open(listobs) as f:
+        all_lines = f.readlines() 
     n_start = 0
     p_select = re.compile('Date\s+Timerange')
 
@@ -117,9 +119,9 @@ if __name__ == '__main__':
                 print('Error in match the band from', listobs)
                 continue
             if band in obj_exptime.keys():
-                with open(listobs) as f:
-                    all_lines = f.readlines() 
-                obstime = read_obstime(all_lines)
+                # with open(listobs) as f:
+                    # all_lines = f.readlines() 
+                obstime = read_obstime(listobs)
                 # print('obstime:', obstime)
                 
                 #if obstime['startdate'] > '01-07-2015':
