@@ -24,31 +24,28 @@ def read_spw(vis):
 
     return spw_specrange
 
-def spw_stat(obsfolder, plot=False):
-    p_obj = re.compile('J\d+[+-]\d')
+def spw_stat(objfolder, plot=False):
     p_obs = re.compile('uid___')
 
-    base_dir = obsfolder
+    base_dir = objfolder
 
     spw_list = {'B3':[], 'B4':[], 'B5':[], 'B6':[],
             'B7':[], 'B8':[], 'B9':[], 'B10':[]}
 
-    for obj in os.listdir(base_dir):
-        if p_obj.match(obj):
-            for obs in os.listdir(base_dir +'/'+ obj):
-                if p_obs.match(obs):
-                    obs_filename = base_dir +'/'+ obj+'/'+obs
-                    try:
-                        band_match = re.compile('_(?P<band>B\d{1,2})')
-                        if band_match.search(obs):
-                            band = band_match.search(obs).groupdict()['band']
-                            # print("Band: ", band)
-                        else:
-                            print("Error in band match.")
-                        spw_specrange = read_spw(obs_filename)
-                        spw_list[band].append(spw_specrange.values())
-                    except:
-                        print("Error: in", obs_filename)
+    for obs in os.listdir(base_dir +'/'):
+        if p_obs.match(obs):
+            obs_filename = base_dir +'/'+ '/'+obs
+            try:
+                band_match = re.compile('_(?P<band>B\d{1,2})')
+                if band_match.search(obs):
+                    band = band_match.search(obs).groupdict()['band']
+                    # print("Band: ", band)
+                else:
+                    print("Error in band match.")
+                spw_specrange = read_spw(obs_filename)
+                spw_list[band].append(spw_specrange.values())
+            except:
+                print("Error: in", obs_filename)
     if plot:
         band_in_plot = ['B5', 'B6', 'B7', 'B8']
         fig = plt.figure(figsize=(12,5))
