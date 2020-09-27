@@ -85,7 +85,7 @@ def spw_stat(objfolder, plot=False):
                                    (h, dh), facecolors='salmon', edgecolors='none', \
                                    alpha=0.5)
                     ax.hlines(y=h, xmin=band_list[band][0], xmax=band_list[band][1], 
-                            color='r', linestyle='-', alpha=0.1, linewidth=0.2)
+                            color='r', linestyle='-', alpha=0.1, linewidth=dh)
                 h = h + dh
 
         plt.show()
