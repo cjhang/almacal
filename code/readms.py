@@ -50,8 +50,8 @@ def spw_stat(obsfolder, plot=False):
                     except:
                         print("Error: in", obs_filename)
     if plot:
-        band_in_plot = ['B6', 'B7']
-        fig = plt.figure()
+        band_in_plot = ['B5', 'B6', 'B7', 'B8']
+        fig = plt.figure(figsize=(12,5))
         ax = fig.add_subplot(111)
 
         #ALMA band information, in GHz
@@ -67,11 +67,14 @@ def spw_stat(obsfolder, plot=False):
                 band_max = np.max(band_list[band])
         
             ax.broken_barh([(band_list[band][0], np.diff(band_list[band])[0]),], 
-                           (0, 1), facecolor='lightblue', edgecolor='lightblue', \
-                           linewidth=0, alpha=0.5)
+                           (0, 1), facecolor='lightblue', edgecolor='grey', \
+                           linewidth=1, alpha=0.5)
+            ax.text(np.mean(band_list[band]), 1.1, "Band"+band[1:], 
+                    horizontalalignment='center', verticalalignment='center')
         ax.set_xlim(band_min-10, band_max+10)
         ax.set_ylim(-0.2, 1.2)
-        ax.tick_params(axis='both', labelcolor='w', top='off', bottom='off', left='off', right='off', labelsize=2)
+        ax.set_xlabel('Frequency [GHz]')
+        ax.tick_params(axis='y', labelcolor='w', top='off', bottom='on', left='off', right='off', labelsize=2)
 
         for band in band_in_plot:
             n_obs = len(spw_list[band])
@@ -79,15 +82,13 @@ def spw_stat(obsfolder, plot=False):
                 continue
             h = 0
             dh = 1./n_obs
-            print("number of obs:", n_obs)
-            print('dh = ', dh)
             for obs in spw_list[band]:
-                print(obs)
                 for spw in obs:
-                    print(spw)
                     ax.broken_barh([(spw[0], np.diff(spw)[0]),], 
                                    (h, dh), facecolors='salmon', edgecolors='none', \
                                    alpha=0.5)
+                    ax.hlines(y=h, xmin=band_list[band][0], xmax=band_list[band][1], 
+                            color='r', linestyle='-', alpha=0.1, linewidth=0.2)
                 h = h + dh
 
         plt.show()
