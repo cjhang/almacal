@@ -50,6 +50,7 @@ def spw_stat(obsfolder, plot=False):
                     except:
                         print("Error: in", obs_filename)
     if plot:
+        band_in_plot = ['B6', 'B7']
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
@@ -59,19 +60,23 @@ def spw_stat(obsfolder, plot=False):
 
         band_min = 1000
         band_max = 10
-        for band in ['B6', 'B7']:
+        for band in band_in_plot:
             if band_min > band_list[band][0]:
                 band_min = np.min(band_list[band])
             if band_max < band_list[band][1]:
                 band_max = np.max(band_list[band])
         
             ax.broken_barh([(band_list[band][0], np.diff(band_list[band])[0]),], 
-                           (0, 1), facecolors='grey', edgecolors=None)
+                           (0, 1), facecolor='lightblue', edgecolor='lightblue', \
+                           linewidth=0, alpha=0.5)
         ax.set_xlim(band_min-10, band_max+10)
         ax.set_ylim(-0.2, 1.2)
+        ax.tick_params(axis='both', labelcolor='w', top='off', bottom='off', left='off', right='off', labelsize=2)
 
-        for band in ['B6', 'B7']:
+        for band in band_in_plot:
             n_obs = len(spw_list[band])
+            if n_obs < 1:
+                continue
             h = 0
             dh = 1./n_obs
             print("number of obs:", n_obs)
@@ -81,7 +86,8 @@ def spw_stat(obsfolder, plot=False):
                 for spw in obs:
                     print(spw)
                     ax.broken_barh([(spw[0], np.diff(spw)[0]),], 
-                                   (h, dh), facecolors='red', edgecolors=None)
+                                   (h, dh), facecolors='salmon', edgecolors='none', \
+                                   alpha=0.5)
                 h = h + dh
 
         plt.show()
