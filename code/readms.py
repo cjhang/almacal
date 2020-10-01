@@ -4,6 +4,7 @@ import os
 import re
 import numpy as np
 import matplotlib.pyplot as plt 
+import analysisUtils as au
 
 def read_spw(vis):
     """
@@ -24,13 +25,20 @@ def read_spw(vis):
 
     return spw_specrange
 
-def spw_stat(objfolder, plot=False):
-    p_obs = re.compile('uid___')
+def spw_stat(objfolder, plot=False, bands=['B5', 'B6', 'B7', 'B8']):
+    # make the statistics about one calibrator
 
     base_dir = objfolder
 
-    spw_list = {'B3':[], 'B4':[], 'B5':[], 'B6':[],
-            'B7':[], 'B8':[], 'B9':[], 'B10':[]}
+    p_obs = re.compile('uid___')
+    spw_list = {'B3':{'time':[], 'freq':[]}, 
+                'B4':{'time':[], 'freq':[]}, 
+                'B5':{'time':[], 'freq':[]}, 
+                'B6':{'time':[], 'freq':[]}, 
+                'B7':{'time':[], 'freq':[]}, 
+                'B8':{'time':[], 'freq':[]}, 
+                'B9':{'time':[], 'freq':[]}, 
+                'B10':{'time':[], 'freq':[]},} 
 
     for obs in os.listdir(base_dir +'/'):
         if p_obs.match(obs):
@@ -42,12 +50,18 @@ def spw_stat(objfolder, plot=False):
                     # print("Band: ", band)
                 else:
                     print("Error in band match.")
+                time_on_source = au.timeOnSource(obs_filename, verbose=False, debug=False)
+                time_minutes = time_on_source[0]['minutes_on_source']
+                if time_minutes < 1e-6:
+                    print('No valid on source time!')
+                    continue
+                spw_list[band]['time'].append(time_minutes)
                 spw_specrange = read_spw(obs_filename)
-                spw_list[band].append(spw_specrange.values())
+                spw_list[band]['freq'].append(spw_specrange.values())
             except:
                 print("Error: in", obs_filename)
     if plot:
-        band_in_plot = ['B5', 'B6', 'B7', 'B8']
+        band_in_plot = bands
         fig = plt.figure(figsize=(12,5))
         ax = fig.add_subplot(111)
 
@@ -71,21 +85,26 @@ def spw_stat(objfolder, plot=False):
         ax.set_xlim(band_min-10, band_max+10)
         ax.set_ylim(-0.2, 1.2)
         ax.set_xlabel('Frequency [GHz]')
+        ax.set_ylabel(r'$t_{\rm on\,source}$ fraction')
         ax.tick_params(axis='y', labelcolor='w', top='off', bottom='on', left='off', right='off', labelsize=2)
 
         for band in band_in_plot:
-            n_obs = len(spw_list[band])
+            h = 0
+            band_total_time = np.sum(spw_list[band]['time'])
+            ax.text(np.mean(band_list[band]), -0.1, 
+                    r"$t_{{\rm total}}$ = {:.2f} min".format(band_total_time), \
+                    horizontalalignment='center', verticalalignment='center')
+            n_obs = len(spw_list[band]['time'])
             if n_obs < 1:
                 continue
-            h = 0
-            dh = 1./n_obs
-            for obs in spw_list[band]:
-                for spw in obs:
+            for i in range(n_obs):
+                dh = spw_list[band]['time'][i]/band_total_time
+                for spw in spw_list[band]['freq'][i]:
                     ax.broken_barh([(spw[0], np.diff(spw)[0]),], 
                                    (h, dh), facecolors='salmon', edgecolors='none', \
                                    alpha=0.5)
                     ax.hlines(y=h, xmin=band_list[band][0], xmax=band_list[band][1], 
-                            color='r', linestyle='-', alpha=0.1, linewidth=dh)
+                            color='r', linestyle='-', alpha=0.1, linewidth=1/n_obs)
                 h = h + dh
 
         plt.show()
