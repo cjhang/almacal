@@ -25,10 +25,12 @@ def read_spw(vis):
 
     return spw_specrange
 
-def spw_stat(objfolder, plot=False, bands=['B5', 'B6', 'B7', 'B8']):
+def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
+             figname=None, showfig=False, filename=None, savedata=False):
     # make the statistics about one calibrator
 
     base_dir = objfolder
+    obj = os.path.basename(objfolder)
 
     p_obs = re.compile('uid___')
     spw_list = {'B3':{'time':[], 'freq':[]}, 
@@ -57,17 +59,19 @@ def spw_stat(objfolder, plot=False, bands=['B5', 'B6', 'B7', 'B8']):
                     continue
                 spw_list[band]['time'].append(time_minutes)
                 spw_specrange = read_spw(obs_filename)
-                spw_list[band]['freq'].append(spw_specrange.values())
+                spw_list[band]['freq'].append(list(spw_specrange.values()))
             except:
                 print("Error: in", obs_filename)
     if plot:
-        band_in_plot = bands
+        band_in_plot = plotbands
         fig = plt.figure(figsize=(12,5))
+        fig.suptitle(os.path.basename(objfolder))
         ax = fig.add_subplot(111)
 
         #ALMA band information, in GHz
-        band_list = {'B3':[84, 116], 'B4':[125, 163], 'B5':[163, 211], 'B6':[211, 275],
-                'B7':[275, 373], 'B8':[385, 500], 'B9':[602, 720], 'B10':[787, 950]}
+        band_list = {'B3':[84, 116], 'B4':[125, 163], 'B5':[163, 211], 
+                'B6':[211, 275], 'B7':[275, 373], 'B8':[385, 500], \
+                'B9':[602, 720], 'B10':[787, 950]}
 
         band_min = 1000
         band_max = 10
@@ -106,11 +110,40 @@ def spw_stat(objfolder, plot=False, bands=['B5', 'B6', 'B7', 'B8']):
                     ax.hlines(y=h, xmin=band_list[band][0], xmax=band_list[band][1], 
                             color='r', linestyle='-', alpha=0.1, linewidth=1/n_obs)
                 h = h + dh
+        if figname:
+            fig.savefig(figname, bbox_inches='tight')
+        if showfig:
+            plt.show()
 
-        plt.show()
+    if savedata: #save the spw_list as fits file
+        table_list = []
+        from astropy.io import fits
+        from astropy.table import Table
+        hdr = fits.Header()
+        hdr['OBJ'] = obj
+        hdr['COMMENT'] = "SPW and exposure time information"
+        table_list.append(fits.PrimaryHDU(header=hdr))
+        for band in spw_list.keys(): 
+            hdr_band = fits.Header()
+            hdr_band['BAND'] = band
+            hdr_band['TOTAL'] = np.sum(spw_list[band]['time'])
+            column_list = []
+            spw_array = np.array(list(spw_list[band]['freq']))
+            try:
+                z, y, x = spw_array.shape
+            except:
+                table_list.append(fits.BinTableHDU(name=band, data=None, header=hdr_band))
+                continue
+            time_array = np.array(spw_list[band]['time'])
+            time_array2 = np.repeat(time_array[:, np.newaxis], y, axis=1)
+            time_freq_table = np.insert(spw_array, 0, time_array2, axis=2)
+        
+            table_list.append(fits.BinTableHDU(name=band, 
+                data=Table(time_freq_table), header=hdr_band))
 
-
-
+        hdus = fits.HDUList(table_list)
+        if filename:
+            hdus.writeto(filename, overwrite=True)
 
 
     return spw_list
