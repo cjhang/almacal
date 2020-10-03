@@ -112,10 +112,11 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
                     ax.hlines(y=h, xmin=band_list[band][0], xmax=band_list[band][1], 
                             color='r', linestyle='-', alpha=0.1, linewidth=1/n_obs)
                 h = h + dh
-        if figname:
-            fig.savefig(figname, bbox_inches='tight')
         if showfig:
             plt.show()
+        if figname:
+            fig.savefig(figname, bbox_inches='tight')
+            plt.close(fig)
 
     if savedata: #save the spw_list as fits file
         table_list = []
