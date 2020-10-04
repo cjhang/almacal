@@ -1,0 +1,134 @@
+%                                                                 aa.dem
+% AA vers. 9.1, LaTeX class for Astronomy & Astrophysics
+% demonstration file
+%                                                       (c) EDP Sciences
+%-----------------------------------------------------------------------
+%
+%\documentclass[referee]{aa} % for a referee version
+%\documentclass[onecolumn]{aa} % for a paper on 1 column  
+%\documentclass[longauth]{aa} % for the long lists of affiliations 
+%\documentclass[letter]{aa} % for the letters 
+%\documentclass[bibyear]{aa} % if the references are not structured 
+%                              according to the author-year natbib style
+
+%
+\documentclass{ref/aa}  
+
+%
+\usepackage{graphicx}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{txfonts}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\usepackage[options]{hyperref}
+% To add links in your PDF file, use the package "hyperref"
+% with options according to your LaTeX or PDFLaTeX drivers.
+%
+\begin{document} 
+
+
+   \title{ALMACAL: number counts for faint sub-millimeter galaxies}
+
+   \subtitle{down to several micro jansky}
+
+   \author{Jianhang Chen
+          \inst{1}
+          \and
+          R. Ivison \inst{1}\fnmsep\thanks{Just to show the usage
+          of the elements in the author field}
+          }
+
+   \institute{European Southern Observatory (ESO), Karl-Schwarzschild-Strasse 2\\
+              \email{jianhang.chen@eso.org}
+         \and
+             Another institude, ...\\
+             \email{user@email.com}
+             \thanks{The university of heaven temporarily does not
+                     accept e-mails}
+             }
+
+   \date{Received **, ****; accepted **, ****}
+
+% \abstract{}{}{}{}{} 
+% 5 {} token are mandatory
+ 
+  \abstract
+  % context heading (optional)
+  % {} leave it empty if necessary  
+   {Context of the project}
+  % aims heading (mandatory)
+   {Aims of this project.}
+  % methods heading (mandatory)
+   {Methods}
+  % results heading (mandatory)
+   {Main results}
+  % conclusions heading (optional), leave it empty if necessary 
+   {}
+
+   \keywords{SMG --
+              galaxy evolution   --
+              cosmic star formation
+               }
+
+   \maketitle
+%
+%-------------------------------------------------------------------
+
+\section{Introduction}
+
+the SMG has the advantage of negative-K correction, which make their flux density almost constant along a large redshift space (z=1-10)
+
+The Lyman break galaxy have the advantage of redshit, but they can be observed only if it is bright enough, which makes them biased to the most brightest galaxy population.
+
+
+%--------------------------------------------------------------------
+\section{AMLACAL}
+
+%-------------------------------------- Two column figure (place early!)
+   \begin{figure*}
+   \centering
+   %%%\includegraphics{empty.eps}
+   %%%\includegraphics{empty.eps}
+   %%%\includegraphics{empty.eps}
+   \caption{Large picture}%
+    \end{figure*}
+%
+
+\section{Conclusions}
+
+   \begin{enumerate}
+      \item conlusion1
+   \end{enumerate}
+
+\begin{acknowledgements}
+      Part of this work was supported by the German
+      \emph{Deut\-sche For\-schungs\-ge\-mein\-schaft, DFG\/} project
+      number Ts~17/2--1.
+\end{acknowledgements}
+
+
+\bibliographystyle{aa} % style aa.bst
+\bibliography{almacal} % your references Yourfile.bib
+
+
+%
+\end{document}
+
+%
+
+%-------------------------------------------------------------
+%                   For appendices and landscape, large table:
+%                    in the preamble, use: \usepackage{lscape}
+%-------------------------------------------------------------
+
+\begin{appendix} %First appendix
+%
+\longtab[1]{
+\begin{landscape}
+\begin{longtable}{lrcrrrrrrrrl}
+...
+\end{longtable}
+\end{landscape}
+}% End longtab
+\end{appendix}
+
+%%%% End of aa.dem
