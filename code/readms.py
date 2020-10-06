@@ -138,7 +138,10 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
                 for spw_range in obs:
                     obs.append(obs_time)
 
-            time_freq_table = np.concatenate(spw_array)
+            if len(spw_array) > 0:
+                time_freq_table = np.concatenate(spw_array)
+            else:
+                time_freq_table = None
         
             table_list.append(fits.BinTableHDU(name=band, 
                 data=Table(time_freq_table), header=hdr_band))
