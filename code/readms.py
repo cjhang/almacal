@@ -130,16 +130,15 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
             hdr_band = fits.Header()
             hdr_band['BAND'] = band
             hdr_band['TOTAL'] = np.sum(spw_list[band]['time'])
-            column_list = []
-            spw_array = np.array(list(spw_list[band]['freq']))
-            try:
-                z, y, x = spw_array.shape
-            except:
-                table_list.append(fits.BinTableHDU(name=band, data=None, header=hdr_band))
-                continue
-            time_array = np.array(spw_list[band]['time'])
-            time_array2 = np.repeat(time_array[:, np.newaxis], y, axis=1)
-            time_freq_table = np.insert(spw_array, 0, time_array2, axis=2)
+            spw_array = spw_list[band]['freq']
+            time_array = spw_list[band]['time']
+
+            for i,obs in enumerate(spw_array):
+                obs_time = time_array[i]
+                for spw_range in obs:
+                    obs.append(obs_time)
+
+            time_freq_table = np.array(spw_array)
         
             table_list.append(fits.BinTableHDU(name=band, 
                 data=Table(time_freq_table), header=hdr_band))
