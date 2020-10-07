@@ -140,10 +140,11 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
 
             if len(spw_array) > 0:
                 time_freq_table = np.concatenate(spw_array)
+                table_list.append(fits.BinTableHDU(name=band, data=Table(time_freq_table), 
+                                  header=hdr_band))
             else:
-                time_freq_table = None
-            table_list.append(fits.BinTableHDU(name=band, data=Table(time_freq_table), 
-                              header=hdr_band))
+                table_list.append(fits.BinTableHDU(name=band, 
+                                  header=hdr_band))
         
 
         hdus = fits.HDUList(table_list)
