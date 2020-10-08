@@ -2,6 +2,7 @@
 
 import os
 import re
+import json
 import numpy as np
 import matplotlib.pyplot as plt 
 import analysisUtils as au
@@ -118,7 +119,11 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
             fig.savefig(figname, bbox_inches='tight')
             plt.close(fig)
 
-    if savedata: #save the spw_list as fits file
+    if savedata:
+        with open(filename, 'w') as fp:
+            json.dump(spw_list, fp)
+    
+    if False: #save the spw_list as fits file
         table_list = []
         from astropy.io import fits
         from astropy.table import Table
