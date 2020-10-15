@@ -26,7 +26,7 @@ def read_spw(vis):
         freq_min = np.min(col_freq[key]) / 1e9
         spw_specrange[key] = [freq_min, freq_max]
 
-    return spw_specrange
+    return spw_specrange.values()
 
 def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
              figname=None, showfig=False, filename=None, savedata=False):
@@ -36,14 +36,14 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
     obj = os.path.basename(objfolder)
 
     p_obs = re.compile('uid___')
-    spw_list = {'B3':{'time':[], 'freq':[]}, 
-                'B4':{'time':[], 'freq':[]}, 
-                'B5':{'time':[], 'freq':[]}, 
-                'B6':{'time':[], 'freq':[]}, 
-                'B7':{'time':[], 'freq':[]}, 
-                'B8':{'time':[], 'freq':[]}, 
-                'B9':{'time':[], 'freq':[]}, 
-                'B10':{'time':[], 'freq':[]},} 
+    spw_list = {'B3':{'name':[], 'time':[], 'freq':[]}, 
+                'B4':{'name':[], 'time':[], 'freq':[]}, 
+                'B5':{'name':[], 'time':[], 'freq':[]}, 
+                'B6':{'name':[], 'time':[], 'freq':[]}, 
+                'B7':{'name':[], 'time':[], 'freq':[]}, 
+                'B8':{'name':[], 'time':[], 'freq':[]}, 
+                'B9':{'name':[], 'time':[], 'freq':[]}, 
+                'B10':{'name':[], 'time':[], 'freq':[]},} 
 
     for obs in os.listdir(base_dir +'/'):
         if p_obs.match(obs):
@@ -61,8 +61,9 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
                     print('No valid on source time!')
                     continue
                 spw_list[band]['time'].append(time_minutes)
+                spw_list[band]['name'].append(obs)
                 spw_specrange = read_spw(obs_filename)
-                spw_list[band]['freq'].append(list(spw_specrange.values()))
+                spw_list[band]['freq'].append(list(spw_specrange))
             except:
                 print("Error: in", obs_filename)
     if plot:
@@ -122,43 +123,31 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
     if savedata:
         with open(filename, 'w') as fp:
             json.dump(spw_list, fp)
-    
-    if False: #save the spw_list as fits file
-        table_list = []
-        from astropy.io import fits
-        from astropy.table import Table
-        hdr = fits.Header()
-        hdr['OBJ'] = obj
-        hdr['COMMENT'] = "SPW and exposure time information"
-        table_list.append(fits.PrimaryHDU(header=hdr))
-        for band in spw_list.keys(): 
-            hdr_band = fits.Header()
-            hdr_band['BAND'] = band
-            hdr_band['TOTAL'] = np.sum(spw_list[band]['time'])
-            spw_array = spw_list[band]['freq']
-            time_array = spw_list[band]['time']
-
-            for i,obs in enumerate(spw_array):
-                obs_time = time_array[i]
-                for spw_range in obs:
-                    spw_range.append(obs_time)
-
-            if len(spw_array) > 0:
-                time_freq_table = np.concatenate(spw_array)
-                table_list.append(fits.BinTableHDU(name=band, data=Table(time_freq_table), 
-                                  header=hdr_band))
-            else:
-                table_list.append(fits.BinTableHDU(name=band, 
-                                  header=hdr_band))
-        
-
-        hdus = fits.HDUList(table_list)
-        if filename:
-            hdus.writeto(filename, overwrite=True)
-
-
     return spw_list
 
+def discrete_spw(spw_list, return_time=False):
+    """this function used for statistics of the histogram of spw distribution
+    """
+    band_list = {'B3':[84, 116], 'B4':[125, 163], 'B5':[163, 211], 
+            'B6':[211, 275], 'B7':[275, 373], 'B8':[385, 500], \
+            'B9':[602, 720], 'B10':[787, 950]}
+    count_list = {}
+    count_time_list = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 'B7':0, 'B8':0, 'B9':0, 
+                       'B10':0}
+    for band in spw_list.keys():
+        freq_low, freq_high = band_list[band]
+        freq_range = np.linspace(freq_low, freq_high, np.diff(band_list[band])+1, dtype=int)
+        freq_counts = np.zeros_like(freq_range, dtype=int)
+        freq_cumulate_time = np.zeros_like(freq_range, dtype=float)
+        for idx, obs in enumerate(spw_list[band]['freq']):
+            for spw in obs:
+                covered_freq = (freq_range >= spw[0]) & (freq_range <= spw[1])
+                # freq_counts[covered_freq] = freq_counts[covered_freq] + 1
+                freq_counts[covered_freq] = 1
+                freq_cumulate_time[covered_freq] = freq_cumulate_time[covered_freq] + spw_list[band]['time'][idx]
+        count_list[band] = freq_counts.tolist()
+        count_time_list[band] = freq_cumulate_time
+    if return_time:
+        return count_time_list
+    return count_list
 
-if __name__ == '__main__':
-    pass
