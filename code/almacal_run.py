@@ -66,19 +66,22 @@ def gen_image(obj, band=None, outdir='./', **kwargs):
         exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
         rmtables(tablenames=myimagename+'.*')
 
-def show_images(fileglob, mode='auto', nrow=3, ncol=3):
+def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
     """show images in an interative ways, and record the input from inspector
     
     Parameters:
         fileglob: the match patter of the image filenames, like: './*.image'
     """
     all_files = glob.glob(fileglob)
+    print("Find {} files".format(len(all_files)))
+    all_select = []
     if mode == 'random':
         all_files = np.random.choice(all_files, nrow * ncol)
     for i in range(0, len(all_files), ncol*nrow):
-        fig = plt.figure(figsize=(3*nrow,3*ncol))
+        fig = plt.figure(figsize=(4*nrow,4*ncol))
         for j in range(0, nrow*ncol):
-            print(all_files[i+j])
+            if (i+j)>=len(all_files):
+                continue
             try:
                 with fits.open(all_files[i+j]) as fitsimage:
                     imageheader = fitsimage[0].header
@@ -87,9 +90,28 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3):
             except:
                 print("Error in reading: {}".format(all_files[i+j]))
                 continue
-            ax = fig.add_subplot(nrow, ncol, j)#, projection=wcs, slices=(0, 0, 'x', 'y'))
+            ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs, slices=(0, 0, 'x', 'y'))
+            # ax.text(10, 10, str(j), fontsize=20)
             ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
             ax.set_xlabel('RA')
             ax.set_ylabel('Dec')
-    plt.show()
+        # show the image and record the 
+        plt.show()
+        print('Input the index of images (1-9), seperate with comma:')
+        try:
+            idx_input = input()
+            if isinstance(idx_input, int):
+                idx_input = [idx_input]
+            for ind in idx_input:
+                all_select.append(all_files[i+ind-1])
+        except:
+            continue
+        # plt.clf()
+        plt.close('all')
+    
+    #print(all_select)
+    if savefile:
+        with open(savefile, 'w+') as f:
+            for item in all_select:
+                f.write(item+'\n')
 
