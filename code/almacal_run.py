@@ -92,6 +92,7 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
                 continue
             ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs, slices=(0, 0, 'x', 'y'))
             # ax.text(10, 10, str(j), fontsize=20)
+            ax.set_title(str(j))
             ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
             ax.set_xlabel('RA')
             ax.set_ylabel('Dec')
@@ -100,6 +101,9 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
         print('Input the index of images (1-9), seperate with comma:')
         try:
             idx_input = input()
+            if idx_input == 0:
+                print("Currently at {}/{}".format(i, len(all_files)))
+                break
             if isinstance(idx_input, int):
                 idx_input = [idx_input]
             for ind in idx_input:
