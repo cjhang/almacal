@@ -87,12 +87,14 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
                     imageheader = fitsimage[0].header
                     imagedata = fitsimage[0].data
                     wcs = WCS(imageheader)
+                    # wcs2 = wcs.dropaxis(3)
+                    # wcs2 = wcs2.dropaxis(2)
             except:
                 print("Error in reading: {}".format(all_files[i+j]))
                 continue
-            ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs, slices=(0, 0, 'x', 'y'))
+            ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs2, slices=(0, 0, 'x', 'y'))
             # ax.text(10, 10, str(j), fontsize=20)
-            ax.set_title(str(j))
+            ax.set_title(str(j+1))
             ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
             ax.set_xlabel('RA')
             ax.set_ylabel('Dec')
