@@ -44,7 +44,7 @@ def effective_imsize(imsize):
 
 
 
-def make_cont_img(vis=None, basename=None, antenna_diameter=12, dirty_image=False, debug=False,  **kwargs):
+def make_cont_img(vis=None, basename=None, antenna_diameter=12, dirty_image=False, myimagename=None, debug=False, outdir='./', **kwargs):
     """This function is used to make the continuum image
 
     """
@@ -70,7 +70,8 @@ def make_cont_img(vis=None, basename=None, antenna_diameter=12, dirty_image=Fals
 
     if basename is None:
         basename = os.path.basename(vis)
-    myimagename = basename + '.cont.auto'
+    if myimagename is None:
+        myimagename = os.path.join(outdir, basename + '.cont.auto')
     rmtables(tablenames=myimagename + '.*')
 
 

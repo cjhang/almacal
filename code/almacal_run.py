@@ -47,7 +47,7 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None):
                 savedata=True, filename=obj_output_dir+'/'+ obj+'.fits')
 
 
-def gen_image(obj, band=None):
+def gen_image(obj, band=None, outdir='./', **kwargs):
     """make images for one calibrator on all or specific band
     """
     for obs in os.listdir(obj):
@@ -57,12 +57,12 @@ def gen_image(obj, band=None):
                 obs_band = band_match.search(obs).groupdict()['band']
                 if obs_band != band:
                     continue
+        basename = os.path.basename(obs)
+        myimagename = os.path.join(outdir, basename + '.cont.auto')
         try:
-            make_cont_img(vis=obj+'/'+obs, dirty_image=True)
+            make_cont_img(vis=obj+'/'+obs, dirty_image=True, myimagename=myimagename, outdir=outdir, **kwargs)
         except:
             print("Error in imaging {}".format(obj))
-        basename = os.path.basename(obs)
-        myimagename = basename + '.cont.auto'
         exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
         rmtables(tablenames=myimagename+'.*')
 
