@@ -13,7 +13,8 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 
 
-def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None):
+def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None, 
+                **kwargs):
     """generate the on-source time and spw distribution for the whole almacal dataset
     
     Params:
@@ -60,11 +61,10 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None):
         obj_dirname = base_dir +'/'+ obj
         obj_output_dir = output_dir + '/' + obj
         os.system('mkdir {}'.format(obj_output_dir))
-        obj_stat = spw_stat(obj_dirname, plot=True, showfig=False,
-                            figname=obj_output_dir+'/'+obj+'.pdf',
-                            plotbands=['B5','B6','B7','B8'], 
+        obj_stat = spw_stat(obj_dirname,
                             savedata=True, 
-                            filename=obj_output_dir+'/'+ obj+'.json')
+                            filename=obj_output_dir+'/'+ obj+'.json', 
+                            **kwargs)
     
         if info_file is not None:
             with open(info_file, 'a+') as f_info:
