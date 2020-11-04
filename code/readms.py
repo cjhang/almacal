@@ -30,7 +30,9 @@ def read_spw(vis):
 
 def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
              figname=None, showfig=False, filename=None, savedata=False):
-    # make the statistics about one calibrator
+    """make the statistics about one calibrator
+
+    """
 
     base_dir = objfolder
     obj = os.path.basename(objfolder)
@@ -68,7 +70,7 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
                 print("Error: in", obs_filename)
     if plot:
         band_in_plot = plotbands
-        fig = plt.figure(figsize=(12,5))
+        fig = plt.figure(figsize=(3*len(band_in_plot),5))
         fig.suptitle(os.path.basename(objfolder))
         ax = fig.add_subplot(111)
 

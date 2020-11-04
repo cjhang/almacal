@@ -1,5 +1,10 @@
 # This file include all the tasks for ALMACAL number counts projects
 
+# The task list include:
+# 1. gen_obstime: generate the observational time for the whole dataset
+# 2. gen_dirty_image: generate the dirty image for all the observations of one calibrator
+# 3. show_image: interative way to inspect the images manually 
+
 import glob
 import analysisUtils as au
 from astropy.table import Table
@@ -8,18 +13,31 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 
 
-def gen_obstime(base_dir=None, output_dir=None, bad_obs=None):
+def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None):
     """generate the on-source time and spw distribution for the whole almacal dataset
+    
+    Params:
+        base_dir: the root folder contains all the measurements
+        output_dir: the root folder for placing the results of each calibrator,
+                    including the json file and the plots
+        bad_obs: the file contains unusable observation
+        info_file: the file contains the general information for all the calibrators
+    
+
+    default run:
+    obj_output_dir = output_dir + '/' + obj + '/'
+    os.system('mkdir {}'.format(obj_output_dir))
+    spw_stat('/', plot=True, showfig=False, figname=obj_output_dir + obj+'.pdf', savedata=True, filename=obj_output_dir + obj+'.json')
     """
 
     p_obj = re.compile('J\d+[+-]\d')
     p_obs = re.compile('uid___')
     
-    bad_obs = '/Users/jchen/Desktop/projects/almacal/data/broken_obs.txt'
-    almacal_info_file = '/Users/jchen/Desktop/projects/almacal/data/almacal_timeOnSource.txt'
-    all_obs = Table.read(almacal_info_file, format='ascii')
-    all_obs.sort(['B6', 'B7'])
-    all_obs.reverse()
+    # bad_obs = '/Users/jchen/Desktop/projects/almacal/data/broken_obs.txt'
+    # almacal_info_file = '/Users/jchen/Desktop/projects/almacal/data/almacal_timeOnSource.txt'
+    # all_obs = Table.read(almacal_info_file, format='ascii')
+    # all_obs.sort(['B6', 'B7'])
+    # all_obs.reverse()
 
     if bad_obs is not None:
         with open(bad_obs) as f:
@@ -30,7 +48,8 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None):
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obj_match = re.compile('J\d{4}[-+]\d{4}')
 
-    for i,obj in enumerate(all_obs['obj']):
+    for i,obj in enumerate(os.listdir(base_dir)):
+    # for i,obj in enumerate(all_obs['obj']):
         obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
                     'B7':0, 'B8':0,  'B9':0, 'B10':0}
         if not obj_match.match(obj):
@@ -41,10 +60,26 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None):
         obj_dirname = base_dir +'/'+ obj
         obj_output_dir = output_dir + '/' + obj
         os.system('mkdir {}'.format(obj_output_dir))
-        spw_stat(obj_dirname, plot=True, showfig=False, \
-                figname=obj_output_dir+'/'+obj+'.pdf', \
-                plotbands=['B5','B6','B7','B8'], 
-                savedata=True, filename=obj_output_dir+'/'+ obj+'.fits')
+        obj_stat = spw_stat(obj_dirname, plot=True, showfig=False,
+                            figname=obj_output_dir+'/'+obj+'.pdf',
+                            plotbands=['B5','B6','B7','B8'], 
+                            savedata=True, 
+                            filename=obj_output_dir+'/'+ obj+'.json')
+    
+        if info_file is not None:
+            with open(info_file, 'a+') as f_info:
+                f_info.write('{:<12s} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f}\n'.format(
+            obj, 
+            np.sum(obj_stat['B3']['time']),
+            np.sum(obj_stat['B4']['time']),
+            np.sum(obj_stat['B5']['time']),
+            np.sum(obj_stat['B6']['time']),
+            np.sum(obj_stat['B7']['time']),
+            np.sum(obj_stat['B8']['time']),
+            np.sum(obj_stat['B9']['time']),
+            np.sum(obj_stat['B10']['time']),
+            ))
+ 
 
 
 def gen_image(obj, band=None, outdir='./', **kwargs):
@@ -111,6 +146,7 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
             for ind in idx_input:
                 all_select.append(all_files[i+ind-1])
         except:
+            plt.close('all')
             continue
         # plt.clf()
         plt.close('all')
