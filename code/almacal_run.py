@@ -115,6 +115,9 @@ def gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], **kwargs):
         outdir: the output directory
         bands: the bands to be imaged
         **kwargs: the additional parameters of make_cont_img
+
+
+    default run: gen_all_image('/science_ALMACAL/data', '/tmp/all_images')
     """
     for obj in os.listdir(allcal_dir):
         obj_match = re.compile('^J\d*[+-]\d*$')
