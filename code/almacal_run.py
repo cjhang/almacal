@@ -23,6 +23,7 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None,
                     including the json file and the plots
         bad_obs: the file contains unusable observation
         info_file: the file contains the general information for all the calibrators
+        **kwargs: support the addition parameters of `spw_stat`
     
 
     default run:
@@ -80,14 +81,19 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None,
             np.sum(obj_stat['B10']['time']),
             ))
  
-
-
 def gen_image(obj, band=None, outdir='./', **kwargs):
     """make images for one calibrator on all or specific band
+
+    Params:
+    obj: the folder that contains all the observation of one calibrator
+    band: the band want to imaged
+    outdir: the directory where all the fits image will be placed
+    **kwargs: the additional parameters supported by make_cont_img
+
     """
     for obs in os.listdir(obj):
         if band is not None:
-            band_match = re.compile('_(?P<band>B\d{1,2})')
+            band_match = re.compile('_(?P<band>B\d{1,2})$')
             if band_match.search(obs):
                 obs_band = band_match.search(obs).groupdict()['band']
                 if obs_band != band:
@@ -100,6 +106,25 @@ def gen_image(obj, band=None, outdir='./', **kwargs):
             print("Error in imaging {}".format(obj))
         exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
         rmtables(tablenames=myimagename+'.*')
+
+def gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], **kwargs):
+    """generate the images of all calibrators
+
+    Params:
+        allcal_dir: the root directory contains all the measurements of calibrators
+        outdir: the output directory
+        bands: the bands to be imaged
+        **kwargs: the additional parameters of make_cont_img
+    """
+    for obj in os.listdir(allcal_dir):
+        obj_match = re.compile('^J\d*[+-]\d*$')
+        if not obj_match.match(obj):
+            continue
+        for band in bands:
+            os.system('mkdir -p {}'.format(os.path.join(outdir, obj, band)))
+            gen_image(os.path.join(allcal_dir, obj), band=band, 
+                      outdir=os.path.join(outdir, obj, band),)
+
 
 def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
     """show images in an interative ways, and record the input from inspector
