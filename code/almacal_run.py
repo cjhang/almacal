@@ -6,6 +6,7 @@
 # 3. show_image: interative way to inspect the images manually 
 
 import glob
+import re
 import analysisUtils as au
 from astropy.table import Table
 from astropy.wcs import WCS
@@ -128,7 +129,6 @@ def gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], **kwargs):
             gen_image(os.path.join(allcal_dir, obj), band=band, 
                       outdir=os.path.join(outdir, obj, band),)
 
-
 def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
     """show images in an interative ways, and record the input from inspector
     
@@ -181,7 +181,39 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
     
     #print(all_select)
     if savefile:
+        obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
         with open(savefile, 'w+') as f:
             for item in all_select:
-                f.write(item+'\n')
+                try:
+                    obsname = obsname_match.search(item).groupdict()['obsname']
+                    f.write(obsname+'\n')
+                except:
+                    print("Error in matching the obs name for filname: {}".format(item))
+                    continue
 
+def make_combine_obs(obj, band=None, badfiles=None):
+    badfiles_list = []
+    if badfiles is not None:
+        with open(badfiles) as f:
+            badfiles_readlines = f.readlines()
+        for item in badfiles_readlines:
+            # remove the '\n' at the end of item
+            badfiles_list.append(item.strip())
+
+    all_files = os.listdir(obj)
+    valid_files = []
+    for obs in all_files:
+        if obs in badfiles_list:
+            continue
+        band_match = re.compile('_(?P<band>B\d{1,2})$')
+        try:
+            obs_band = band_match.search(obs).groupdict()['band']
+        except:
+            continue
+        if obs_band == band:
+            valid_files.append(obs)
+
+    # print(valid_files)
+    return valid_files
+    
+    
