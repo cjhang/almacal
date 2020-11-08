@@ -43,7 +43,7 @@ def efficient_imsize(imsize):
             continue
         
 
-def make_cont_img(vis=None, basename=None, antenna_diameter=12, dirty_image=False, myimagename=None, debug=False, outdir='./', **kwargs):
+def make_cont_img(vis=None, basename=None, antenna_diameter=12, dirty_image=False, myimagename=None, debug=False, outdir='./', dry_run=False, **kwargs):
     """This function is used to make the continuum image
 
     """
@@ -73,12 +73,19 @@ def make_cont_img(vis=None, basename=None, antenna_diameter=12, dirty_image=Fals
         myimagename = os.path.join(outdir, basename + '.cont.auto')
     rmtables(tablenames=myimagename + '.*')
 
+    if dry_run:
+        print("Mean frequecy:", freq_mean)
+        print("Maximum baseline:", baseline_max)
+        print("My cell size:", mycell)
+        print("My image size:", myimsize)
+        return
 
     if debug:
         print("Mean frequecy:", freq_mean)
         print("Maximum baseline:", baseline_max)
         print("My cell size:", mycell)
         print("My image size:", myimsize)
+    
 
     if dirty_image:
         if debug:
