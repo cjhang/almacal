@@ -234,7 +234,7 @@ def read_flux(obs, allflux_file=None):
 
     return np.float(allflux[:,3][obs_select][0])
 
-def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp'):
+def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', debug=True):
     """put back the central point source
     """
     # if not os.path.isdir(outdir):
@@ -248,6 +248,8 @@ def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp'):
         obs_list = [obs_list,]
     
     for obs in obs_list:
+        if debug:
+            print(">>>> {}".format(obs))
         try:
             obs_matched = obs_match.search(obs).groupdict()
         except:
@@ -270,7 +272,6 @@ def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp'):
 
         # create a point source
         comp_cal = os.path.join(tmpdir, obsname+'_central_cal.cl')
-        # print(comp_cal)
         os.system('rm -rf {}'.format(comp_cal))
         cl.done()
         cl.addcomponent(dir=mydirection, flux=myflux, fluxunit='Jy', freq=myfreq, shape="point", spectrumtype='constant')
