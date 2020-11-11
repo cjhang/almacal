@@ -12,6 +12,7 @@ from astropy.table import Table
 from astropy.wcs import WCS
 from astropy.io import fits
 from matplotlib import pyplot as plt
+from astropy.coordinates import SkyCoord
 
 
 def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None, 
@@ -231,41 +232,67 @@ def read_flux(obs, allflux_file=None):
     if np.sum(obs_select) > 1:
         print("Warning: not an unique flux!")
 
-    return np.float(allflux[:,3][select][0])
+    return np.float(allflux[:,3][obs_select][0])
 
-def ms_resore(obs, allflux_file=None):
+def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp'):
+    """put back the central point source
+    """
+    # if not os.path.isdir(outdir):
+    os.system('mkdir -p {}'.format(outdir))
+    # if not os.path.isdir(tmpdir):
+    os.system('mkdir -p {}'.format(tmpdir))
+
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
 
-    try:
-        obs_matched = obs_match.search(obs).groupdict()
-    except:
-        print("Unsupported filename:".format(obs))
+    if isinstance(obs_list, str):
+        obs_list = [obs_list,]
+    
+    for obs in obs_list:
+        try:
+            obs_matched = obs_match.search(obs).groupdict()
+        except:
+            print("Unsupported filename:".format(obs))
 
-    obsname = obs_matched['obsname']
-    objname = obs_matched['objname']
-    band = obs_matched['band']
+        obsname = obs_matched['obsname']
+        objname = obs_matched['objname']
+        band = obs_matched['band']
 
-    # read the basic information from ms
-    mydirection = read_refdir(obs).encode('utf-8')
-    spw_list = read_spw(obs)
-    myfreq = str(np.mean(spw_list)) + 'GHz'
-    # read the flux from the fluxval file
-    myflux = read_flux(obs, allflux_file=allflux_file)
+        # read the basic information from ms
+        mydirection = read_refdir(obs).encode('utf-8')
+        spw_list = read_spw(obs)
+        myfreq = str(np.mean(spw_list)) + 'GHz'
+        # read the flux from the fluxval file
+        try:
+            myflux = read_flux(obs, allflux_file=allflux_file)
+        except:
+            print("No fluxval found for {}".format(obs))
+            continue
 
-    # create a point source
-    os.system('rm -rf central_cal.cl')
-    cl.done()
-    cl.addcomponent(dir=mydirection, flux=myflux, fluxunit='Jy', freq=myfreq, shape="point", spectrumtype='constant')
-    cl.rename('central_cal.cl')
-    cl.done()
+        # create a point source
+        comp_cal = os.path.join(tmpdir, obsname+'_central_cal.cl')
+        # print(comp_cal)
+        os.system('rm -rf {}'.format(comp_cal))
+        cl.done()
+        cl.addcomponent(dir=mydirection, flux=myflux, fluxunit='Jy', freq=myfreq, shape="point", spectrumtype='constant')
+        cl.rename(comp_cal)
+        cl.done()
 
 
-    tmpfile = obs + '.tmp'
-    os.system('rm -rf {}'.format(tmpfile))
-    os.system('cp -r {} {}'.format(obs, tmpfile))
-    ft(vis=tmpfile, complist='central_cal.cl')
-    uvsub(vis=tmpfile, reverse=True)
-    os.system('rm -rf {}.restore'.format(obs))
-    split(vis=tmpfile, outputvis=obs+'.restore')
-    os.system('rm -rf {}'.format(tmpfile))
+        basedir = os.path.dirname(obs)
+        filename = os.path.basename(obs)
+        if outdir is None:
+            outdir = basedir
+        # setup the temperary files
+        tmpfile = os.path.join(tmpdir, filename+'.tmp')
+        os.system('rm -rf {}'.format(tmpfile))
+        os.system('cp -r {} {}'.format(obs, tmpfile))
+        # restore the point source to the uv data
+        ft(vis=tmpfile, complist=comp_cal)
+        uvsub(vis=tmpfile, reverse=True)
+        # split the restore data
+        outfile = os.path.join(outdir, filename+'.restore')
+        os.system('rm -rf {}'.format(outfile))
+        split(vis=tmpfile, outputvis=outfile, datacolumn='corrected')
+    # remove all the temperary files
+    os.system('rm -rf {}'.format(tmpdir))
 
