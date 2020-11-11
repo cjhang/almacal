@@ -38,7 +38,7 @@ def read_refdir(vis):
     tb.close()
     
     rad2deg = 180./np.pi
-    direction = "J2000 " + SkyCoord(reference_dir[0]*rad2deg, refval[1]*rad2deg, 
+    direction = "J2000 " + SkyCoord(reference_dir[0]*rad2deg, reference_dir[1]*rad2deg, 
                                       unit="deg").to_string('hmsdms')
     return direction
 
