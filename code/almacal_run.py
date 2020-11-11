@@ -216,4 +216,56 @@ def make_combine_obs(obj, band=None, badfiles=None):
     # print(valid_files)
     return valid_files
     
-    
+def read_flux(obs, allflux_file=None):
+    obs_filename = os.path.basename(obs)
+    # allflux_file = './allcal.fluxval'
+    try:
+        allflux = np.loadtxt(allflux_file, dtype=str)
+    except:
+        raise ValueError("Unsupported allflux file!")
+    obs_select = allflux[:,1] == obs_filename
+
+    if np.sum(obs_select) < 1:
+        raise ValueError("No flux can be found!")
+        return 0
+    if np.sum(obs_select) > 1:
+        print("Warning: not an unique flux!")
+
+    return np.float(allflux[:,3][select][0])
+
+def ms_resore(obs, allflux_file=None):
+    obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
+
+    try:
+        obs_matched = obs_match.search(obs).groupdict()
+    except:
+        print("Unsupported filename:".format(obs))
+
+    obsname = obs_matched['obsname']
+    objname = obs_matched['objname']
+    band = obs_matched['band']
+
+    # read the basic information from ms
+    mydirection = read_refdir(obs).encode('utf-8')
+    spw_list = read_spw(obs)
+    myfreq = str(np.mean(spw_list)) + 'GHz'
+    # read the flux from the fluxval file
+    myflux = read_flux(obs, allflux_file=allflux_file)
+
+    # create a point source
+    os.system('rm -rf central_cal.cl')
+    cl.done()
+    cl.addcomponent(dir=mydirection, flux=myflux, fluxunit='Jy', freq=myfreq, shape="point", spectrumtype='constant')
+    cl.rename('central_cal.cl')
+    cl.done()
+
+
+    tmpfile = obs + '.tmp'
+    os.system('rm -rf {}'.format(tmpfile))
+    os.system('cp -r {} {}'.format(obs, tmpfile))
+    ft(vis=tmpfile, complist='central_cal.cl')
+    uvsub(vis=tmpfile, reverse=True)
+    os.system('rm -rf {}.restore'.format(obs))
+    split(vis=tmpfile, outputvis=obs+'.restore')
+    os.system('rm -rf {}'.format(tmpfile))
+
