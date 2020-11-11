@@ -16,6 +16,7 @@ def read_spw(vis):
     tb.open(vis + '/SPECTRAL_WINDOW')
     col_names = tb.getvarcol('NAME')
     col_freq = tb.getvarcol('CHAN_FREQ')
+    tb.close()
 
     #print(col_names)
 
@@ -27,6 +28,19 @@ def read_spw(vis):
         spw_specrange[key] = [freq_min, freq_max]
 
     return spw_specrange.values()
+
+def read_refdir(vis):
+    """read the reference direction and return the standard direction string
+    """
+    tb = tbtool()
+    tb.open(vis+'/FIELD')
+    reference_dir = tb.getcol('REFERENCE_DIR').flatten()
+    tb.close()
+    
+    rad2deg = 180./np.pi
+    direction = "J2000 " + SkyCoord(reference_dir[0]*rad2deg, refval[1]*rad2deg, 
+                                      unit="deg").to_string('hmsdms')
+    return direction
 
 def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
              figname=None, showfig=False, filename=None, savedata=False):
