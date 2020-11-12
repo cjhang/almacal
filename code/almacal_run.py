@@ -137,7 +137,9 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
         fileglob: the match patter of the image filenames, like: './*.image'
     """
     all_files = glob.glob(fileglob)
-    print("Find {} files".format(len(all_files)))
+    total_num = len(all_files)
+    select_num = 0
+    print("Find {} files".format(total_num))
     all_select = []
     if mode == 'random':
         all_files = np.random.choice(all_files, nrow * ncol)
@@ -172,6 +174,7 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
                 break
             if isinstance(idx_input, int):
                 idx_input = [idx_input]
+            select_num += len(idx_input)
             for ind in idx_input:
                 all_select.append(all_files[i+ind-1])
         except:
@@ -180,6 +183,7 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
         # plt.clf()
         plt.close('all')
     
+    print("Totally {}% of data have been selected.".format(100.*select_num/total_num))
     #print(all_select)
     if savefile:
         obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
