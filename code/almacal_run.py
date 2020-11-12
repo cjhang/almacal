@@ -192,7 +192,7 @@ def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
                     print("Error in matching the obs name for filname: {}".format(item))
                     continue
 
-def make_combine_obs(obj, band=None, badfiles=None):
+def make_combine_obs(obj, basedir=None, band=None, badfiles=None):
     badfiles_list = []
     if badfiles is not None:
         with open(badfiles) as f:
@@ -212,7 +212,10 @@ def make_combine_obs(obj, band=None, badfiles=None):
         except:
             continue
         if obs_band == band:
-            valid_files.append(obs)
+            if basedir is not None:
+                valid_files.append(os.path.join(basedir, obs))
+            else:
+                valid_files.append(obs)
 
     # print(valid_files)
     return valid_files
