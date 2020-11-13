@@ -244,6 +244,7 @@ def read_flux(obs, allflux_file=None):
 def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', debug=True):
     """put back the central point source
     """
+
     # if not os.path.isdir(outdir):
     os.system('mkdir -p {}'.format(outdir))
     # if not os.path.isdir(tmpdir):
@@ -252,8 +253,16 @@ def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', de
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
 
     if isinstance(obs_list, str):
-        obs_list = [obs_list,]
-    
+        if os.path.isfile(obs_list)
+            file_list = []
+                with open(obs_list) as f:
+                    file_list_readlines = f.readlines()
+                for item in file_list_readlines:
+                    # remove the '\n' at the end of item
+                    file_list.append(item.strip())
+                obs_list = file_list
+        else:
+            obs_list = [obs_list,]
     for obs in obs_list:
         if debug:
             print(">>>> {}".format(obs))
@@ -303,4 +312,20 @@ def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', de
         split(vis=tmpfile, outputvis=outfile, datacolumn='corrected')
     # remove all the temperary files
     os.system('rm -rf {}'.format(tmpdir))
+
+def copy_ms(basedir, outdir, selectfile=None, debug=True):
+    selectfiles_list = []
+    if selectfile is not None:
+        with open(selectfile) as f:
+            selectfiles_readlines = f.readlines()
+        for item in selectfiles_readlines:
+            # remove the '\n' at the end of item
+            selectfiles_list.append(item.strip())
+
+    all_files = os.listdir(basedir)
+    for obs in all_files:
+        if debug:
+            print(obs)
+        if obs in selectfiles_list:
+            os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir+'/'))
 
