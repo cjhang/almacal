@@ -241,7 +241,7 @@ def read_flux(obs, allflux_file=None):
 
     return np.float(allflux[:,3][obs_select][0])
 
-def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', debug=True):
+def ms_resore(obs_list, allflux_file=None, basedir=None, outdir='./output', tmpdir='./tmp', debug=True):
     """put back the central point source
     """
 
@@ -253,7 +253,7 @@ def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', de
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
 
     if isinstance(obs_list, str):
-        if os.path.isfile(obs_list)
+        if os.path.isfile(obs_list):
             file_list = []
                 with open(obs_list) as f:
                     file_list_readlines = f.readlines()
@@ -263,6 +263,9 @@ def ms_resore(obs_list, allflux_file=None, outdir='./output', tmpdir='./tmp', de
                 obs_list = file_list
         else:
             obs_list = [obs_list,]
+    if basedir is not None:
+        lamf = lambda x: os.join(basedir, x)
+        obs_list = map(lamf, obs_list)
     for obs in obs_list:
         if debug:
             print(">>>> {}".format(obs))
