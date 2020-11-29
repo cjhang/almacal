@@ -17,17 +17,24 @@ def read_spw(vis):
     """read the spectral windows
     """
     tb = tbtool()
-    tb.open(vis + '/SPECTRAL_WINDOW')
-    col_names = tb.getvarcol('NAME')
-    col_freq = tb.getvarcol('CHAN_FREQ')
-    tb.close()
-
+    if isinstance(vis, str):
+        vis = [vis, ]
+    
+    if not isinstance(vis, list):
+        raise ValueError("read_spw: Unsupported measurements files!")
+    
     spw_specrange = {}
 
-    for key in col_names.keys():
-        freq_max = np.max(col_freq[key]) / 1e9
-        freq_min = np.min(col_freq[key]) / 1e9
-        spw_specrange[key] = [freq_min, freq_max]
+    for v in vis:
+        tb.open(v + '/SPECTRAL_WINDOW')
+        col_names = tb.getvarcol('NAME')
+        col_freq = tb.getvarcol('CHAN_FREQ')
+        tb.close()
+
+        for key in col_names.keys():
+            freq_max = np.max(col_freq[key]) / 1e9
+            freq_min = np.min(col_freq[key]) / 1e9
+            spw_specrange[key] = [freq_min, freq_max]
 
     return spw_specrange.values()
 
@@ -44,7 +51,8 @@ def efficient_imsize(imsize):
             continue
         
 
-def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, mycell=None, myimsize=None, outdir='./', dry_run=False, **kwargs):
+def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, mycell=None, myimsize=None, outdir='./', dry_run=False, 
+                  baseline_percent=90, **kwargs):
     """This function is used to make the continuum image
     
     dirty_image: generate the dirty image
@@ -56,30 +64,42 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
     spw_specrange = read_spw(vis)
     freq_mean = np.mean(spw_specrange) # in GHz
     
-    # read the antenna_diameter
-    tb = tbtool()
-    tb.open(vis + '/ANTENNA')
-    antenna_diameter = np.median(tb.getcol('DISH_DIAMETER'))
-    tb.close()
-
-
-    wavelength = (const.c / (freq_mean * u.GHz)).to(u.um) # in um
-    fov = 2.0 * 1.22 * wavelength / (antenna_diameter*u.m).to(u.um) * 206265
-
     # get the baselines
-    # baselines = au.getBaselineLengths(vis)
-
-    # another way is to use getBaselineStats directly
-    baseline_stat = au.getBaselineStats(vis)
-    baseline_max = baseline_stat[2] * u.m
-    baseline_90 = baseline_stat[-1] * u.m
-
-    baseline_typical = baseline_90
-
-    # if baseline_stat[0] < 300:
-        # baseline_typical = baseline_max
-    # else:
+    tb = tbtool()
+    if isinstance(vis, list):
+        baselines_list = []
+        for v in vis:
+            obs_baselines = au.getBaselineLengths(v, sort=False)
+            baselines_list.append(obs_baselines.values())
+        # unfold the list
+        baseline_list = [item for sublist in baselines_list for item in sublist]
+    if isinstance(vis, str):
+        baselines_list = au.getBaselineLengths(vis)
+        
+        # # another way is to use getBaselineStats directly
+        # baseline_stat = au.getBaselineStats(vis)
+        # baseline_max = baseline_stat[2] * u.m
+        # baseline_90 = baseline_stat[-1] * u.m
         # baseline_typical = baseline_90
+    baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
+
+    # read the antenna_diameter
+    if isinstance(vis, list):
+        antenna_diameter_list = []
+        for v in vis:
+            tb.open(v + '/ANTENNA')
+            antenna_diameter_list.append(tb.getcol('DISH_DIAMETER'))
+            tb.close()
+        antenna_diameter_list = [item for sublist in antenna_diameter_list for item in sublist]
+    if isinstance(vis, str):
+        tb.open(vis + '/ANTENNA')
+        antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+        tb.close()
+    antenna_diameter = np.median(antenna_diameter_list) * u.m
+
+    wavelength = const.c / (freq_mean * u.GHz) # in um
+    fov = (2.0 * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+
     # calcuate the cell size
     if mycell is None:
         cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
@@ -91,7 +111,10 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
 
 
     if basename is None:
-        basename = os.path.basename(vis)
+        if isinstance(vis, list):
+            basename = 'concat'
+        else:
+            basename = os.path.basename(vis)
     if myimagename is None:
         myimagename = os.path.join(outdir, basename + '.cont.auto')
     rmtables(tablenames=myimagename + '.*')
@@ -128,4 +151,66 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
                specmode="mfs", outframe="LSRK",
                pblimit=0.1,
                **kwargs)
+
+def image_selfcal(vis=None, ncycle=3, ):
+    # tclean and self-calibration
+    os.system('rm -rf tclean/cycle0.*')
+    tclean(vis=calmsfile,
+           imagename='./tclean/cycle0',
+           field='',
+           spw='',
+           datacolumn='data',
+           specmode='mfs',
+           deconvolver='hogbom',
+           nterms=1,
+           gridder='standard',
+           imsize=320,
+           cell='0.1arcsec',
+           pblimit=0.1,
+           weighting='natural',
+           threshold='0mJy',
+           niter=50000,
+           interactive=True,
+           savemodel='modelcolumn')
+
+
+    os.system("rm -rf cycle1_phase.cal")
+    gaincal(vis=calmsfile,
+            caltable="cycle1_phase.cal",
+            field="",
+            solint="2min",
+            calmode="p",
+            refant=myrefant,
+            gaintype="G")
+
+    applycal(vis=calmsfile,
+             field="",
+             gaintable=["cycle1_phase.cal"],
+             interp="linear")
+
+    os.system("rm -rf {0} {0}.flagversions".format(calmsfile+'.selfcal'))
+    split(vis=calmsfile,
+          outputvis=calmsfile+'.selfcal',
+          datacolumn="corrected")
+
+    # make the cycle 1 image
+    os.system('rm -rf tclean/cycle1.*')
+    tclean(vis=calmsfile+'.selfcal',
+           imagename='./tclean/cycle1',
+           field='',
+           spw='',
+           specmode='mfs',
+           deconvolver='hogbom',
+           datacolumn='data',
+           nterms=1,
+           gridder='standard',
+           imsize=320,
+           cell='0.1arcsec',
+           pblimit=0.1,
+           weighting='natural',
+           threshold='0mJy',
+           niter=50000,
+           interactive=True,
+           savemodel='modelcolumn')
+
 
