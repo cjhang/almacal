@@ -10,22 +10,27 @@ import analysisUtils as au
 plt.ioff()
 
 def read_spw(vis):
-    """
+    """read the spectral windows
     """
     tb = tbtool()
-    tb.open(vis + '/SPECTRAL_WINDOW')
-    col_names = tb.getvarcol('NAME')
-    col_freq = tb.getvarcol('CHAN_FREQ')
-    tb.close()
-
-    #print(col_names)
-
+    if isinstance(vis, str):
+        vis = [vis, ]
+    
+    if not isinstance(vis, list):
+        raise ValueError("read_spw: Unsupported measurements files!")
+    
     spw_specrange = {}
 
-    for key in col_names.keys():
-        freq_max = np.max(col_freq[key]) / 1e9
-        freq_min = np.min(col_freq[key]) / 1e9
-        spw_specrange[key] = [freq_min, freq_max]
+    for v in vis:
+        tb.open(v + '/SPECTRAL_WINDOW')
+        col_names = tb.getvarcol('NAME')
+        col_freq = tb.getvarcol('CHAN_FREQ')
+        tb.close()
+
+        for key in col_names.keys():
+            freq_max = np.max(col_freq[key]) / 1e9
+            freq_min = np.min(col_freq[key]) / 1e9
+            spw_specrange[key] = [freq_min, freq_max]
 
     return spw_specrange.values()
 

@@ -13,30 +13,7 @@ from astropy import constants as const
 import matplotlib.pyplot as plt 
 import analysisUtils as au
 
-def read_spw(vis):
-    """read the spectral windows
-    """
-    tb = tbtool()
-    if isinstance(vis, str):
-        vis = [vis, ]
-    
-    if not isinstance(vis, list):
-        raise ValueError("read_spw: Unsupported measurements files!")
-    
-    spw_specrange = {}
-
-    for v in vis:
-        tb.open(v + '/SPECTRAL_WINDOW')
-        col_names = tb.getvarcol('NAME')
-        col_freq = tb.getvarcol('CHAN_FREQ')
-        tb.close()
-
-        for key in col_names.keys():
-            freq_max = np.max(col_freq[key]) / 1e9
-            freq_min = np.min(col_freq[key]) / 1e9
-            spw_specrange[key] = [freq_min, freq_max]
-
-    return spw_specrange.values()
+from readms import read_spw
 
 def efficient_imsize(imsize):
     """This function try to optimize the imsize that can be divided by 2,3,5,7 only
@@ -69,12 +46,12 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
     if isinstance(vis, list):
         baselines_list = []
         for v in vis:
-            obs_baselines = au.getBaselineLengths(v, sort=False)
-            baselines_list.append(obs_baselines.values())
+            obs_baselines = au.getBaselineLengths(v, returnLengthsOnly=True)
+            baselines_list.append(obs_baselines)
         # unfold the list
         baseline_list = [item for sublist in baselines_list for item in sublist]
     if isinstance(vis, str):
-        baselines_list = au.getBaselineLengths(vis)
+        baselines_list = au.getBaselineLengths(vis, returnLengthsOnly=True)
         
         # # another way is to use getBaselineStats directly
         # baseline_stat = au.getBaselineStats(vis)
