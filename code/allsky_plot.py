@@ -3,16 +3,16 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-almacal_info_file = '/tmp/almacal.info.txt'
+almacal_info_file = '/Users/jchen/Desktop/projects/almacal/data/almacal_timeOnSource.txt'
 
-data = np.loadtxt(almacal_info_file, skiprows=1, delimiter=' ',
-        dtype={'names': ('obj', 'B3','B4','B5','B6','B7','B8','B9'), 
-               'formats': ('S10', 'f4', 'f4','f4','f4','f4','f4','f4')})
+data = np.loadtxt(almacal_info_file, skiprows=1,
+        dtype={'names': ('obj', 'B3','B4','B5','B6','B7','B8','B9','B10'), 
+               'formats': ('S10', 'f4', 'f4','f4','f4','f4','f4','f4','f4')})
 
 
 band = 5
-# for band in [3,4,5,6,7,8,9,10]:
-if True:
+for band in [3,4,5,6,7,8,9,10]:
+# if True:
     
     x_coords = []
     y_coords = []
@@ -29,11 +29,11 @@ if True:
         dec = coord.dec
         x_coords.append(ra.radian)
         y_coords.append(dec.radian)
-        depth.append(row['B{}'.format(band)]/60)
+        depth.append(row['B{}'.format(band)])
 
     #print('depth', depth)
     # print(x_coords)
-    obs_valid = np.array(depth)>0.1
+    obs_valid = np.array(depth)>1e-6
     xx = np.array(x_coords)[obs_valid]
     yy = np.array(y_coords)[obs_valid]
     depth_valid = np.array(depth)[obs_valid]
@@ -58,4 +58,4 @@ if True:
     ax.set_ylabel('Counts')
 
     plt.show()
-    fig.savefig('almacal_stat/Band{}_stat.pdf'.format(band))
+    fig.savefig('/tmp/Band{}_stat.pdf'.format(band))

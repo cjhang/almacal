@@ -95,8 +95,9 @@ def read_listobs(logfile):
 
 
 if __name__ == '__main__':
-    listobs_folder = '/scratch-ssd/jchen/listobs/'
-    outputfile = '/home/jchen/Documents/almacal.new.info.txt'
+    listobs_folder = '/Users/jchen/Public/almacal_test/listobs'
+    outputfile = '/tmp/almacal.new.info2.txt'
+    print("Hello")
     with open(outputfile, 'w+') as f_out:
         f_out.write('obj B3 B4 B5 B6 B7 B8 B9 B10\n')
     # obj_scanintent = {'B3':[], 'B4':[], 'B5':[], 'B6':[], 
