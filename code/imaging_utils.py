@@ -49,7 +49,7 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
             obs_baselines = au.getBaselineLengths(v, returnLengthsOnly=True)
             baselines_list.append(obs_baselines)
         # unfold the list
-        baseline_list = [item for sublist in baselines_list for item in sublist]
+        baselines_list = [item for sublist in baselines_list for item in sublist]
     if isinstance(vis, str):
         baselines_list = au.getBaselineLengths(vis, returnLengthsOnly=True)
         
