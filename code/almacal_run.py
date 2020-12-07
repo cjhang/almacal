@@ -4,16 +4,21 @@
 # 1. gen_obstime: generate the observational time for the whole dataset
 # 2. gen_dirty_image: generate the dirty image for all the observations of one calibrator
 # 3. show_image: interative way to inspect the images manually 
-
+import os
 import glob
 import re
-import analysisUtils as au
+import numpy as np
 from astropy.table import Table
 from astropy.wcs import WCS
 from astropy.io import fits
 from matplotlib import pyplot as plt
 from astropy.coordinates import SkyCoord
 
+import analysisUtils as au
+from analysisUtils import tbtool
+from imaging_utils import make_cont_img
+
+tb = au.tbtool()
 
 def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None, 
                 **kwargs):
@@ -83,7 +88,7 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None,
             np.sum(obj_stat['B10']['time']),
             ))
  
-def gen_image(obj, band=None, outdir='./', **kwargs):
+def gen_image(obj, band=None, outdir='./', exclude_aca=False, **kwargs):
     """make images for one calibrator on all or specific band
 
     Params:
@@ -93,23 +98,39 @@ def gen_image(obj, band=None, outdir='./', **kwargs):
     **kwargs: the additional parameters supported by make_cont_img
 
     """
+    p_obs = re.compile('uid___')
     for obs in os.listdir(obj):
+        if not p_obs.match(obs):
+            continue
         if band is not None:
             band_match = re.compile('_(?P<band>B\d{1,2})$')
             if band_match.search(obs):
                 obs_band = band_match.search(obs).groupdict()['band']
                 if obs_band != band:
                     continue
+
         basename = os.path.basename(obs)
+        obs_fullpath = os.path.join(obj, obs)
         myimagename = os.path.join(outdir, basename + '.cont.auto')
+
+        if exclude_aca:
+            tb.open(obs_fullpath + '/ANTENNA')
+            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+            tb.close()
+            if antenna_diameter < 12.0:
+                if debug:
+                    print("Excuding data from {}".format(antenna_diameter))
+                continue
+        print(obs_fullpath)
         try:
-            make_cont_img(vis=obj+'/'+obs, dirty_image=True, myimagename=myimagename, outdir=outdir, **kwargs)
+            make_cont_img(vis=obs_fullpath, dirty_image=True, myimagename=myimagename, outdir=outdir, **kwargs)
         except:
             print("Error in imaging {}".format(obj))
         exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
         rmtables(tablenames=myimagename+'.*')
 
-def gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], **kwargs):
+def gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
+                  debug=False, **kwargs):
     """generate the images of all calibrators
 
     Params:
@@ -122,13 +143,17 @@ def gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], **kwargs):
     default run: gen_all_image('/science_ALMACAL/data', '/tmp/all_images')
     """
     for obj in os.listdir(allcal_dir):
+        if debug:
+            print(obj)
         obj_match = re.compile('^J\d*[+-]\d*$')
         if not obj_match.match(obj):
             continue
         for band in bands:
-            os.system('mkdir -p {}'.format(os.path.join(outdir, obj, band)))
-            gen_image(os.path.join(allcal_dir, obj), band=band, 
-                      outdir=os.path.join(outdir, obj, band),)
+            infile_fullpath = os.path.join(allcal_dir, obj)
+            outfile_fullpath = os.path.join(outdir, obj, band)
+        
+            os.system('mkdir -p {}'.format(outfile_fullpath))
+            gen_image(infile_fullpath, band=band, outdir=outfile_fullpath, exclude_aca=exclude_aca)
 
 def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
     """show images in an interative ways, and record the input from inspector

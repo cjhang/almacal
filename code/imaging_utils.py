@@ -13,6 +13,7 @@ from astropy import constants as const
 import matplotlib.pyplot as plt 
 import analysisUtils as au
 
+from analysisUtils import tbtool
 from readms import read_spw
 
 def efficient_imsize(imsize):

@@ -12,7 +12,7 @@ plt.ioff()
 def read_spw(vis):
     """read the spectral windows
     """
-    tb = tbtool()
+    tb = au.tbtool()
     if isinstance(vis, str):
         vis = [vis, ]
     
