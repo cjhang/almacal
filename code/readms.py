@@ -47,16 +47,23 @@ def read_refdir(vis):
                                       unit="deg").to_string('hmsdms')
     return direction
 
-def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
-             figname=None, showfig=False, filename=None, savedata=False):
+def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
+             figname=None, showfig=False, savedata=False, filename=None,):
     """make the statistics about one calibrator
 
+    Args:
+        objfolder (str): the folder contains all the visibility
+        vis: a single visibility or a list
+        jsonfile: the json file to be read
+        plot (bool): whehther plot the results interactively (default is False)
+            - plotbands (list): the band to be plotted (default is ['B5', 'B6', 'B7', 'B8'])
+            - figname (bool): the figname of the saved figure, if None, no figures will be saved (default is None)
+        savedata (bool): whether save the statistics into file, default to save as json file
+            - filename (str): the filename of the saved data
+
+    
+
     """
-
-    base_dir = objfolder
-    obj = os.path.basename(objfolder)
-
-    p_obs = re.compile('uid___')
     spw_list = {'B3':{'name':[], 'time':[], 'freq':[]}, 
                 'B4':{'name':[], 'time':[], 'freq':[]}, 
                 'B5':{'name':[], 'time':[], 'freq':[]}, 
@@ -65,32 +72,51 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
                 'B8':{'name':[], 'time':[], 'freq':[]}, 
                 'B9':{'name':[], 'time':[], 'freq':[]}, 
                 'B10':{'name':[], 'time':[], 'freq':[]},} 
+    filelist = []
 
-    for obs in os.listdir(base_dir +'/'):
-        if p_obs.match(obs):
-            obs_filename = base_dir +'/'+ '/'+obs
-            try:
-                band_match = re.compile('_(?P<band>B\d{1,2})')
-                if band_match.search(obs):
-                    band = band_match.search(obs).groupdict()['band']
-                    # print("Band: ", band)
-                else:
-                    print("Error in band match.")
-                time_on_source = au.timeOnSource(obs_filename, verbose=False, debug=False)
-                time_minutes = time_on_source[0]['minutes_on_source']
-                if time_minutes < 1e-6:
-                    print('No valid on source time!')
-                    continue
-                spw_list[band]['time'].append(time_minutes)
-                spw_list[band]['name'].append(obs)
-                spw_specrange = read_spw(obs_filename)
-                spw_list[band]['freq'].append(list(spw_specrange))
-            except:
-                print("Error: in", obs_filename)
+    if objfolder:
+        base_dir = objfolder
+        obj = os.path.basename(objfolder)
+
+        p_obs = re.compile('uid___')
+
+        for obs in os.listdir(base_dir):
+            if p_obs.match(obs):
+                filelist.append(os.path.join(base_dir, obs))
+    elif vis:
+        if isinstance(vis, str):
+            filelist = [vis,]
+        elif isinstance(vis, list):
+            filelist = vis
+    elif jsonfile:
+        with open(jsonfile, 'r') as f:
+            spw_list = json.load(f)
+    else:
+        raise ValueError("No valid files have been given!")
+
+    band_match = re.compile('_(?P<band>B\d{1,2})')
+    for obs in filelist:
+        try:
+            if band_match.search(obs):
+                band = band_match.search(obs).groupdict()['band']
+                # print("Band: ", band)
+            else:
+                print("Error in band match.")
+            time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
+            time_minutes = time_on_source[0]['minutes_on_source']
+            if time_minutes < 1e-6:
+                print('No valid on source time!')
+                continue
+            spw_list[band]['time'].append(time_minutes)
+            spw_list[band]['name'].append(obs)
+            spw_specrange = read_spw(obs)
+            spw_list[band]['freq'].append(list(spw_specrange))
+        except:
+            print("Error: in", obs)
     if plot:
         band_in_plot = plotbands
         fig = plt.figure(figsize=(3*len(band_in_plot),5))
-        fig.suptitle(os.path.basename(objfolder))
+        # fig.suptitle(os.path.basename(objfolder))
         ax = fig.add_subplot(111)
 
         #ALMA band information, in GHz
@@ -115,6 +141,8 @@ def spw_stat(objfolder, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'],
         ax.set_ylim(-0.2, 1.2)
         ax.set_xlabel('Frequency [GHz]')
         ax.set_ylabel(r'$t_{\rm on\,source}$ fraction')
+        ax.tick_params(axis='x', which='major', labelsize=8)
+        ax.tick_params(axis='x', which='minor', labelsize=6)
         ax.tick_params(axis='y', labelcolor='w', top='off', bottom='on', left='off', right='off', labelsize=2)
 
         for band in band_in_plot:
