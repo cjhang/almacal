@@ -29,8 +29,8 @@ def efficient_imsize(imsize):
             continue
         
 
-def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, mycell=None, myimsize=None, outdir='./', dry_run=False, 
-                  baseline_percent=90, **kwargs):
+def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, 
+                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, **kwargs):
     """This function is used to make the continuum image
     
     dirty_image: generate the dirty image
@@ -97,12 +97,10 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
         myimagename = os.path.join(outdir, basename + '.cont.auto')
     rmtables(tablenames=myimagename + '.*')
 
-    if dry_run:
-        print("Mean frequecy:", freq_mean)
-        print("Maximum baseline:", baseline_max)
-        print("My cell size:", mycell)
-        print("My image size:", myimsize)
-        return
+    print("Mean frequecy:", freq_mean)
+    print("Maximum baseline:", baseline_typical)
+    print("My cell size:", mycell)
+    print("My image size:", myimsize)
 
     if dirty_image:
         tclean(vis=vis, spw="",
