@@ -58,7 +58,7 @@ The calibrator with Jet: J0635-7156
 
 **2020-12-08**
 
-possibe difference between good residual and bad residuals:
+possibe difference between good residual and bad residuals (based on J0217-0820):
 
 - [x] ~~integration time~~
 - [x] ~~bandpass or gain calibrator~~
@@ -86,3 +86,11 @@ Plans for this week and maybe the following weeks:
 - [ ] modify the gen_image program to make images with different resolution, maybe three for each image? with resolution decrease three time one time
 
 Another plan is making all your daily records online for the collaborators.
+
+---
+
+**2020-12-10**
+
+Todo
+
+- [ ] Analysis the most prominent ear in J0217-0820

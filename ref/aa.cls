@@ -30,7 +30,7 @@
 \def\fileversion{9.1}
 \let\aafileversion\fileversion
 \NeedsTeXFormat{LaTeX2e}[1995/06/01]
-\ProvidesClass{aa}
+\ProvidesClass{ref/aa}
          [\filedate{} v\fileversion{} Class for AA journal]
 \LoadClass[fleqn]{article}
 \newif\ifaa@letter
