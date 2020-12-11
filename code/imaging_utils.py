@@ -13,9 +13,6 @@ from astropy import constants as const
 import matplotlib.pyplot as plt 
 import analysisUtils as au
 
-from analysisUtils import tbtool
-from readms import read_spw
-
 def efficient_imsize(imsize):
     """This function try to optimize the imsize that can be divided by 2,3,5,7 only
     Which is much faster for casa
