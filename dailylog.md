@@ -94,3 +94,11 @@ Another plan is making all your daily records online for the collaborators.
 Todo
 
 - [ ] Analysis the most prominent ear in J0217-0820
+- [ ] check the direction of ear with the direction of psf
+
+Possible ways to improve the point source subtraction:
+
+- selfcal with `nterms=2`   
+- selfcal with multiscale algorithms
+
+-----------
