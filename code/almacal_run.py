@@ -20,6 +20,28 @@ from astropy.coordinates import SkyCoord
 
 tb = au.tbtool()
 
+def gen_filenames(dirname, debug=False):
+    """generate all the valid files names
+
+    """
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
+    filelist = []
+    if not os.path.isdir(dirname):
+        raise ValueError('Invalid directory!')
+    for item in os.listdir(dirname):
+        if debug:
+            print(item)
+        if obj_match.match(item):
+            obj_path = os.path.join(dirname, item)
+            for obs in os.listdir(obj_path):
+                if obs_match.match(obs):
+                    filelist.append(os.path.join(obj_path, obs))
+        elif obs_match.match(item):
+            filelist.append(os.path.join(dirname, item))
+
+    return filelist
+
 def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None, 
                 **kwargs):
     """generate the on-source time and spw distribution for the whole almacal dataset
@@ -164,10 +186,10 @@ def gen_all_image(allcal_dir=None, vis=None, outdir='./', bands=['B6','B7'], exc
 
     for infile in filelist:
         for band in bands:
-            outfile_fullpath = os.path.join(outdir, obj, band)
+            outfile_fullpath = os.path.join(outdir, band)
         
             os.system('mkdir -p {}'.format(outfile_fullpath))
-            gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=exclude_aca)
+            gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=exclude_aca, **kwargs)
 
 def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
     """show images in an interative ways, and record the input from inspector
@@ -373,4 +395,30 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
             print(obs)
         if obs in selectfiles_list:
             os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir+'/'))
+
+def check_image(img=None):
+    """This program designed to determine the validity of the image after point source subtraction
+
+
+    """
+    imghead = imhead(img, mode='list')
+    imgstat = imstat(img)
+
+    unit = imghead['bunit']
+    rms = imgstat['rms']
+
+    # define the central region
+    beam_major = imghead['beammajor']['value']*u.Unit(imghead['beammajor']['unit'])
+    radius = 5 
+    region_string = 'circle[[{},{}], {}]'.format(str(imghead['crval1'])+imghead['cunit1'],
+                                                 str(imghead['crval2'])+imghead['cunit2'],
+                                                 radius*beam_major)
+    imgstat_central = imstat(img, region=region_string)
+    central_max = imgstat_central['max']
+    central_mean = imgstat_central['mean']
+    central_sum = imgstat_central['sum']
+
+    print("For whole image: RMS={} {}, sum={}".format(rms, unit, imgstat['sum']))
+    print("For the central region: max:{},   mean:{},   sum:{}".format(central_max, central_mean, central_sum))
+    print("For the ratio: max:{},   mean:{},   sum:{}".format(central_max/rms, central_mean/rms, central_sum/rms))
 
