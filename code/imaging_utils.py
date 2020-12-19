@@ -27,7 +27,7 @@ def efficient_imsize(imsize):
         
 
 def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, 
-                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, **kwargs):
+                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, imgsize_scale=1, imgcell_scale=1, **kwargs):
     """This function is used to make the continuum image
     
     dirty_image: generate the dirty image
@@ -84,6 +84,7 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
         myimsize = efficient_imsize(int(fov / cellsize))
         myrestfreq = str(freq_mean)+'GHz'
 
+    myimsize = imgsize_scale * myimsize
 
     if basename is None:
         if isinstance(vis, list):
@@ -106,7 +107,6 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
                imsize=myimsize, cell=mycell, 
                restfreq=myrestfreq, phasecenter="", 
                specmode="mfs", outframe="LSRK",
-               pblimit=0.1,
                weighting='natural',
                # weighting="briggs", robust=1.5,
                niter=0,
@@ -122,7 +122,6 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
                imsize=myimsize, cell=mycell, 
                restfreq=myrestfreq, phasecenter="", 
                specmode="mfs", outframe="LSRK",
-               pblimit=0.1,
                **kwargs)
 
 def image_selfcal(vis=None, ncycle=3, ):
