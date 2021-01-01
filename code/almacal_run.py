@@ -14,7 +14,7 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 from astropy.coordinates import SkyCoord
 
-# import analysisUtils as au
+import analysisUtils as au
 # from analysisUtils import tbtool
 # from imaging_utils import make_cont_img
 
@@ -396,29 +396,87 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
         if obs in selectfiles_list:
             os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir+'/'))
 
-def check_image(img=None):
-    """This program designed to determine the validity of the image after point source subtraction
+def gaussian(x, u0, amp, std):
+    return amp*np.exp(-0.5*((x-u0)/std)**2)
 
+def check_image(img, plot=True, radius=5):
+    """This program designed to determine the validity of the image after point source subtraction
+    
+    The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
 
     """
-    imghead = imhead(img, mode='list')
-    imgstat = imstat(img)
+    hdu = fits.open(img)
+    header = hdu[0].header
+    data = hdu[0].data
 
-    unit = imghead['bunit']
-    rms = imgstat['rms']
+    ny, nx = data.shape[-2:]
+    masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
+    # statistics the noisy of the image
+    hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=50)
+    bins_mid = (bins[:-1] + bins[1:])*0.5
+    p0 = (0, 1, 1e-4) # mean, max and std
+    amp_scale = 1.0*np.max(hist) # change to int into float
+    popt, pcov = curve_fit(gaussian, bins_mid, hist/amp_scale, p0=p0)
 
-    # define the central region
-    beam_major = imghead['beammajor']['value']*u.Unit(imghead['beammajor']['unit'])
-    radius = 5 
-    region_string = 'circle[[{},{}], {}]'.format(str(imghead['crval1'])+imghead['cunit1'],
-                                                 str(imghead['crval2'])+imghead['cunit2'],
-                                                 radius*beam_major)
-    imgstat_central = imstat(img, region=region_string)
-    central_max = imgstat_central['max']
-    central_mean = imgstat_central['mean']
-    central_sum = imgstat_central['sum']
+    hist_fit = gaussian(bins_mid, *popt)*amp_scale
+    upper_5sigma = 5.0*popt[-1]
+    # chi2 = np.sum((hist - hist_fit)/amp_scale)**2/(len(bins_mid)-3)
+    # print("Chi2 is {}".format(chi2))
 
-    print("For whole image: RMS={} {}, sum={}".format(rms, unit, imgstat['sum']))
-    print("For the central region: max:{},   mean:{},   sum:{}".format(central_max, central_mean, central_sum))
-    print("For the ratio: max:{},   mean:{},   sum:{}".format(central_max/rms, central_mean/rms, central_sum/rms))
+    # statistics in the central region
+    bmaj = header['BMAJ']
+    bmin = header['BMIN']
+    bpa = header['BPA']
+
+    # radius = 5 
+    bmaj_pixel_size = bmaj / np.abs(header['CDELT1'])
+    # select the central region with side length of radius*bmaj 
+    x_index = np.arange(0, nx) - nx/2.0
+    y_index = np.arange(0, ny) - ny/2.0
+    x_map, y_map = np.meshgrid(x_index, y_index)
+    mask = np.sqrt(x_map**2 + y_map**2) < radius*bmaj_pixel_size*0.5 #units in half major axis 
+
+    hist_center, bins_center = np.histogram(masked_data[mask], bins=bins)
+    bins_mid_center = (bins_center[:-1] + bins_center[1:])*0.5
+    amp_scale_center = 1.0*np.max(hist_center) # change to int into float
+    
+    n_outlier = np.sum(hist_center[bins_mid_center>upper_5sigma])
+    print('mean: {}, std:{}'.format(popt[0], popt[-1]))
+    print('number of 5sigma outlier: {}'.format(n_outlier))
+    print('fraction of 5sigma outlier: {}'.format(1.0*n_outlier/np.sum(hist_center)))
+
+
+    if plot:
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot(111)
+        ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
+        ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
+        ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
+        ax.vlines(3.0*popt[-1], 0, 1.2, color='k', label=r'3$\sigma$ upper boundary')
+        ax.vlines(5.0*popt[-1], 0, 1.2, color='k', lw=4, label=r'5$\sigma$ upper boundary')
+        ax.set_xlabel('Flux density [Jy/beam]')
+        ax.set_ylabel('Normalized Pixel numbers')
+        ax.legend()
+
+    if 0:
+        imghead = imhead(img, mode='list')
+        imgstat = imstat(img)
+
+        unit = imghead['bunit']
+        rms = imgstat['rms']
+
+        # define the central region
+        beam_major = imghead['beammajor']['value']*u.Unit(imghead['beammajor']['unit'])
+        radius = 5 
+        region_string = 'circle[[{},{}], {}]'.format(str(imghead['crval1'])+imghead['cunit1'],
+                                                     str(imghead['crval2'])+imghead['cunit2'],
+                                                     radius*beam_major)
+        imgstat_central = imstat(img, region=region_string)
+        central_max = imgstat_central['max']
+        central_mean = imgstat_central['mean']
+        central_sum = imgstat_central['sum']
+
+        print("For whole image: RMS={} {}, sum={}".format(rms, unit, imgstat['sum']))
+        print("For the central region: max:{},   mean:{},   sum:{}".format(central_max, central_mean, central_sum))
+        print("For the ratio: max:{},   mean:{},   sum:{}".format(central_max/rms, central_mean/rms, central_sum/rms))
 
