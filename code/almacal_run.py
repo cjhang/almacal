@@ -13,6 +13,7 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from matplotlib import pyplot as plt
 from astropy.coordinates import SkyCoord
+from scipy.optimize import curve_fit
 
 import analysisUtils as au
 # from analysisUtils import tbtool
@@ -288,17 +289,22 @@ def make_combine_obs(obj, basedir=None, band=None, badfiles=None):
     # print(valid_files)
     return valid_files
     
-def read_flux(obs, allflux_file=None):
+def read_flux(obs, allflux_file=None, strick_mode=False):
     obs_filename = os.path.basename(obs)
+    if allflux_file is None:
+        allflux_file = os.path.join(os.path.expanduser('~'), 'Documents/projects/almacal/data/allcal.fluxval')
     # allflux_file = './allcal.fluxval'
     try:
         allflux = np.loadtxt(allflux_file, dtype=str)
     except:
-        raise ValueError("Unsupported allflux file!")
+        if strick_mode:
+            raise ValueError("Unsupported allflux file!")
+        return 0
     obs_select = allflux[:,1] == obs_filename
 
     if np.sum(obs_select) < 1:
-        raise ValueError("No flux can be found!")
+        if strick_mode:
+            raise ValueError("No flux can be found!")
         return 0
     if np.sum(obs_select) > 1:
         print("Warning: not an unique flux!")
@@ -399,12 +405,18 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=True, radius=5):
+def check_image(img, plot=True, radius=5, debug=True, check_flux=True, minimal_fluxval=0.001):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
 
     """
+    p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).cont.auto.fits')
+    if p_uidimg.search(img):
+        uidname = p_uidimg.search(img).groupdict()['uidname']
+    else:
+        uidname = None
+
     hdu = fits.open(img)
     header = hdu[0].header
     data = hdu[0].data
@@ -441,10 +453,11 @@ def check_image(img, plot=True, radius=5):
     amp_scale_center = 1.0*np.max(hist_center) # change to int into float
     
     n_outlier = np.sum(hist_center[bins_mid_center>upper_5sigma])
-    print('mean: {}, std:{}'.format(popt[0], popt[-1]))
-    print('number of 5sigma outlier: {}'.format(n_outlier))
-    print('fraction of 5sigma outlier: {}'.format(1.0*n_outlier/np.sum(hist_center)))
-
+    percent_outlier = 1.0*n_outlier/np.sum(hist_center)
+    if debug:
+        print('mean: {}, std:{}'.format(popt[0], popt[-1]))
+        print('number of 5sigma outlier: {}'.format(n_outlier))
+        print('fraction of 5sigma outlier: {}'.format(percent_outlier))
 
     if plot:
         fig = plt.figure(figsize=(8, 6))
@@ -457,6 +470,24 @@ def check_image(img, plot=True, radius=5):
         ax.set_xlabel('Flux density [Jy/beam]')
         ax.set_ylabel('Normalized Pixel numbers')
         ax.legend()
+
+    if check_flux:
+        # check the flux value of the subtracted point source
+        if uidname:
+            fluxval = read_flux(uidname)
+            if debug:
+                print(uidname)
+                print("fluxval: {}".format(fluxval))
+            if fluxval > 0:
+                fluxval_ratio < fluxval/minimal_fluxval
+                    
+    # return the checking results
+    if percent_outlier >= 0.02:
+        return False
+    if check_flux:
+        if fluxval_ratio < 1:
+            return False
+    return True
 
     if 0:
         imghead = imhead(img, mode='list')
