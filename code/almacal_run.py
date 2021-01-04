@@ -111,7 +111,7 @@ def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None,
             np.sum(obj_stat['B10']['time']),
             ))
  
-def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, **kwargs):
+def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, **kwargs):
     """make images for one calibrator on all or specific band
 
     Params:
@@ -405,7 +405,7 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=True, radius=5, debug=True, check_flux=True, minimal_fluxval=0.001):
+def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal_fluxval=0.001):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -447,6 +447,7 @@ def check_image(img, plot=True, radius=5, debug=True, check_flux=True, minimal_f
     y_index = np.arange(0, ny) - ny/2.0
     x_map, y_map = np.meshgrid(x_index, y_index)
     mask = np.sqrt(x_map**2 + y_map**2) < radius*bmaj_pixel_size*0.5 #units in half major axis 
+    mask = ~masked_data.mask & mask # also masked the central inf and nan
 
     hist_center, bins_center = np.histogram(masked_data[mask], bins=bins)
     bins_mid_center = (bins_center[:-1] + bins_center[1:])*0.5
@@ -470,7 +471,15 @@ def check_image(img, plot=True, radius=5, debug=True, check_flux=True, minimal_f
         ax.set_xlabel('Flux density [Jy/beam]')
         ax.set_ylabel('Normalized Pixel numbers')
         ax.legend()
-
+        plt.show()
+    
+    # return the checking results
+    # check the fiiting
+    if (popt[0]-0.0)<1e-8 and (popt[-1]-0.001)<1e-8:
+        if debug:
+            print("Fitting failed!")
+        return False
+    # check the fluxval
     if check_flux:
         # check the flux value of the subtracted point source
         if uidname:
@@ -479,14 +488,11 @@ def check_image(img, plot=True, radius=5, debug=True, check_flux=True, minimal_f
                 print(uidname)
                 print("fluxval: {}".format(fluxval))
             if fluxval > 0:
-                fluxval_ratio < fluxval/minimal_fluxval
+                if fluxval/minimal_fluxval < 1:
+                    return False
                     
-    # return the checking results
     if percent_outlier >= 0.02:
         return False
-    if check_flux:
-        if fluxval_ratio < 1:
-            return False
     return True
 
     if 0:
@@ -511,3 +517,38 @@ def check_image(img, plot=True, radius=5, debug=True, check_flux=True, minimal_f
         print("For the central region: max:{},   mean:{},   sum:{}".format(central_max, central_mean, central_sum))
         print("For the ratio: max:{},   mean:{},   sum:{}".format(central_max/rms, central_mean/rms, central_sum/rms))
 
+def check_images(imgs, debug=False, **kwargs):
+    """wraps up check_image to handle multiple images
+    """
+    if isinstance(imgs, str):
+        all_files = glob.glob(imgs)
+    elif isinstance(imgs, list):
+        all_files = imgs
+
+    p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).cont.auto.fits')
+
+    good_imgs = []
+    bad_imgs = []
+    for img in all_files:
+        if debug:
+            print("img: {}".format(img))
+        # continue
+        if p_uidimg.search(img):
+            uidname = p_uidimg.search(img).groupdict()['uidname']
+        else:
+            uidname = None
+        # 
+        if check_image(img, **kwargs):
+            if uidname is not None:
+                good_imgs.append(uidname)
+            else:
+                if debug:
+                    print("Not support filenames: {}".format(img))
+
+        else:
+            if uidname is not None:
+                bad_imgs.append(uidname)
+            else:
+                if debug:
+                    print("{} is not include in the returns!".format(img))
+    return good_imgs, bad_imgs

@@ -27,7 +27,7 @@ def efficient_imsize(imsize):
         
 
 def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, 
-                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, imgsize_scale=1, imgcell_scale=1, **kwargs):
+                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, imgsize_scale=1, cellsize_scale=1, **kwargs):
     """This function is used to make the continuum image
     
     dirty_image: generate the dirty image
@@ -78,13 +78,14 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
     # calcuate the cell size
     if mycell is None:
         cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
+        cellsize = cellsize_scale * cellsize
         mycell = "{:.4f}arcsec".format(cellsize)
     
     if myimsize is None:
-        myimsize = efficient_imsize(int(fov / cellsize))
+        myimsize = efficient_imsize(int(imgsize_scale * fov / cellsize))
+        print(">>>", myimsize)
         myrestfreq = str(freq_mean)+'GHz'
 
-    myimsize = imgsize_scale * myimsize
 
     if basename is None:
         if isinstance(vis, list):
@@ -101,11 +102,11 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
     print("My image size:", myimsize)
 
     if dirty_image:
-        tclean(vis=vis, spw="",
+        tclean(vis=vis,
                datacolumn="data",
                imagename=myimagename,
                imsize=myimsize, cell=mycell, 
-               restfreq=myrestfreq, phasecenter="", 
+               restfreq=myrestfreq, 
                specmode="mfs", outframe="LSRK",
                weighting='natural',
                # weighting="briggs", robust=1.5,
@@ -116,7 +117,7 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
                savemodel="none", **kwargs)
 
     if clean_image:
-        tclean(vis=vis, spw="",
+        tclean(vis=vis,
                datacolumn="data",
                imagename=myimagename,
                imsize=myimsize, cell=mycell, 
