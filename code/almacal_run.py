@@ -146,7 +146,7 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, 
                 print("Excuding data from {}".format(antenna_diameter))
             return
     try:
-        make_cont_img(vis=vis, dirty_image=True, myimagename=myimagename, outdir=outdir, **kwargs)
+        make_cont_img(vis=vis, tclean=True, myimagename=myimagename, outdir=outdir, **kwargs)
     except:
         print("Error in imaging {}".format(vis))
     exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
@@ -321,7 +321,7 @@ def ms_restore(obs_list, allflux_file=None, basedir=None, outdir='./output', tmp
     os.system('mkdir -p {}'.format(tmpdir))
 
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
-
+    
     if isinstance(obs_list, str):
         if os.path.isfile(obs_list):
             file_list = []
@@ -475,7 +475,7 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     
     # return the checking results
     # check the fiiting
-    if (popt[0]-0.0)<1e-8 and (popt[-1]-0.001)<1e-8:
+    if np.abs(popt[0]-0.0)<1e-8 and np.abs(popt[-1]-0.001)<1e-8:
         if debug:
             print("Fitting failed!")
         return False
@@ -538,7 +538,7 @@ def check_images(imgs, debug=False, **kwargs):
         else:
             uidname = None
         # 
-        if check_image(img, **kwargs):
+        if check_image(img, debug=debug, **kwargs):
             if uidname is not None:
                 good_imgs.append(uidname)
             else:
@@ -552,3 +552,18 @@ def check_images(imgs, debug=False, **kwargs):
                 if debug:
                     print("{} is not include in the returns!".format(img))
     return good_imgs, bad_imgs
+
+def make_good_image(good_imgs, basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
+    """make the final good image with all the good observations
+    """
+    good_imgs_fullpath = []
+    for img in good_imgs:
+        good_imgs_fullpath.append(os.path.join(basedir, img))
+    if debug:
+        print("good images:")
+        print(good_imgs_fullpath)
+        print('\n')
+    if concatvis is None:
+        concatvis = os.path.join(tmpdir, 'combine.ms')
+    concat(vis=good_imgs_fullpath, concatvis=concatvis)
+    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000)
