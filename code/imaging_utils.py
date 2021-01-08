@@ -26,8 +26,12 @@ def efficient_imsize(imsize):
             continue
         
 
-def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False, myimagename=None, 
-                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, imgsize_scale=1, cellsize_scale=1, **kwargs):
+def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, 
+                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, imgsize_scale=1, 
+                  datacolumn="data", specmode='mfs', cellsize_scale=1, outframe="LSRK", weighting='natural',
+                  niter=0, interactive=False, usemask='auto-multithresh',
+                  **kwargs):
+
     """This function is used to make the continuum image
     
     dirty_image: generate the dirty image
@@ -101,29 +105,28 @@ def make_cont_img(vis=None, basename=None, dirty_image=False, clean_image=False,
     print("My cell size:", mycell)
     print("My image size:", myimsize)
 
-    if dirty_image:
+    if isinstance(vis, list):
+        if len(vis) > 4:
+            vis_combined = '/tmp/vis_combined.ms'
+            concat(vis=vis, concatvis=vis_combined)
+            vis = vis_combined
+    if clean:
         tclean(vis=vis,
-               datacolumn="data",
                imagename=myimagename,
-               imsize=myimsize, cell=mycell, 
+               imsize=myimsize, 
+               cell=mycell, 
                restfreq=myrestfreq, 
-               specmode="mfs", outframe="LSRK",
-               weighting='natural',
-               # weighting="briggs", robust=1.5,
-               niter=0,
-               # usemask='user',
-               # usemask="auto-multithresh",
-               interactive=False,
-               savemodel="none", **kwargs)
-
-    if clean_image:
-        tclean(vis=vis,
-               datacolumn="data",
-               imagename=myimagename,
-               imsize=myimsize, cell=mycell, 
-               restfreq=myrestfreq, phasecenter="", 
-               specmode="mfs", outframe="LSRK",
+               datacolumn=datacolumn, 
+               specmode=specmode, 
+               outframe=outframe, 
+               weighting=weighting,
+               niter=niter, 
+               interactive=interactive, 
+               usemask=usemask,
                **kwargs)
+
+    if isinstance(vis, list):
+        os.system('rm -rf /tmp/vis_combined.ms')
 
 def image_selfcal(vis=None, ncycle=3, ):
     # tclean and self-calibration
