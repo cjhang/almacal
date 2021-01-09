@@ -634,13 +634,14 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
     """
     if imgs_dir:
         obj_match = re.compile('^J\d*[+-]\d*$')
-        for obj in os.listdir(imgs_dir)[:5]:
+        for obj in os.listdir(imgs_dir):
             if obj_match.match(obj):
                 print(obj)
                 obj_dir = os.path.join(outdir, obj)
                 if os.path.isdir(obj_dir):
-                    if len(os.listdir()) > 0:
-                        print("Skip {}".format(obj))
+                    if len(os.listdir(obj_dir)) > 0:
+                        if debug:
+                            print("Skip {}".format(obj))
                         continue
                 else:
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
