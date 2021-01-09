@@ -638,6 +638,13 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
                                                     basename=obj+'_'+band, debug=debug, **kwargs)
     elif good_imgs_file:
         good_imgs = []
+        basename_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)')
+        try:
+            basename_matched = basename_match.search(os.path.basename(good_imgs_file)).groupdict()
+            obj = basename_matched['obj']
+            band = basename_matched['band']
+        except:
+            obj = band = 'Undefined'
         with open(good_imgs_file) as good_file:
             good_imgs_lines = good_file.readlines()
         for line in good_imgs_lines:
@@ -645,5 +652,5 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
 
             
     if make_image:
-            make_good_images(good_images, basenem=obj+'_'+band, basedir='', tmpdir='./', debug=debug)
+            make_good_images(good_images, basenem=obj+'_'+band, basedir='', tmpdir=outdir, debug=debug)
 
