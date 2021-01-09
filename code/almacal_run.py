@@ -588,32 +588,40 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
     """fix the missing and wrong images for gen_all_image output
     """
     filelist = []
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
     for obj in os.listdir(allcal_dir):
-        if debug:
-            print(obj)
-        obj_match = re.compile('^J\d*[+-]\d*$')
         if obj_match.match(obj):
-            filelist.append(os.path.join(allcal_dir, obj))
-            continue
+            if debug:
+                print(obj)
+            # start to go through each obj
 
-    for infile in filelist:
-        for band in bands:
-            outfile_fullpath = os.path.join(outdir, band)
-            os.system('mkdir -p {}'.format(outfile_fullpath))
-            
-            outfile_fullname = outfile_fullpath+'cont.auto.fits' 
-            if os.path.isfile(outfile_fullname):
-                tb.open(infile + '/ANTENNA')
-                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-                tb.close()
-                if antenna_diameter < 12.0:
+            for obs in os.listdir(os.path.join(allcal_dir, obj)):
+                if obs_match.match(obs):
+                    obs_band = obs_match.search(obs).groupdict()['band']
+                    infile = os.path.join(allcal_dir, obj, obs)
                     if debug:
-                        print("removing aca image: {}".format(antenna_diameter))
-                    os.system('rm -f {}'.format(outfile_fullname))
-            else:
-                if debug:
-                    print("Adding new image: {}".format(outfile_fullname))
-                gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=True, **kwargs)
+                        print(obs)
+                    if obs_band in bands:
+                        outfile_fullpath = os.path.join(outdir, obj, obs_band)
+                        os.system('mkdir -p {}'.format(outfile_fullpath))
+                        
+                        outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
+                        if os.path.isfile(outfile_fullname):
+                            tb.open(infile + '/ANTENNA')
+                            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                            tb.close()
+                            if antenna_diameter < 12.0:
+                                if debug:
+                                    print("Removing aca image: {}".format(outfile_fullname))
+                                os.system('rm -f {}'.format(outfile_fullname))
+                            else:
+                                if debug:
+                                    print(">> {} already exists.".format(outfile_fullname))
+                        else:
+                            if debug:
+                                print("Adding new image: {}".format(outfile_fullname))
+                            gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=True, **kwargs)
 
 def run_generate_all_goodlist():
     """generate the good image list for all the calibrators
