@@ -429,8 +429,11 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     bins_mid = (bins[:-1] + bins[1:])*0.5
     p0 = (0, 1, 1e-4) # mean, max and std
     amp_scale = 1.0*np.max(hist) # change to int into float
-    popt, pcov = curve_fit(gaussian, bins_mid, hist/amp_scale, p0=p0)
-
+    try:
+        popt, pcov = curve_fit(gaussian, bins_mid, hist/amp_scale, p0=p0)
+    except:
+        print("`Fitting failed!")
+        popt = p0
     hist_fit = gaussian(bins_mid, *popt)*amp_scale
     upper_5sigma = 5.0*popt[-1]
     # chi2 = np.sum((hist - hist_fit)/amp_scale)**2/(len(bins_mid)-3)
