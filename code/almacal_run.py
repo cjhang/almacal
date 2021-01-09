@@ -125,14 +125,14 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, 
     
     if not p_obs.search(vis):
         print("Invalid name!")
-        return
+        return False
     if band is not None:
         band_match = re.compile('_(?P<band>B\d{1,2})$')
         if band_match.search(vis):
             obs_band = band_match.search(vis).groupdict()['band']
             if obs_band != band:
                 print("Invalid band!")
-                return
+                return False
 
     basename = os.path.basename(vis)
     myimagename = os.path.join(outdir, basename + '.cont.auto')
@@ -144,13 +144,14 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, 
         if antenna_diameter < 12.0:
             if debug:
                 print("Excuding data from {}".format(antenna_diameter))
-            return
+            return False
     try:
-        make_cont_img(vis=vis, tclean=True, myimagename=myimagename, outdir=outdir, **kwargs)
+        make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, **kwargs)
     except:
         print("Error in imaging {}".format(vis))
     exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
     rmtables(tablenames=myimagename+'.*')
+    return True
 
 def gen_all_image(allcal_dir=None, vis=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, **kwargs):
@@ -592,8 +593,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
     for obj in os.listdir(allcal_dir):
         if obj_match.match(obj):
-            if debug:
-                print(obj)
+            print(obj)
             # start to go through each obj
 
             for obs in os.listdir(os.path.join(allcal_dir, obj)):
@@ -612,20 +612,26 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                             antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
                             tb.close()
                             if antenna_diameter < 12.0:
-                                if debug:
-                                    print("Removing aca image: {}".format(outfile_fullname))
+                                print("Removing aca image: {}".format(outfile_fullname))
                                 os.system('rm -f {}'.format(outfile_fullname))
                             else:
                                 if debug:
                                     print(">> {} already exists.".format(outfile_fullname))
                         else:
-                            if debug:
+                            if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=True, 
+                                         debug=debug, **kwargs):
                                 print("Adding new image: {}".format(outfile_fullname))
-                            gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=True, **kwargs)
 
-def run_generate_all_goodlist():
+def run_generate_all_goodlist(imgs_dir, dry_run=True, outdir=None, debug=False, **kwargs):
     """generate the good image list for all the calibrators
     """
-    pass
-
+    for obj in os.listdir(imgs_dir):
+        if obj_match.match(obj):
+            print(obj)
+    
+        for band in os.listdir(os.path.join(imgs_dir, obj)):
+            obj_band_path = os.path.join(imgs_dir, obj, band)
+            good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', debug=debug, **kwargs)
+            if outdir:
+                make_good_images(good_images, basenem=obj+'_'+band, basedir='', tmpdir='./', debug=debug)
 
