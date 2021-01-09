@@ -518,7 +518,7 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
         print("For the central region: max:{},   mean:{},   sum:{}".format(central_max, central_mean, central_sum))
         print("For the ratio: max:{},   mean:{},   sum:{}".format(central_max/rms, central_mean/rms, central_sum/rms))
 
-def check_images(imgs, debug=False, **kwargs):
+def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
     """wraps up check_image to handle multiple images
     """
     if isinstance(imgs, str):
@@ -552,6 +552,11 @@ def check_images(imgs, debug=False, **kwargs):
             else:
                 if debug:
                     print("{} is not include in the returns!".format(img))
+    if outdir:
+        with open(os.path.join(outdir, basename+"_good_imgs.txt"), "w") as good_outfile:
+            good_outfile.write("\n".join(str(item) for item in good_imgs))
+        with open(os.path.join(outdir, basename+"_bad_imgs.txt"), "w") as bad_outfile:
+            bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
 def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
@@ -568,9 +573,6 @@ def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='.
         concatvis = os.path.join(tmpdir, basename+'combine.ms')
     concat(vis=good_imgs_fullpath, concatvis=concatvis)
     make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000, )
-
-
-
 
 
 
@@ -622,16 +624,26 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                          debug=debug, **kwargs):
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_generate_all_goodlist(imgs_dir, dry_run=True, outdir=None, debug=False, **kwargs):
+def run_generate_all_goodlist(imgs_dir=None, good_imgs_file=None, make_image=False, outdir='./', debug=False, **kwargs):
     """generate the good image list for all the calibrators
     """
-    for obj in os.listdir(imgs_dir):
-        if obj_match.match(obj):
-            print(obj)
-    
-        for band in os.listdir(os.path.join(imgs_dir, obj)):
-            obj_band_path = os.path.join(imgs_dir, obj, band)
-            good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', debug=debug, **kwargs)
-            if outdir:
-                make_good_images(good_images, basenem=obj+'_'+band, basedir='', tmpdir='./', debug=debug)
+    if imgs_dir:
+        for obj in os.listdir(imgs_dir):
+            if obj_match.match(obj):
+                print(obj)
+                os.system('mkdir {}'.format(obj))
+            for band in os.listdir(os.path.join(imgs_dir, obj)):
+                obj_band_path = os.path.join(imgs_dir, obj, band)
+                good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
+                                                    basename=obj+'_'+band, debug=debug, **kwargs)
+    elif good_imgs_file:
+        good_imgs = []
+        with open(good_imgs_file) as good_file:
+            good_imgs_lines = good_file.readlines()
+        for line in good_imgs_lines:
+            good_imgs.append(line.strip())
+
+            
+    if make_image:
+            make_good_images(good_images, basenem=obj+'_'+band, basedir='', tmpdir='./', debug=debug)
 
