@@ -553,10 +553,12 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 if debug:
                     print("{} is not include in the returns!".format(img))
     if outdir:
-        with open(os.path.join(outdir, basename+"_good_imgs.txt"), "w") as good_outfile:
-            good_outfile.write("\n".join(str(item) for item in good_imgs))
-        with open(os.path.join(outdir, basename+"_bad_imgs.txt"), "w") as bad_outfile:
-            bad_outfile.write("\n".join(str(item) for item in bad_imgs))
+        if len(good_imgs) > 0:
+            with open(os.path.join(outdir, basename+"_good_imgs.txt"), "w") as good_outfile:
+                good_outfile.write("\n".join(str(item) for item in good_imgs))
+        if len(bad_imgs) > 0:
+            with open(os.path.join(outdir, basename+"_bad_imgs.txt"), "w") as bad_outfile:
+                bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
 def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
@@ -628,10 +630,11 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
+        obj_match = re.compile('^J\d*[+-]\d*$')
         for obj in os.listdir(imgs_dir):
             if obj_match.match(obj):
                 print(obj)
-                os.system('mkdir {}'.format(obj))
+                os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
             for band in os.listdir(os.path.join(imgs_dir, obj)):
                 obj_band_path = os.path.join(imgs_dir, obj, band)
                 good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
