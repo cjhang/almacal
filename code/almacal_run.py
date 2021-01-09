@@ -553,7 +553,7 @@ def check_images(imgs, debug=False, **kwargs):
                     print("{} is not include in the returns!".format(img))
     return good_imgs, bad_imgs
 
-def make_good_image(good_imgs, basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
+def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
     """make the final good image with all the good observations
     """
     good_imgs_fullpath = []
@@ -564,6 +564,60 @@ def make_good_image(good_imgs, basedir=None, outdir='./', tmpdir='./', concatvis
         print(good_imgs_fullpath)
         print('\n')
     if concatvis is None:
-        concatvis = os.path.join(tmpdir, 'combine.ms')
+        concatvis = os.path.join(tmpdir, basename+'combine.ms')
     concat(vis=good_imgs_fullpath, concatvis=concatvis)
-    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000)
+    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000, )
+
+
+
+
+
+
+
+
+
+
+
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# The ALMA run automatic pipeline section #
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
+                  debug=False, **kwargs):
+    """fix the missing and wrong images for gen_all_image output
+    """
+    filelist = []
+    for obj in os.listdir(allcal_dir):
+        if debug:
+            print(obj)
+        obj_match = re.compile('^J\d*[+-]\d*$')
+        if obj_match.match(obj):
+            filelist.append(os.path.join(allcal_dir, obj))
+            continue
+
+    for infile in filelist:
+        for band in bands:
+            outfile_fullpath = os.path.join(outdir, band)
+            os.system('mkdir -p {}'.format(outfile_fullpath))
+            
+            outfile_fullname = outfile_fullpath+'cont.auto.fits' 
+            if os.path.isfile(outfile_fullname):
+                tb.open(infile + '/ANTENNA')
+                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                tb.close()
+                if antenna_diameter < 12.0:
+                    if debug:
+                        print("removing aca image: {}".format(antenna_diameter))
+                    os.system('rm -f {}'.format(outfile_fullname))
+            else:
+                if debug:
+                    print("Adding new image: {}".format(outfile_fullname))
+                gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=True, **kwargs)
+
+def run_generate_all_goodlist():
+    """generate the good image list for all the calibrators
+    """
+    pass
+
+
