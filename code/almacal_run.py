@@ -624,7 +624,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                          debug=debug, **kwargs):
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_generate_all_goodlist(imgs_dir=None, good_imgs_file=None, make_image=False, outdir='./', debug=False, **kwargs):
+def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False, outdir='./', debug=False, **kwargs):
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
