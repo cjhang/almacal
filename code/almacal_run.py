@@ -634,10 +634,16 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
     """
     if imgs_dir:
         obj_match = re.compile('^J\d*[+-]\d*$')
-        for obj in os.listdir(imgs_dir):
+        for obj in os.listdir(imgs_dir)[:5]:
             if obj_match.match(obj):
                 print(obj)
-                os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
+                obj_dir = os.path.join(outdir, obj)
+                if os.path.isdir(obj_dir):
+                    if len(os.listdir()) > 0:
+                        print("Skip {}".format(obj))
+                        continue
+                else:
+                    os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
             for band in os.listdir(os.path.join(imgs_dir, obj)):
                 obj_band_path = os.path.join(imgs_dir, obj, band)
                 good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
