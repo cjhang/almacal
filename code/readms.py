@@ -48,7 +48,7 @@ def read_refdir(vis):
     return direction
 
 def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
-             figname=None, showfig=False, savedata=False, filename=None,):
+             figname=None, showfig=False, savedata=False, filename=None, debug=False):
     """make the statistics about one calibrator
 
     Args:
@@ -99,16 +99,19 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
         try:
             if band_match.search(obs):
                 band = band_match.search(obs).groupdict()['band']
-                # print("Band: ", band)
+                if debug:
+                    print("Band: ", band)
             else:
                 print("Error in band match.")
             time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
             time_minutes = time_on_source[0]['minutes_on_source']
+            if debug:
+                print('time_on_source', time_on_source)
             if time_minutes < 1e-6:
                 print('No valid on source time!')
                 continue
             spw_list[band]['time'].append(time_minutes)
-            spw_list[band]['name'].append(obs)
+            spw_list[band]['name'].append(os.path.basename(obs))
             spw_specrange = read_spw(obs)
             spw_list[band]['freq'].append(list(spw_specrange))
         except:
