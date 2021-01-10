@@ -43,58 +43,30 @@ def gen_filenames(dirname, debug=False):
 
     return filelist
 
-def gen_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None, 
-                **kwargs):
-    """generate the on-source time and spw distribution for the whole almacal dataset
-    
-    Params:
-        base_dir: the root folder contains all the measurements
-        output_dir: the root folder for placing the results of each calibrator,
-                    including the json file and the plots
-        bad_obs: the file contains unusable observation
-        info_file: the file contains the general information for all the calibrators
-        **kwargs: support the addition parameters of `spw_stat`
-    
-
-    default run:
-    obj_output_dir = output_dir + '/' + obj + '/'
-    os.system('mkdir {}'.format(obj_output_dir))
-    spw_stat('/', plot=True, showfig=False, figname=obj_output_dir + obj+'.pdf', savedata=True, filename=obj_output_dir + obj+'.json')
+def gen_obstime_select(dirname, select='good', basedir=None, info_file=None, **kwargs):
+    """generate the on-source time and spw distribution for given visibilities
     """
 
-    p_obj = re.compile('J\d+[+-]\d')
-    p_obs = re.compile('uid___')
-    
-    # bad_obs = '/Users/jchen/Desktop/projects/almacal/data/broken_obs.txt'
-    # almacal_info_file = '/Users/jchen/Desktop/projects/almacal/data/almacal_timeOnSource.txt'
-    # all_obs = Table.read(almacal_info_file, format='ascii')
-    # all_obs.sort(['B6', 'B7'])
-    # all_obs.reverse()
-
-    if bad_obs is not None:
-        with open(bad_obs) as f:
-            all_bad_obs = f.readlines()
-        for i in range(len(all_bad_obs)):
-            all_bad_obs[i] = all_bad_obs[i].strip()
-
     band_match = re.compile('_(?P<band>B\d{1,2})$')
-    obj_match = re.compile('J\d{4}[-+]\d{4}')
+    obj_match = re.compile('^J\d{4}[-+]\d{4}')
 
-    for i,obj in enumerate(os.listdir(base_dir)):
-    # for i,obj in enumerate(all_obs['obj']):
-        obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
-                    'B7':0, 'B8':0,  'B9':0, 'B10':0}
+    for obj in os.listdir(dirname):
         if not obj_match.match(obj):
-            print('Error load obj:', obj)
             continue
-        print('index=', i, "obj:", obj)
-            
-        obj_dirname = base_dir +'/'+ obj
-        obj_output_dir = output_dir + '/' + obj
-        os.system('mkdir {}'.format(obj_output_dir))
-        obj_stat = spw_stat(obj_dirname,
+        obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
+                        'B7':0, 'B8':0,  'B9':0, 'B10':0}
+        obj_dir = os.path.join(dirname, obj)
+        for f in os.listdir(obj_dir):
+            if select in f:
+                good_vis = []
+                with open(os.path.join(basedir, obj, obj+'_'+band+'_good_imgs.txt')) as good_file:
+                    good_vis_lines = good_file.readlines()
+                for line in good_vis_lines:
+                    good_vis.append(os.path.join(basedir, obj, line.strip()))
+
+        obj_stat = spw_stat(vis=good_vis,
                             savedata=True, 
-                            filename=obj_output_dir+'/'+ obj+'.json', 
+                            jsonfile=os.path.join(obj_dir, obj+'.json') 
                             **kwargs)
     
         if info_file is not None:
@@ -579,7 +551,11 @@ def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='.
     if concatvis is None:
         concatvis = os.path.join(tmpdir, basename+'combine.ms')
     concat(vis=good_imgs_fullpath, concatvis=concatvis)
-    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000, )
+    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000, pblimit=-0.01, 
+                  fov_scale=2.0)
+    if only_fits:
+        exportfits(imagename=concatvis+'.auto.cont.image', fitsimage=concatvis+'.auto.cont.fits')
+        rmtables(tablenames=concatvis+'.auto.cont.*')
 
 
 
@@ -592,6 +568,74 @@ def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='.
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None, info_file=None, 
+                **kwargs):
+    """generate the on-source time and spw distribution for the whole almacal dataset
+    
+    Params:
+        base_dir: the root folder contains all the measurements
+        output_dir: the root folder for placing the results of each calibrator,
+                    including the json file and the plots
+        bad_obs: the file contains unusable observation
+        info_file: the file contains the general information for all the calibrators
+        **kwargs: support the addition parameters of `spw_stat`
+    
+
+    default run:
+    obj_output_dir = output_dir + '/' + obj + '/'
+    os.system('mkdir {}'.format(obj_output_dir))
+    spw_stat('/', plot=True, showfig=False, figname=obj_output_dir + obj+'.pdf', savedata=True, filename=obj_output_dir + obj+'.json')
+    """
+
+    p_obj = re.compile('J\d+[+-]\d')
+    p_obs = re.compile('uid___')
+    
+    # bad_obs = '/Users/jchen/Desktop/projects/almacal/data/broken_obs.txt'
+    # almacal_info_file = '/Users/jchen/Desktop/projects/almacal/data/almacal_timeOnSource.txt'
+    # all_obs = Table.read(almacal_info_file, format='ascii')
+    # all_obs.sort(['B6', 'B7'])
+    # all_obs.reverse()
+
+    if bad_obs is not None:
+        with open(bad_obs) as f:
+            all_bad_obs = f.readlines()
+        for i in range(len(all_bad_obs)):
+            all_bad_obs[i] = all_bad_obs[i].strip()
+
+    band_match = re.compile('_(?P<band>B\d{1,2})$')
+    obj_match = re.compile('J\d{4}[-+]\d{4}')
+
+    for i,obj in enumerate(os.listdir(base_dir)):
+    # for i,obj in enumerate(all_obs['obj']):
+        obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
+                    'B7':0, 'B8':0,  'B9':0, 'B10':0}
+        if not obj_match.match(obj):
+            print('Error load obj:', obj)
+            continue
+        print('index=', i, "obj:", obj)
+            
+        obj_dirname = base_dir +'/'+ obj
+        obj_output_dir = output_dir + '/' + obj
+        os.system('mkdir {}'.format(obj_output_dir))
+        obj_stat = spw_stat(obj_dirname,
+                            savedata=True, 
+                            filename=obj_output_dir+'/'+ obj+'.json', 
+                            **kwargs)
+    
+        if info_file is not None:
+            with open(info_file, 'a+') as f_info:
+                f_info.write('{:<12s} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f}\n'.format(
+            obj, 
+            np.sum(obj_stat['B3']['time']),
+            np.sum(obj_stat['B4']['time']),
+            np.sum(obj_stat['B5']['time']),
+            np.sum(obj_stat['B6']['time']),
+            np.sum(obj_stat['B7']['time']),
+            np.sum(obj_stat['B8']['time']),
+            np.sum(obj_stat['B9']['time']),
+            np.sum(obj_stat['B10']['time']),
+            ))
 
 def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, **kwargs):
