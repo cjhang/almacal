@@ -43,30 +43,38 @@ def gen_filenames(dirname, debug=False):
 
     return filelist
 
-def gen_obstime_select(dirname, select='good', basedir=None, info_file=None, **kwargs):
+def gen_obstime_select(dirname, select='good', basedir=None, info_file=None, 
+                       debug=False, **kwargs):
     """generate the on-source time and spw distribution for given visibilities
     """
 
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obj_match = re.compile('^J\d{4}[-+]\d{4}')
 
-    for obj in os.listdir(dirname):
+    for obj in os.listdir(dirname)[:5]:
         if not obj_match.match(obj):
             continue
+        if debug:
+            print('obj: {}'.format(obj))
         obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
                         'B7':0, 'B8':0,  'B9':0, 'B10':0}
         obj_dir = os.path.join(dirname, obj)
+        good_vis = []
         for f in os.listdir(obj_dir):
             if select in f:
-                good_vis = []
-                with open(os.path.join(basedir, obj, obj+'_'+band+'_good_imgs.txt')) as good_file:
+                with open(os.path.join(obj_dir, f)) as good_file:
                     good_vis_lines = good_file.readlines()
                 for line in good_vis_lines:
                     good_vis.append(os.path.join(basedir, obj, line.strip()))
-
-        obj_stat = spw_stat(vis=good_vis,
-                            savedata=True, 
-                            jsonfile=os.path.join(obj_dir, obj+'.json') 
+        if debug:
+            print('good_vis', good_vis)
+        if len(good_vis)<1:
+            if debug:
+                print('skip {}'.format(obj))
+            continue
+        obj_stat = spw_stat(vis=good_vis, debug=debug,
+                            #savedata=True, 
+                            #jsonfile=os.path.join(obj_dir, obj+'.json'), 
                             **kwargs)
     
         if info_file is not None:
