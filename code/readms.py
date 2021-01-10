@@ -75,6 +75,8 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
     filelist = []
 
     if objfolder:
+        if debug:
+            print("objfolder", objfolder)
         base_dir = objfolder
         obj = os.path.basename(objfolder)
 
@@ -84,11 +86,15 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
             if p_obs.match(obs):
                 filelist.append(os.path.join(base_dir, obs))
     elif vis:
+        if debug:
+            print('vis', vis)
         if isinstance(vis, str):
             filelist = [vis,]
         elif isinstance(vis, list):
             filelist = vis
     elif jsonfile:
+        if debug:
+            print('jsonfiel', jsonfile)
         with open(jsonfile, 'r') as f:
             spw_list = json.load(f)
     else:
