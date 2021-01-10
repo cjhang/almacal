@@ -18,19 +18,20 @@ def efficient_imsize(imsize):
     Which is much faster for casa
     """
     while True:
-        if ((imsize%3 == 0) | (imsize%5 == 0) | (imsize%7 == 0)) & (imsize%2 == 0):
+        # if ((imsize%3 == 0) | (imsize%5 == 0) | (imsize%7 == 0)) & (imsize%2 == 0):
+        if (imsize%5 == 0) | (imsize%2 == 0):
             return imsize
         else:
-            print(imsize)
+            # print(imsize)
             imsize += 1
             continue
         
 
-def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, 
-                  mycell=None, myimsize=None, outdir='./', baseline_percent=90, imgsize_scale=1, 
-                  datacolumn="data", specmode='mfs', cellsize_scale=1, outframe="LSRK", weighting='natural',
-                  niter=0, interactive=False, usemask='auto-multithresh',
-                  **kwargs):
+def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=80,
+                  mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
+                  cellsize_scale=1, datacolumn="data", specmode='mfs', outframe="LSRK", weighting='natural',
+                  niter=0, interactive=False, usemask='auto-multithresh', only_fits=False,
+                  uvtaper_scale=None, debug=False, **kwargs):
 
     """This function is used to make the continuum image
     
@@ -77,7 +78,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None,
     antenna_diameter = np.median(antenna_diameter_list) * u.m
 
     wavelength = const.c / (freq_mean * u.GHz) # in um
-    fov = (2.0 * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
 
     # calcuate the cell size
     if mycell is None:
@@ -88,8 +89,8 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None,
     if myimsize is None:
         myimsize = efficient_imsize(int(imgsize_scale * fov / cellsize))
         print(">>>", myimsize)
-        myrestfreq = str(freq_mean)+'GHz'
-
+    
+    myrestfreq = str(freq_mean)+'GHz'
 
     if basename is None:
         if isinstance(vis, list):
@@ -100,10 +101,10 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None,
         myimagename = os.path.join(outdir, basename + '.cont.auto')
     rmtables(tablenames=myimagename + '.*')
 
-    print("Mean frequecy:", freq_mean)
-    print("Maximum baseline:", baseline_typical)
-    print("My cell size:", mycell)
-    print("My image size:", myimsize)
+    print("mean frequecy:", freq_mean)
+    print("maximum baseline:", baseline_typical)
+    print("cell size:", mycell)
+    print("image size:", myimsize)
 
     if isinstance(vis, list):
         if len(vis) > 4:
@@ -125,11 +126,62 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None,
                usemask=usemask,
                **kwargs)
 
+        if uvtaper_scale:
+            if isinstance(uvtaper, (int, float)):
+                uvtaper_scale = [uvtaper_scale,]
+            for uvt_scale in uvtaper_scale:
+                uvt_scale = uvt_scale*1.
+                img_header = imhead(myimagename+'.image')
+                print(img_header)
+                restoringbeam = img_header['restoringbeam']
+                print(restoringbeam)
+                beam_major = restoringbeam['major']
+                beam_minor = restoringbeam['minor']
+                beam_pa = restoringbeam['positionangle']
+                # set-up the uvtaper
+                bmaj = "{:.6f}{}".format(beam_major['value']*uvt_scale, beam_major['unit'])
+                bmin = "{:.6f}{}".format(beam_minor['value']*uvt_scale, beam_minor['unit'])
+                bpa = "{:.6f}{}".format(beam_pa['value'], beam_pa['unit'])
+                # set up the resolution and imsize
+                uvt_param = np.sqrt(uvt_scale**2+1.)
+                mycell = "{:.6f}arcsec".format(cellsize * uvt_param)
+                myimsize = efficient_imsize(int(imgsize_scale * fov / (cellsize*uvt_param)))
+                # myimsize = efficient_imsize(int(myimsize / np.sqrt(uvt_scale**2+1.)))
+                if debug:
+                    print("uvtaper parameters: \n")
+                    print("uvtaper:", [bmaj, bmin, bpa])
+                    print("uvtaper cell size:", mycell)
+                    print("uvtaper image size:", myimsize)
+
+                tclean(vis=vis,
+                      imagename=myimagename+'.uvtaper{}'.format(uvt_scale),
+                      imsize=myimsize, 
+                      cell=mycell, 
+                      restfreq=myrestfreq, 
+                      datacolumn=datacolumn, 
+                      specmode=specmode, 
+                      outframe=outframe, 
+                      weighting=weighting,
+                      niter=niter, 
+                      interactive=interactive, 
+                      usemask=usemask,
+                      uvtaper=[bmaj, bmin, bpa],
+                      **kwargs)
     if isinstance(vis, list):
         os.system('rm -rf /tmp/vis_combined.ms')
+    
+    if only_fits:
+        exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
+        rmtables(tablenames=myimagename+'.*')
+
+
+
 
 def image_selfcal(vis=None, ncycle=3, ):
     # tclean and self-calibration
+
+    pass
+
     os.system('rm -rf tclean/cycle0.*')
     tclean(vis=calmsfile,
            imagename='./tclean/cycle0',
