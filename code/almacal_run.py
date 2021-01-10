@@ -567,6 +567,8 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
 def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
     """make the final good image with all the good observations
     """
+    if len(good_imgs) < 1:
+        return False
     good_imgs_fullpath = []
     for img in good_imgs:
         good_imgs_fullpath.append(os.path.join(basedir, img))
@@ -629,7 +631,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                          debug=debug, **kwargs):
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False, outdir='./', debug=False, **kwargs):
+def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', debug=False, **kwargs):
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
@@ -649,6 +651,12 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
                 obj_band_path = os.path.join(imgs_dir, obj, band)
                 good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
                                                     basename=obj+'_'+band, debug=debug, **kwargs)
+                
+                print(good_imgs)
+                if make_image:
+                        make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                        tmpdir=os.path.join(obj,outdir), debug=debug)
+
     elif good_imgs_file:
         good_imgs = []
         basename_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)')
@@ -663,7 +671,10 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, make_image=False,
         for line in good_imgs_lines:
             good_imgs.append(line.strip())
 
+    return
             
+    print(good_imgs)
     if make_image:
-            make_good_images(good_images, basenem=obj+'_'+band, basedir='', tmpdir=outdir, debug=debug)
+            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                            tmpdir=os.path.join(outdir, obj), debug=debug)
 
