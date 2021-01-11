@@ -191,7 +191,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
                 with open(filelist) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    flist.append(line.strip())
+                    flist.append(line.strip()+'.cont.auto.fits')
         if isinstance(filelist, list):
             flist = filelist
         for item in flist:
