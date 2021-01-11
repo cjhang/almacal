@@ -172,13 +172,31 @@ def gen_all_image(allcal_dir=None, vis=None, outdir='./', bands=['B6','B7'], exc
             os.system('mkdir -p {}'.format(outfile_fullpath))
             gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=exclude_aca, **kwargs)
 
-def show_images(fileglob, mode='auto', nrow=3, ncol=3, savefile=None):
+def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3, ncol=3, savefile=None):
     """show images in an interative ways, and record the input from inspector
     
     Parameters:
         fileglob: the match patter of the image filenames, like: './*.image'
     """
-    all_files = glob.glob(fileglob)
+    
+    if fileglob:
+        all_files = glob.glob(fileglob)
+    elif filelist:
+        all_files = []
+        if base_dir is None:
+            raise ValueError("basedir should be defined along with filelist")
+        if isinstance(filelist, str):
+            if os.path.isfile(filelist):
+                flist = []
+                with open(filelist) as f:
+                    filelist_lines = f.readlines()
+                for line in filelist_lines:
+                    flist.append(line.strip())
+        if isinstance(filelist, list):
+            flist = filelist
+        for item in flist:
+            all_files.append(os.path.join(basedir, item))
+
     total_num = len(all_files)
     select_num = 0
     print("Find {} files".format(total_num))
