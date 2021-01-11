@@ -51,11 +51,10 @@ def gen_obstime_select(dirname, select='good', basedir=None, info_file=None,
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obj_match = re.compile('^J\d{4}[-+]\d{4}')
 
-    for obj in os.listdir(dirname)[:5]:
+    for obj in os.listdir(dirname):
         if not obj_match.match(obj):
             continue
-        if debug:
-            print('obj: {}'.format(obj))
+        print('obj: {}'.format(obj))
         obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
                         'B7':0, 'B8':0,  'B9':0, 'B10':0}
         obj_dir = os.path.join(dirname, obj)
@@ -544,7 +543,7 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
-def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False):
+def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False, only_fits=False):
     """make the final good image with all the good observations
     """
     if len(good_imgs) < 1:
@@ -559,16 +558,8 @@ def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='.
     if concatvis is None:
         concatvis = os.path.join(tmpdir, basename+'combine.ms')
     concat(vis=good_imgs_fullpath, concatvis=concatvis)
-    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=2000, pblimit=-0.01, 
-                  fov_scale=2.0)
-    if only_fits:
-        exportfits(imagename=concatvis+'.auto.cont.image', fitsimage=concatvis+'.auto.cont.fits')
-        rmtables(tablenames=concatvis+'.auto.cont.*')
-
-
-
-
-
+    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=100, pblimit=-0.01, 
+                  fov_scale=2.0, uvtaper_scale=[1.0, 2.0], only_fits=only_fits, debug=debug)
 
 
 
@@ -683,7 +674,8 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                          debug=debug, **kwargs):
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', debug=False, **kwargs):
+def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
+                           debug=False, **kwargs):
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
@@ -707,7 +699,7 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, mak
                 print(good_imgs)
                 if make_image:
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                        tmpdir=os.path.join(obj,outdir), debug=debug)
+                                        tmpdir=os.path.join(outdir,obj), debug=debug)
 
     elif good_imgs_file:
         good_imgs = []
@@ -728,5 +720,5 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, mak
     print(good_imgs)
     if make_image:
             make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                            tmpdir=os.path.join(outdir, obj), debug=debug)
+                            tmpdir=os.path.join(outdir, obj), only_fits=True, debug=debug)
 

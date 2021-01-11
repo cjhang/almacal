@@ -27,7 +27,7 @@ def efficient_imsize(imsize):
             continue
         
 
-def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=80,
+def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=90,
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
                   cellsize_scale=1, datacolumn="data", specmode='mfs', outframe="LSRK", weighting='natural',
                   niter=0, interactive=False, usemask='auto-multithresh', only_fits=False,
@@ -167,6 +167,11 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                       usemask=usemask,
                       uvtaper=[bmaj, bmin, bpa],
                       **kwargs)
+                if only_fits:
+                    exportfits(imagename=myimagename+'.uvtaper{}.image'.format(uvt_scale), 
+                               fitsimage=myimagename+'uvtaper{}.fits'.format(uvt_scale))
+                    #rmtables(tablenames=myimagename+'uvtaper{}.*')
+
     if isinstance(vis, list):
         os.system('rm -rf /tmp/vis_combined.ms')
     
