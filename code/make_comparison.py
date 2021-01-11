@@ -8,6 +8,11 @@ data_new = np.loadtxt(almacal_info_file_new, skiprows=1, delimiter=' ',
         dtype={'names': ('obj', 'B3','B4','B5','B6','B7','B8','B9'), 
                'formats': ('S10', 'f4', 'f4','f4','f4','f4','f4','f4')})
 
+almacal_info_file_good = '../data/make_all_goodimages.txt'
+data_good = np.loadtxt(almacal_info_file_good, skiprows=0,
+        dtype={'names': ('obj', 'B3','B4','B5','B6','B7','B8','B9','B10'), 
+               'formats': ('S10', 'f4', 'f4','f4','f4','f4','f4','f4','f4')})
+
 almacal_info_file_oteo2016 = '../data/almacal.oteo2016.info.txt'
 data_oteo2016 = np.loadtxt(almacal_info_file_oteo2016, skiprows=1, delimiter=' ',
         dtype={'names': ('obj', 'B3','B4','B5','B6','B7','B8','B9'), 
@@ -23,6 +28,7 @@ bands = ['B6', 'B7']
 # for the data used in oteo2016
 if True:
     band_depth_new = {'B6':[], 'B7':[]}
+    band_depth_good = {'B6':[], 'B7':[]}
     band_depth_oteo2016 = {'B6':[], 'B7':[]}
     
     # for new data
@@ -33,6 +39,15 @@ if True:
     for band, depth in band_depth_new.items():
         obs_valid = np.array(depth)>0.1
         band_depth_new[band] = np.array(depth)[obs_valid]
+
+    # for good data
+    for row in data_good:
+        for band in bands:
+            obj = (row['obj']).decode('ascii')
+            band_depth_good[band].append(row[band]) # in minutes
+    for band, depth in band_depth_good.items():
+        obs_valid = np.array(depth)>0.1
+        band_depth_good[band] = np.array(depth)[obs_valid]
 
     # for oteo2016
     for row in data_oteo2016:
@@ -78,8 +93,9 @@ if True:
     ax = fig.add_subplot(121)
     ax.set_title('Band 6')
     # ax.text(3.2, 87, 'Band 6')
-    im = plt.hist(np.log10(band_depth_new['B6']), bins=20, label='Whole dataset before 2020')
-    im = plt.hist(np.log10(band_depth_oteo2016['B6']), bins=20, label='Oteo et al. (2016)')
+    im = plt.hist(np.log10(band_depth_new['B6']), bins=20, label='Whole dataset before 2020', alpha=0.5)
+    im = plt.hist(np.log10(band_depth_good['B6']), bins=20, label='Usable dataset before 2020', alpha=0.7)
+    im = plt.hist(np.log10(band_depth_oteo2016['B6']), bins=20, label='Oteo et al. (2016)', alpha=0.9)
     ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
     ax.set_ylabel('Number')
     # for 1000 minutes, 43 antenna, at 243GHz
@@ -95,8 +111,9 @@ if True:
     ax = fig.add_subplot(122)
     # ax.text(3.2, 55, 'Band 7')
     ax.set_title('Band 7')
-    im = plt.hist(np.log10(band_depth_new['B7']), bins=20)
-    im = plt.hist(np.log10(band_depth_oteo2016['B7']), bins=20)
+    im = plt.hist(np.log10(band_depth_new['B7']), bins=20, alpha=0.5)
+    im = plt.hist(np.log10(band_depth_good['B7']), bins=20, alpha=0.7)
+    im = plt.hist(np.log10(band_depth_oteo2016['B7']), bins=20, alpha=0.9)
     ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
     ax.set_ylabel('Number')
     # for 1000 minutes, 43 antenna, at 345 GHz
@@ -109,4 +126,4 @@ if True:
     ax.set_ylim(0, 60)
 
     plt.show()
-    fig.savefig('results/comparison.pdf')
+    #fig.savefig('../results/comparison.pdf')
