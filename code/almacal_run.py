@@ -183,7 +183,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
         all_files = glob.glob(fileglob)
     elif filelist:
         all_files = []
-        if base_dir is None:
+        if basedir is None:
             raise ValueError("basedir should be defined along with filelist")
         if isinstance(filelist, str):
             if os.path.isfile(filelist):
@@ -215,13 +215,26 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
                     wcs = WCS(imageheader)
                     # wcs2 = wcs.dropaxis(3)
                     # wcs2 = wcs2.dropaxis(2)
+
+                    #with wcs projection
+                    scale = imageheader['CDELT1']*3600
+                    ny, nx = imagedata.shape[-2:]
+                    x_index = (np.arange(0, nx) - nx/2.0) * scale
+                    y_index = (np.arange(0, ny) - ny/2.0) * scale
+                    x_map, y_map = np.meshgrid(x_index, y_index)
+
             except:
                 print("Error in reading: {}".format(all_files[i+j]))
                 continue
             ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs2, slices=(0, 0, 'x', 'y'))
             # ax.text(10, 10, str(j), fontsize=20)
             ax.set_title(str(j+1))
-            ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
+            #ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
+            imagedata = np.ma.masked_invalid(imagedata)
+            #imagedata = imagedata.filled(0)
+            ax.pcolormesh(x_map, y_map, imagedata[0,0,:,:])
+            ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+                    verticalalignment='center')
             ax.set_xlabel('RA')
             ax.set_ylabel('Dec')
         # show the image and record the 
