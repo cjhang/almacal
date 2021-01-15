@@ -172,7 +172,7 @@ def gen_all_image(allcal_dir=None, vis=None, outdir='./', bands=['B6','B7'], exc
             os.system('mkdir -p {}'.format(outfile_fullpath))
             gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=exclude_aca, **kwargs)
 
-def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3, ncol=3, savefile=None):
+def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3, ncol=3, savefile=None, debug=False):
     """show images in an interative ways, and record the input from inspector
     
     Parameters:
@@ -180,20 +180,30 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
     """
     
     if fileglob:
+        if debug:
+            print(fileglob)
         all_files = glob.glob(fileglob)
     elif filelist:
+        if debug:
+            print(filelist)
+        if not os.path.isfile(filelist):
+            raise ValueError("{} is not found".format(filelist))
         all_files = []
         if basedir is None:
             raise ValueError("basedir should be defined along with filelist")
         if isinstance(filelist, str):
-            if os.path.isfile(filelist):
+            try:
                 flist = []
                 with open(filelist) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
                     flist.append(line.strip()+'.cont.auto.fits')
-        if isinstance(filelist, list):
+            except:
+                raise ValueError("file {} cannot be open".format(filelist))
+        elif isinstance(filelist, list):
             flist = filelist
+        else:
+            raise ValueError("Wrong file type of filelist!")
         for item in flist:
             all_files.append(os.path.join(basedir, item))
 
@@ -217,7 +227,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
                     # wcs2 = wcs2.dropaxis(2)
 
                     #with wcs projection
-                    scale = imageheader['CDELT1']*3600
+                    scale = np.abs(imageheader['CDELT1'])*3600
                     ny, nx = imagedata.shape[-2:]
                     x_index = (np.arange(0, nx) - nx/2.0) * scale
                     y_index = (np.arange(0, ny) - ny/2.0) * scale
@@ -244,6 +254,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
             idx_input = input()
             if idx_input == 0:
                 print("Currently at {}/{}".format(i, len(all_files)))
+                plt.close('all')
                 break
             if isinstance(idx_input, int):
                 idx_input = [idx_input]
@@ -416,7 +427,8 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal_fluxval=0.001):
+def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
+                threshold_mean=5e-5, threshold_median=5e-5):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -466,6 +478,9 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     hist_center, bins_center = np.histogram(masked_data[mask], bins=bins)
     bins_mid_center = (bins_center[:-1] + bins_center[1:])*0.5
     amp_scale_center = 1.0*np.max(hist_center) # change to int into float
+
+    mean_central = np.ma.mean(masked_data[mask])
+    median_central = np.ma.median(masked_data[mask])
     
     n_outlier = np.sum(hist_center[bins_mid_center>upper_5sigma])
     percent_outlier = 1.0*n_outlier/np.sum(hist_center)
@@ -473,6 +488,10 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
         print('mean: {}, std:{}'.format(popt[0], popt[-1]))
         print('number of 5sigma outlier: {}'.format(n_outlier))
         print('fraction of 5sigma outlier: {}'.format(percent_outlier))
+        print('\n')
+        print("central mean: {}".format(mean_central))
+        print("central median: {}".format(median_central))
+        print('\n')
 
     if plot:
         fig = plt.figure(figsize=(8, 6))
@@ -505,8 +524,13 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
                 if fluxval/minimal_fluxval < 1:
                     return False
                     
-    if percent_outlier >= 0.02:
+    if percent_outlier >= outlier_frac:
         return False
+    if mean_central > threshold_mean:
+        return False
+    if median_central > threshold_median:
+        return False
+    return True
     return True
 
     if 0:
@@ -705,7 +729,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                          debug=debug, **kwargs):
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
+def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
                            debug=False, **kwargs):
     """generate the good image list for all the calibrators
     """
@@ -714,6 +738,9 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, mak
         for obj in os.listdir(imgs_dir):
             if obj_match.match(obj):
                 print(obj)
+                if objlist is not None:
+                    if obj not in objlist:
+                        continue
                 obj_dir = os.path.join(outdir, obj)
                 if os.path.isdir(obj_dir):
                     if len(os.listdir(obj_dir)) > 0:
@@ -726,8 +753,8 @@ def run_make_all_goodimags(imgs_dir=None, good_imgs_file=None, basedir=None, mak
                 obj_band_path = os.path.join(imgs_dir, obj, band)
                 good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
                                                     basename=obj+'_'+band, debug=debug, **kwargs)
-                
-                print(good_imgs)
+                if debug: 
+                    print(good_imgs)
                 if make_image:
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                         tmpdir=os.path.join(outdir,obj), debug=debug)
