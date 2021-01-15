@@ -1,4 +1,10 @@
 # This file include the several help functions to read the basic information from the casa asdm file
+# Copywrite @ Jianhang Chen
+# Email: cjhastro@gmail.com
+
+# History:
+# 2019.09.27: first release, v0.1
+
 
 import os
 import re
@@ -12,7 +18,6 @@ plt.ioff()
 def read_spw(vis):
     """read the spectral windows
     """
-    tb = au.tbtool()
     if isinstance(vis, str):
         vis = [vis, ]
     
@@ -48,7 +53,8 @@ def read_refdir(vis):
     return direction
 
 def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
-             figname=None, showfig=False, savedata=False, filename=None, debug=False):
+             figname=None, showfig=False, savedata=False, filename=None, 
+             z=0, lines=None, lines_names=None, debug=False):
     """make the statistics about one calibrator
 
     Args:
@@ -60,7 +66,10 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
             - figname (bool): the figname of the saved figure, if None, no figures will be saved (default is None)
         savedata (bool): whether save the statistics into file, default to save as json file
             - filename (str): the filename of the saved data
-
+        
+        lines (list): the spectral lines to be added to the plots, in units of GHz, like: [115.3, 230.5, 345.8]
+        lines_names (list): the names of the lines, like: ['CO1-0, CO2-1, CO3-2']
+        z (float): the redshift of the source
     
 
     """
@@ -154,6 +163,7 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
         ax.tick_params(axis='x', which='minor', labelsize=6)
         ax.tick_params(axis='y', labelcolor='w', top='off', bottom='on', left='off', right='off', labelsize=2)
 
+        # plot the spectral window
         for band in band_in_plot:
             h = 0
             band_total_time = np.sum(spw_list[band]['time'])
@@ -172,6 +182,20 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
                     ax.hlines(y=h, xmin=band_list[band][0], xmax=band_list[band][1], 
                             color='r', linestyle='-', alpha=0.1, linewidth=1/n_obs)
                 h = h + dh
+        
+        # plot the spectral lines
+        if lines:
+            if isinstance(lines, (float,int)):
+                lines = [lines,]
+            if lines_names:
+                if isinstance(lines_names, (str)):
+                    lines = [lines_names,]
+            for idx, line in enumerate(lines):
+                line_obs = line / (1.0 + z)
+                ax.vlines(line_obs, 0, 1, alpha=0.6, color='b', linewidth=1)
+                if lines_names:
+                    ax.text(line_obs, 0.8, lines_names[idx], fontsize=12, alpha=0.6, horizontalalignment='center')
+
         if showfig:
             plt.show()
         if figname:
