@@ -245,8 +245,8 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
             ax.pcolormesh(x_map, y_map, imagedata[0,0,:,:])
             ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                     verticalalignment='center')
-            ax.set_xlabel('RA')
-            ax.set_ylabel('Dec')
+            ax.set_xlabel('RA [arcsec]')
+            ax.set_ylabel('Dec [arcsec]')
         # show the image and record the 
         plt.show()
         print('Input the index of images (1-9), seperate with comma:')
@@ -447,7 +447,7 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     ny, nx = data.shape[-2:]
     masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
     # statistics the noisy of the image
-    hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=50)
+    hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=100)
     bins_mid = (bins[:-1] + bins[1:])*0.5
     p0 = (0, 1, 1e-4) # mean, max and std
     amp_scale = 1.0*np.max(hist) # change to int into float
@@ -457,15 +457,23 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
         print("`Fitting failed!")
         popt = p0
     hist_fit = gaussian(bins_mid, *popt)*amp_scale
-    upper_5sigma = 5.0*popt[-1]
+    lower_3sigma = popt[0] - 3.0*popt[-1]
+    upper_3sigma = popt[0] + 3.0*popt[-1]
+    lower_5sigma = popt[0] - 5.0*popt[-1]
+    upper_5sigma = popt[0] + 5.0*popt[-1]
+    ## checking the fitting
+    # no reliable noise of the of noise, cannot use chi2 
     # chi2 = np.sum((hist - hist_fit)/amp_scale)**2/(len(bins_mid)-3)
     # print("Chi2 is {}".format(chi2))
+    # the fraction of the 3 sigma outlier, theoretical gaussian value is 
+    n_outlier_3sigma = np.sum(hist[bins_mid < lower_3sigma])
+    percent_outlier_3sigma = 1.0 * n_outlier_3sigma / np.sum(hist) 
+    
 
     # statistics in the central region
     bmaj = header['BMAJ']
     bmin = header['BMIN']
     bpa = header['BPA']
-
     # radius = 5 
     bmaj_pixel_size = bmaj / np.abs(header['CDELT1'])
     # select the central region with side length of radius*bmaj 
@@ -482,15 +490,20 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     mean_central = np.ma.mean(masked_data[mask])
     median_central = np.ma.median(masked_data[mask])
     
-    n_outlier = np.sum(hist_center[bins_mid_center>upper_5sigma])
-    percent_outlier = 1.0*n_outlier/np.sum(hist_center)
+    n_outlier_central = np.sum(hist_center[bins_mid_center>upper_5sigma])
+    percent_outlier_central = 1.0*n_outlier_central/np.sum(hist_center)
+    
     if debug:
+        print('Checking the fitting of noise:')
         print('mean: {}, std:{}'.format(popt[0], popt[-1]))
-        print('number of 5sigma outlier: {}'.format(n_outlier))
-        print('fraction of 5sigma outlier: {}'.format(percent_outlier))
+        print('number of 3 sigma outlier: {}'.format(n_outlier_3sigma))
+        print('fraction of 3 sigma outlier: {}'.format(percent_outlier_3sigma))
         print('\n')
+        print('Statistics of central region')
         print("central mean: {}".format(mean_central))
         print("central median: {}".format(median_central))
+        print('number of 5sigma outlier of central region: {}'.format(n_outlier_central))
+        print('fraction of 5sigma outlier of central region: {}'.format(percent_outlier_central))
         print('\n')
 
     if plot:
@@ -499,8 +512,9 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
         ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
         ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
         ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
-        ax.vlines(3.0*popt[-1], 0, 1.2, color='k', label=r'3$\sigma$ upper boundary')
-        ax.vlines(5.0*popt[-1], 0, 1.2, color='k', lw=4, label=r'5$\sigma$ upper boundary')
+        ax.vlines(upper_3sigma, 0, 2.0, color='k', label=r'3$\sigma$ boundary')
+        ax.vlines(lower_3sigma, 0, 2.0, color='k')
+        ax.vlines(upper_5sigma, 0, 2.0, color='k', lw=4, label=r'5$\sigma$ upper boundary')
         ax.set_xlabel('Flux density [Jy/beam]')
         ax.set_ylabel('Normalized Pixel numbers')
         ax.legend()
@@ -524,7 +538,9 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
                 if fluxval/minimal_fluxval < 1:
                     return False
                     
-    if percent_outlier >= outlier_frac:
+    if percent_outlier_3sigma >= 0.0027: #2*3sigma_boundary
+        return False
+    if percent_outlier_central >= outlier_frac:
         return False
     if mean_central > threshold_mean:
         return False
