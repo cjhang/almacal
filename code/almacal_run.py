@@ -536,17 +536,27 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
                 print("fluxval: {}".format(fluxval))
             if fluxval > 0:
                 if fluxval/minimal_fluxval < 1:
+                    if debug:
+                        print("Rejected, wrong fluxval!")
                     return False
                     
     if percent_outlier_3sigma >= 0.0027: #2*3sigma_boundary
+        if debug:
+            print("Rejected, non-Gaussian noise!")
         return False
     if percent_outlier_central >= outlier_frac:
+        if debug:
+            print("Rejected, large central residual!")
         return False
     if mean_central > threshold_mean:
+        if debug:
+            print("Rejected, large central mean value!")
         return False
     if median_central > threshold_median:
+        if debug:
+            print("Rejected, large central median value!")
         return False
-    return True
+
     return True
 
     if 0:
