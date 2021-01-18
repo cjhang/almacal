@@ -251,6 +251,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
         plt.show()
         print('Input the index of images (1-9), seperate with comma:')
         try:
+            find_zero = False
             idx_input = input()
             if idx_input == 0:
                 print("Currently at {}/{}".format(i, len(all_files)))
@@ -260,7 +261,14 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
                 idx_input = [idx_input]
             select_num += len(idx_input)
             for ind in idx_input:
+                if ind == 0:
+                    print("Currently at {}/{}".format(i, len(all_files)))
+                    plt.close('all')
+                    find_zero = True
+                    break
                 all_select.append(all_files[i+ind-1])
+            if find_zero:
+                break
         except:
             plt.close('all')
             continue
