@@ -8,6 +8,9 @@ import os
 import glob
 import re
 import numpy as np
+import scipy
+import matplotlib.pyplot as plt
+from matplotlib import patches
 from astropy.table import Table
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -42,17 +45,19 @@ def gen_filenames(dirname, debug=False):
             filelist.append(os.path.join(dirname, item))
     return filelist
 
-def read_filelist(listfile, basedir=None):
+def read_listfile(listfile, basedir=None, suffix=None):
     """read the obs from text file
     """
     flist = []
     with open(listfile) as f:
         listfile_lines = f.readlines()
-    for line in listfile_lines:
+    for l in listfile_lines:
+        line = l.strip()
         if basedir:
-            flist.append(os.path.join(basedir, line.strip()+'.cont.auto.fits'))
-        else:
-            flist.append(line.strip()+'.cont.auto.fits')
+            line = os.path.join(basedir, line)
+        if suffix:
+            line = line + suffix
+        flist.append(line)
     return flist
 
 def gen_obstime_select(dirname, select='good', basedir=None, info_file=None, 
@@ -144,7 +149,7 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, 
     rmtables(tablenames=myimagename+'.*')
     return True
 
-def gen_all_image(allcal_dir=None, vis=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
+def gen_images(allcal_dir=None, vis=None, outdir='./', bands=None, exclude_aca=True, 
                   debug=False, **kwargs):
     """generate the images of all calibrators
 
@@ -178,11 +183,13 @@ def gen_all_image(allcal_dir=None, vis=None, outdir='./', bands=['B6','B7'], exc
             filelist = vis
 
     for infile in filelist:
-        for band in bands:
-            outfile_fullpath = os.path.join(outdir, band)
-        
-            os.system('mkdir -p {}'.format(outfile_fullpath))
-            gen_image(infile, band=band, outdir=outfile_fullpath, exclude_aca=exclude_aca, **kwargs)
+        if bands is not None:
+            for band in bands:
+                outdir = os.path.join(outdir, band)
+                os.system('mkdir -p {}'.format(outdir))
+                gen_image(infile, band=band, outdir=outdir, exclude_aca=exclude_aca, **kwargs)
+        else:
+            gen_image(infile, outdir=outdir, exclude_aca=exclude_aca, **kwargs)
 
 def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3, ncol=3, savefile=None, debug=False):
     """show images in an interative ways, and record the input from inspector
@@ -449,12 +456,14 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
-                threshold_mean=5e-5, threshold_median=5e-5):
+def check_image(img, plot=False, radius=6, debug=False, sigmaclip=False, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
+                gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=2.0):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
-
+    
+    Args:
+        radius: in units of half major axis of sythesized beam
     """
     p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).cont.auto.fits')
     if p_uidimg.search(img):
@@ -462,14 +471,21 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     else:
         uidname = None
 
-    hdu = fits.open(img)
-    header = hdu[0].header
-    data = hdu[0].data
+    with fits.open(img) as hdu:
+        header = hdu[0].header
+        data = hdu[0].data
 
     ny, nx = data.shape[-2:]
     masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
+    mask_invalid = masked_data.mask
+    data4hist = masked_data[~mask_invalid]
+    # Testing the sigma clip
+    if sigmaclip:
+        clipped_data, clip_low, clip_up = scipy.stats.sigmaclip(data4hist, 5, 5)
+        data4hist = clipped_data    
     # statistics the noisy of the image
-    hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=100)
+    # hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=100)
+    hist, bins = np.histogram(data4hist, bins=100)
     bins_mid = (bins[:-1] + bins[1:])*0.5
     p0 = (0, 1, 1e-4) # mean, max and std
     amp_scale = 1.0*np.max(hist) # change to int into float
@@ -479,12 +495,13 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
         print("`Fitting failed!")
         popt = p0
     hist_fit = gaussian(bins_mid, *popt)*amp_scale
-    lower_1sigma = popt[0] - 1.0*popt[-1]
-    lower_2sigma = popt[0] - 2.0*popt[-1]
-    lower_3sigma = popt[0] - 3.0*popt[-1]
-    upper_3sigma = popt[0] + 3.0*popt[-1]
-    lower_5sigma = popt[0] - 5.0*popt[-1]
-    upper_5sigma = popt[0] + 5.0*popt[-1]
+    mean, amp, sigma = popt
+    lower_1sigma = mean - 1.0*sigma
+    lower_2sigma = mean - 2.0*sigma
+    lower_3sigma = mean - 3.0*sigma
+    upper_3sigma = mean + 3.0*sigma
+    lower_5sigma = mean - 5.0*sigma
+    upper_5sigma = mean + 5.0*sigma
     ## checking the fitting
     # the fraction of the 3 sigma outlier, theoretical gaussian value is 
     n_outlier_3sigma = np.sum(hist[bins_mid < lower_3sigma])
@@ -500,8 +517,10 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     bmaj = header['BMAJ']
     bmin = header['BMIN']
     bpa = header['BPA']
+    # print(bmaj, bmin, bpa)
     # radius = 5 
     bmaj_pixel_size = bmaj / np.abs(header['CDELT1'])
+    bmin_pixel_size = bmaj / np.abs(header['CDELT2'])
     # select the central region with side length of radius*bmaj 
     x_index = np.arange(0, nx) - nx/2.0
     y_index = np.arange(0, ny) - ny/2.0
@@ -520,26 +539,43 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     percent_outlier_central = 1.0*n_outlier_central/np.sum(hist_center)
     
     if debug:
-        print('Checking the fitting of noise:')
-        print('mean: {}, std:{}'.format(popt[0], popt[-1]))
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print('>> Checking the fitting of noise:')
+        print('mean: {}, std:{}'.format(mean, sigma))
         # print('number of 3 sigma outlier: {}'.format(n_outlier_3sigma))
-        print('fraction of 1 sigma outlier: {:.4}%. [theoretical: 15.87]'.format(percent_outlier_1sigma*100.))
-        print('deviation of 1 sigma: {:.4}%.'.format(deviation_1sigma*100.))
-        print('fraction of 2 sigma outlier: {:.4}%. [theoretical: 2.28%]'.format(percent_outlier_2sigma*100.))
-        print('deviation of 2 sigma: {:.4}%.'.format(deviation_2sigma*100.))
-        print('fraction of 3 sigma outlier: {:.4}%. [theoretical: 0.14%]'.format(percent_outlier_3sigma*100.))
-        print('deviation of 3 sigma: {:.4}%.'.format(deviation_3sigma*100.))
-        print('>>')
-        print('Statistics of central region')
+        print('fraction of 1 sigma outlier: {:.4f}%. [theoretical: 15.87]'.format(percent_outlier_1sigma*100.))
+        print('deviation of 1 sigma: {:.4f}%.'.format(deviation_1sigma*100.))
+        print('fraction of 2 sigma outlier: {:.4f}%. [theoretical: 2.28%]'.format(percent_outlier_2sigma*100.))
+        print('deviation of 2 sigma: {:.4f}%.'.format(deviation_2sigma*100.))
+        print('fraction of 3 sigma outlier: {:.4f}%. [theoretical: 0.14%]'.format(percent_outlier_3sigma*100.))
+        print('deviation of 3 sigma: {:.4f}%.'.format(deviation_3sigma*100.))
+        print('>> Statistics of central region')
         print("central mean: {}".format(mean_central))
         print("central median: {}".format(median_central))
+        print('deviation of central median: {:.4f}.'.format(median_central/sigma))
         print('number of 5sigma outlier of central region: {}'.format(n_outlier_central))
         print('fraction of 5sigma outlier of central region: {}'.format(percent_outlier_central))
-        print('>>')
 
     if plot:
-        fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot(111)
+        # show the image
+        fig = plt.figure(figsize=(14, 6))
+        ax = fig.add_subplot(121)
+        scale = np.abs(header['CDELT1'])*3600
+        x_index = (np.arange(0, nx) - nx/2.0) * scale
+        y_index = (np.arange(0, ny) - ny/2.0) * scale
+        x_map, y_map = np.meshgrid(x_index, y_index)
+        ax.pcolormesh(x_map, y_map, masked_data)
+        ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+                verticalalignment='center')
+        circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, edgecolor='red', linewidth=2, alpha=0.5)
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin*3600, height=bmaj*3600, angle=bpa, facecolor='orange', edgecolor=None, alpha=0.8)
+        ax.add_patch(circle)
+        ax.add_patch(ellipse)
+        ax.set_xlabel('RA [arcsec]')
+        ax.set_ylabel('Dec [arcsec]')
+        
+        # niose statistics
+        ax = fig.add_subplot(122)
         ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
         ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
         ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
@@ -553,7 +589,7 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     
     # return the checking results
     # check the fiiting
-    if np.abs(popt[0]-0.0)<1e-8 and np.abs(popt[-1]-0.001)<1e-8:
+    if np.abs(mean-0.0)<1e-8 and np.abs(sigma-0.001)<1e-8: #compare with initial guess
         if debug:
             print("Fitting failed!")
         return False
@@ -570,24 +606,32 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
                     if debug:
                         print("Rejected, wrong fluxval!")
                     return False
-                    
-    if percent_outlier_3sigma >= 0.0027: #2*3sigma_boundary
-        if debug:
-            print("Rejected, non-Gaussian noise!\n")
-        return False
-    if percent_outlier_central >= outlier_frac:
-        if debug:
-            print("Rejected, large central residual!\n")
-        return False
-    if mean_central > threshold_mean:
-        if debug:
-            print("Rejected, large central mean value!\n")
-        return False
-    if median_central > threshold_median:
+    if np.abs(median_central) > central_median_deviation*sigma:
         if debug:
             print("Rejected, large central median value!\n")
         return False
-
+    strick_mode = False
+    # comparing the noise distribution with Gaussian
+    for deviation in [deviation_1sigma, deviation_2sigma, deviation_3sigma]:
+        if deviation > gaussian_deviation:
+            if debug:
+                print("Rjected, non-Gaussian noise")
+            return False
+    if strick_mode:
+        # if percent_outlier_3sigma >= 0.0027: #2*3sigma_boundary
+            # if debug:
+                # print("Rejected, non-Gaussian noise!\n")
+            # return False
+        if percent_outlier_central >= outlier_frac:
+            if debug:
+                print("Rejected, large central residual!\n")
+            return False
+        if mean_central > threshold_mean:
+            if debug:
+                print("Rejected, large central mean value!\n")
+            return False
+        if debug:
+            print("\n")
     return True
 
     if 0:
@@ -655,23 +699,24 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
-def make_good_image(good_imgs, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False, only_fits=False):
+def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False, only_fits=False,
+                    niter=100, clean=True, pblimit=-0.01, fov_scale=2.0, uvtaper_scale=[1.0, 2.0], **kwargs):
     """make the final good image with all the good observations
     """
-    if len(good_imgs) < 1:
+    if len(vis) < 1:
         return False
-    good_imgs_fullpath = []
-    for img in good_imgs:
-        good_imgs_fullpath.append(os.path.join(basedir, img))
+    if basedir:
+        vis_fullpath = []
+        for v in vis:
+            vis_fullpath.append(os.path.join(basedir, v))
+        vis = vis_fullpath
     if debug:
-        print("good images:")
-        print(good_imgs_fullpath)
-        print('\n')
+        print(vis)
     if concatvis is None:
         concatvis = os.path.join(tmpdir, basename+'combine.ms')
-    concat(vis=good_imgs_fullpath, concatvis=concatvis)
-    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=True, niter=100, pblimit=-0.01, 
-                  fov_scale=2.0, uvtaper_scale=[1.0, 2.0], only_fits=only_fits, debug=debug)
+    concat(vis=vis, concatvis=concatvis)
+    make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=clean, niter=niter, pblimit=pblimit, 
+                  fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, only_fits=only_fits, debug=debug, **kwargs)
 
 
 
@@ -772,19 +817,21 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                         
                         outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
                         if os.path.isfile(outfile_fullname):
-                            tb.open(infile + '/ANTENNA')
-                            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-                            tb.close()
-                            if antenna_diameter < 12.0:
-                                print("Removing aca image: {}".format(outfile_fullname))
-                                os.system('rm -f {}'.format(outfile_fullname))
+                            if exclude_aca:
+                                tb.open(infile + '/ANTENNA')
+                                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                                tb.close()
+                                if antenna_diameter < 12.0:
+                                    print("Removing aca image: {}".format(outfile_fullname))
+                                    os.system('rm -f {}'.format(outfile_fullname))
                             else:
                                 if debug:
                                     print(">> {} already exists.".format(outfile_fullname))
                         else:
-                            if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=True, 
+                            if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=exclude_aca, 
                                          debug=debug, **kwargs):
-                                print("Adding new image: {}".format(outfile_fullname))
+                                if debug:
+                                    print("Adding new image: {}".format(outfile_fullname))
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
                            debug=False, **kwargs):
@@ -794,10 +841,10 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
         obj_match = re.compile('^J\d*[+-]\d*$')
         for obj in os.listdir(imgs_dir):
             if obj_match.match(obj):
-                print(obj)
                 if objlist is not None:
                     if obj not in objlist:
                         continue
+                    print(obj)
                 obj_dir = os.path.join(outdir, obj)
                 if os.path.isdir(obj_dir):
                     if len(os.listdir(obj_dir)) > 0:
