@@ -40,8 +40,20 @@ def gen_filenames(dirname, debug=False):
                     filelist.append(os.path.join(obj_path, obs))
         elif obs_match.match(item):
             filelist.append(os.path.join(dirname, item))
-
     return filelist
+
+def read_filelist(listfile, basedir=None):
+    """read the obs from text file
+    """
+    flist = []
+    with open(listfile) as f:
+        listfile_lines = f.readlines()
+    for line in listfile_lines:
+        if basedir:
+            flist.append(os.path.join(basedir, line.strip()+'.cont.auto.fits'))
+        else:
+            flist.append(line.strip()+'.cont.auto.fits')
+    return flist
 
 def gen_obstime_select(dirname, select='good', basedir=None, info_file=None, 
                        debug=False, **kwargs):
@@ -208,6 +220,8 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
             all_files.append(os.path.join(basedir, item))
 
     total_num = len(all_files)
+    if total_num == 1:
+        ncol = nrow = 1
     select_num = 0
     print("Find {} files".format(total_num))
     all_select = []
@@ -465,18 +479,22 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
         print("`Fitting failed!")
         popt = p0
     hist_fit = gaussian(bins_mid, *popt)*amp_scale
+    lower_1sigma = popt[0] - 1.0*popt[-1]
+    lower_2sigma = popt[0] - 2.0*popt[-1]
     lower_3sigma = popt[0] - 3.0*popt[-1]
     upper_3sigma = popt[0] + 3.0*popt[-1]
     lower_5sigma = popt[0] - 5.0*popt[-1]
     upper_5sigma = popt[0] + 5.0*popt[-1]
     ## checking the fitting
-    # no reliable noise of the of noise, cannot use chi2 
-    # chi2 = np.sum((hist - hist_fit)/amp_scale)**2/(len(bins_mid)-3)
-    # print("Chi2 is {}".format(chi2))
     # the fraction of the 3 sigma outlier, theoretical gaussian value is 
     n_outlier_3sigma = np.sum(hist[bins_mid < lower_3sigma])
     percent_outlier_3sigma = 1.0 * n_outlier_3sigma / np.sum(hist) 
-    
+    percent_outlier_1sigma = 1.0 * np.sum(hist[bins_mid < lower_1sigma]) / np.sum(hist) 
+    percent_outlier_2sigma = 1.0 * np.sum(hist[bins_mid < lower_2sigma]) / np.sum(hist) 
+    # calculating the deviation from Gaussian
+    deviation_1sigma = np.abs((percent_outlier_1sigma - 0.1587)/0.1587)
+    deviation_2sigma = np.abs((percent_outlier_2sigma - 0.0228)/0.0228)
+    deviation_3sigma = np.abs((percent_outlier_3sigma - 0.0014)/0.0014)
 
     # statistics in the central region
     bmaj = header['BMAJ']
@@ -504,15 +522,20 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
     if debug:
         print('Checking the fitting of noise:')
         print('mean: {}, std:{}'.format(popt[0], popt[-1]))
-        print('number of 3 sigma outlier: {}'.format(n_outlier_3sigma))
-        print('fraction of 3 sigma outlier: {}'.format(percent_outlier_3sigma))
-        print('\n')
+        # print('number of 3 sigma outlier: {}'.format(n_outlier_3sigma))
+        print('fraction of 1 sigma outlier: {:.4}%. [theoretical: 15.87]'.format(percent_outlier_1sigma*100.))
+        print('deviation of 1 sigma: {:.4}%.'.format(deviation_1sigma*100.))
+        print('fraction of 2 sigma outlier: {:.4}%. [theoretical: 2.28%]'.format(percent_outlier_2sigma*100.))
+        print('deviation of 2 sigma: {:.4}%.'.format(deviation_2sigma*100.))
+        print('fraction of 3 sigma outlier: {:.4}%. [theoretical: 0.14%]'.format(percent_outlier_3sigma*100.))
+        print('deviation of 3 sigma: {:.4}%.'.format(deviation_3sigma*100.))
+        print('>>')
         print('Statistics of central region')
         print("central mean: {}".format(mean_central))
         print("central median: {}".format(median_central))
         print('number of 5sigma outlier of central region: {}'.format(n_outlier_central))
         print('fraction of 5sigma outlier of central region: {}'.format(percent_outlier_central))
-        print('\n')
+        print('>>')
 
     if plot:
         fig = plt.figure(figsize=(8, 6))
@@ -550,19 +573,19 @@ def check_image(img, plot=False, radius=5, debug=False, check_flux=True, minimal
                     
     if percent_outlier_3sigma >= 0.0027: #2*3sigma_boundary
         if debug:
-            print("Rejected, non-Gaussian noise!")
+            print("Rejected, non-Gaussian noise!\n")
         return False
     if percent_outlier_central >= outlier_frac:
         if debug:
-            print("Rejected, large central residual!")
+            print("Rejected, large central residual!\n")
         return False
     if mean_central > threshold_mean:
         if debug:
-            print("Rejected, large central mean value!")
+            print("Rejected, large central mean value!\n")
         return False
     if median_central > threshold_median:
         if debug:
-            print("Rejected, large central median value!")
+            print("Rejected, large central median value!\n")
         return False
 
     return True
