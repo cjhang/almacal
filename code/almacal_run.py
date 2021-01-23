@@ -716,8 +716,10 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
         concatvis = os.path.join(tmpdir, basename+'combine.ms')
     concat(vis=vis, concatvis=concatvis)
     make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=clean, niter=niter, pblimit=pblimit, 
-                  fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, only_fits=only_fits, debug=debug, **kwargs)
+                  fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, debug=debug, **kwargs)
 
+    if only_fits:
+        rmtables(concatvis+'.*')
 
 
 
@@ -834,7 +836,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                     print("Adding new image: {}".format(outfile_fullname))
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
-                           debug=False, **kwargs):
+                           debug=False, only_fits=False, **kwargs):
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
@@ -861,7 +863,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                     print(good_imgs)
                 if make_image:
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                        tmpdir=os.path.join(outdir,obj), debug=debug)
+                                        tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
     elif good_imgs_file:
         good_imgs = []
