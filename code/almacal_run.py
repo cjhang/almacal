@@ -867,7 +867,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                     elif os.path.isfile(good_image_file):
                         print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
                         good_imgs = []
-                        with open good_imgs_file as f:
+                        with open(good_images_file) as f:
                             good_imags_lines = f.readlines()
                         for gi in good_imags_lines:
                             good_imgs.append(gi.strip())
