@@ -719,7 +719,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
                   fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, debug=debug, **kwargs)
 
     if only_fits:
-        exportfits(imagename=concatvis+'.auto.cont.image', fitsimage=concatvis+'.auto.cont.image.fits')
+        for i in glob.glob(concatvis+'.*.image'):
+            exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
 
@@ -837,7 +838,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                     print("Adding new image: {}".format(outfile_fullname))
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
-                           debug=False, only_fits=False, update=False, **kwargs):
+                           debug=False, only_fits=False, update=True, **kwargs):
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
