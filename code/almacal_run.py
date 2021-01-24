@@ -837,7 +837,7 @@ def run_fix_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_ac
                                     print("Adding new image: {}".format(outfile_fullname))
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
-                           debug=False, only_fits=False, **kwargs):
+                           debug=False, only_fits=False, update=False, **kwargs):
     """generate the good image list for all the calibrators
     """
     if imgs_dir:
@@ -857,12 +857,22 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                 else:
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
             for band in os.listdir(os.path.join(imgs_dir, obj)):
-                combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
-                if os.path.isdir(combined_file):
-                    print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                    make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                    tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-                    return
+                if update:
+                    combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
+                    good_image_file = os.path.join(outdir, obj, obj+'_'+band+'_good_imgs.txt')
+                    if os.path.isdir(combined_file):
+                        print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
+                        make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                        tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+                    elif os.path.isfile(good_image_file):
+                        print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
+                        good_imgs = []
+                        with open good_imgs_file as f:
+                            good_imags_lines = f.readlines()
+                        for gi in good_imags_lines:
+                            good_imgs.append(gi.strip())
+                        make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                        tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
                 obj_band_path = os.path.join(imgs_dir, obj, band)
                 good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
@@ -872,25 +882,4 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                 if make_image:
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                         tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-
-    elif good_imgs_file:
-        good_imgs = []
-        basename_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)')
-        try:
-            basename_matched = basename_match.search(os.path.basename(good_imgs_file)).groupdict()
-            obj = basename_matched['obj']
-            band = basename_matched['band']
-        except:
-            obj = band = 'Undefined'
-        with open(good_imgs_file) as good_file:
-            good_imgs_lines = good_file.readlines()
-        for line in good_imgs_lines:
-            good_imgs.append(line.strip())
-
-    return
-            
-    print(good_imgs)
-    if make_image:
-            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                            tmpdir=os.path.join(outdir, obj), only_fits=True, debug=debug)
 
