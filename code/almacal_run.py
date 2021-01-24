@@ -719,7 +719,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
                   fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, debug=debug, **kwargs)
 
     if only_fits:
-        rmtables(concatvis+'.*')
+        exportfits(imagename=concatvis+'.auto.cont.image', fitsimage=concatvis+'.auto.cont.image.fits')
+        rmtables(concatvis+'*')
 
 
 
@@ -856,6 +857,13 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                 else:
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
             for band in os.listdir(os.path.join(imgs_dir, obj)):
+                combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
+                if os.path.isdir(combined_file):
+                    print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
+                    make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                    tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+                    return
+
                 obj_band_path = os.path.join(imgs_dir, obj, band)
                 good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
                                                     basename=obj+'_'+band, debug=debug, **kwargs)
