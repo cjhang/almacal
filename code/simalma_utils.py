@@ -15,36 +15,44 @@ def make_random_source(direction, n=1, radius=1*u.arcsec):
     # generate a random radius
     skycoord = SkyCoord(direction[5:])
     
-    direction_list = []
     
     theta = 2*np.pi*np.random.uniform(0, 1, n)
     rho = radius * np.sqrt(np.random.uniform(0, 1, n))
 
+    print(skycoord.ra, skycoord.dec)
+    print(rho * np.cos(theta))
+    print(rho * np.sin(theta))
+
     ra_random = rho * np.cos(theta) + skycoord.ra
     dec_random = rho * np.sin(theta) + skycoord.dec
+    
+    print(ra_random)
+    print(dec_random)
 
-    # f = lambda x: ('J2000 '+x.to_string('hmsdms')).encode('utf-8')
-    # return list(map(f, skycoord_list))
+    skycoord_list = SkyCoord(ra=ra_random, dec=dec_random)
+    f = lambda x: ('J2000 '+x.to_string('hmsdms')).encode('utf-8')
+    return list(map(f, skycoord_list))
    
     # The old method
-    while len(direction_list) < n:
-        # random value for ra and dec
-        # two_delta = (np.random.random_sample(2) - 0.5) * 2 * radius        
-        delta1 = (np.random.random_sample() - 0.5) * 2 #* radius        
-        delta2 = (np.random.random_sample() - 0.5) * 2 #* radius        
-        two_delta = np.array([delta1, delta2]) * radius
-        # print(two_delta[0], two_delta[1])
-        if (two_delta[0]**2 + two_delta[1]**2) >= radius**2:
-            continue
-        ra_random = two_delta[0] + skycoord.ra
-        dec_random = two_delta[1] + skycoord.dec
-        skycoord_tmp = SkyCoord(ra=ra_random, dec=dec_random)
-        direction_list.append('J2000 ' + skycoord_tmp.to_string('hmsdms'))
+    # direction_list = []
+    # while len(direction_list) < n:
+        # # random value for ra and dec
+        # # two_delta = (np.random.random_sample(2) - 0.5) * 2 * radius        
+        # delta1 = (np.random.random_sample() - 0.5) * 2 #* radius        
+        # delta2 = (np.random.random_sample() - 0.5) * 2 #* radius        
+        # two_delta = np.array([delta1, delta2]) * radius
+        # # print(two_delta[0], two_delta[1])
+        # if (two_delta[0]**2 + two_delta[1]**2) >= radius**2:
+            # continue
+        # ra_random = two_delta[0] + skycoord.ra
+        # dec_random = two_delta[1] + skycoord.dec
+        # skycoord_tmp = SkyCoord(ra=ra_random, dec=dec_random)
+        # direction_list.append('J2000 ' + skycoord_tmp.to_string('hmsdms'))
    
-    return direction_list
+    # return direction_list
 
 
-def add_raondom_source(vis, n=5, tmpdir='./tmp', make_image=False):
+def add_raondom_source(vis, n=5, tmpdir='./tmp', make_image=False, basename=None):
     """
     """
     md = msmdtool()
@@ -59,8 +67,7 @@ def add_raondom_source(vis, n=5, tmpdir='./tmp', make_image=False):
     os.system('rm -rf random_points.cl')
     cl.done()
     for d in make_random_source(mydirection, n=n, radius=15*u.arcsec):
-        print(d, d.encode('utf-8'))
-        cl.addcomponent(dir=d.encode('utf-8'), flux=5, fluxunit='mJy', 
+        cl.addcomponent(dir=d, flux=5, fluxunit='mJy', 
                         freq=myfreq, shape='point')
     cl.rename('random_points.cl')
     cl.done()
@@ -72,5 +79,5 @@ def add_raondom_source(vis, n=5, tmpdir='./tmp', make_image=False):
     rmtables(vis_new)
     split(vis=vis, datacolumn='corrected', outputvis=vis_new)
     if make_image:
-        make_cont_img(vis_new, outdir=tmpdir, clean=True)
+        make_cont_img(vis_new, outdir=tmpdir, clean=True, basename=basename)
 

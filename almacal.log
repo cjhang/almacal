@@ -42,6 +42,12 @@ This is the wiki page of number counting project affiliated of ALMACAL
 
 ## Recordings of every day:
 
+**Old logs**
+
+The first file to carefully check the ears in the residual: `uid___A002_Xcd97a1_X3b27.ms` from `J1924-2914: B7` 
+
+---
+
 **20120-12-07**
 
 The calibrator with Jet: J0635-7156
@@ -58,7 +64,7 @@ The calibrator with Jet: J0635-7156
 
 **2020-12-08**
 
-possibe difference between good residual and bad residuals (based on J0217-0820):
+possibe difference between good residual and bad residuals (based on J1717-3342):
 
 - [x] ~~integration time~~
 - [x] ~~bandpass or gain calibrator~~
@@ -82,7 +88,7 @@ Plans for this week and maybe the following weeks:
   - [ ] multi-band auto source confirmation
   - [ ] made the completeness and flux bootsting simulation
 - [ ] An ancillary program to estimate the theoretical sensitivity? Based on the extrapolate values from the alma online calculator?
-- [ ] A program automatically find the good images. (Based on imstat results, and the fluxval if possible)
+- [x] A program automatically find the good images. (Based on imstat results, and the fluxval if possible)
 - [ ] modify the gen_image program to make images with different resolution, maybe three for each image? with resolution decrease three time one time
 
 Another plan is making all your daily records online for the collaborators.
@@ -93,8 +99,8 @@ Another plan is making all your daily records online for the collaborators.
 
 Todo
 
-- [ ] Analysis the most prominent ear in J0217-0820
-- [ ] check the direction of ear with the direction of psf
+- [ ] ~~Analysis the most prominent ear in J0217-0820~~, data still in property
+- [x] ~~check the direction of ear with the direction of psf~~, **ears not always align with the psf, but somehow close to the major axis of the psf**
 
 Possible ways to improve the point source subtraction:
 
@@ -102,3 +108,145 @@ Possible ways to improve the point source subtraction:
 - selfcal with multiscale algorithms
 
 -----------
+
+**2020-12-17**
+
+- [ ] Try to test the effect of time binning on the effect of ears
+
+---
+
+**2020-12-19**
+
+- [ ] Check the noise distriution of dirty image, implemented in the check_image program
+
+The testing files:
+
+- the file cannot be found on ALMA archive: uid___A002_Xb4655b_X878
+- the file to test the integrational time effect: `uid___A001_X133d_X1330/uid___A002_Xde8105_X761c.ms` (with initial 2.02s integration time?) calibrator:` J1717-3342`
+- second file to test the integrational time effect: `uid___A001_X133d_X12be/uid___A002_Xde63ab_X85f2` (short integrational time, but with weak central residual). calibrator:` J1717-3342` 
+  full HLtau name:`/science-ALMACAL/data/J1717-3342/uid___A002_Xde63ab_X85f2.ms.split.cal.J1717-3342_B6/`
+
+---
+
+**2020-12-20**
+
+Notes for blcal: (surprise)
+
+- no more cycle of amplitude selfcal needed
+- cannot be implemeted together with caltable from gaincal
+- another ms file to test blcal is: member.uid___A001_X1284_X426
+
+---
+
+**2020-12-21**
+
+solution from blcal cannot always be trusted, if the final RMS is even much below the ALMA calculator prediction
+
+need to do next:
+
+- [x] Test blcal on the effects of off-center point source. Target: `J2148+0657: uid___A002_Xcda49e_Xdebb.ms` with the filename on HLtau is `uid___A002_Xcda49e_Xdebb.ms.split.cal.J2148+0657_B7`
+
+  **blcal is not constrained for the amplitude, use with cautious**
+
+---
+
+**2020-12-23**
+
+It seems that the additional bandpass and gaincal has no much effects on the final image. Beside, applying  the blcal after  the additional bandpass and gaincal also has no significant improvement
+
+---
+
+**2020-12-25**
+
+Merry Christmas!
+
+- [ ] **Test the time averaging and channal averaging on the final imaging quality.**
+
+---
+
+**2020-12-26**
+
+- [x] ~~imaging the different spw separately~~
+
+---
+
+**2020-12-27**
+
+- [ ] check the blcal effect on specific baselines
+- [x] ~~imaging different scan seperately~~
+- [ ] check the bandpass and gaincal solutions of good image
+- [ ] remove time-variable term is neccesary prior standard calibration
+- [x] ~~make standard calibration and point source subtraction with randomly chose antennae ls~~
+
+---
+
+**2020-12-28**
+
+The ears persist in different time (or scan) and different sets of antennas, and the ear also change direction with differnt rime range (or scan)
+
+---
+
+**2020-12-30**
+
+- [x] ~~check the image of different correlation~~
+
+---
+
+**2021-1-1**
+
+Happy new year 🥳
+
+The five typical bad image from J1924-2914
+
+- `gen_all_image_run1/J1924-2914/B7/uid___A002_X80c782_X1597.ms.split.cal.J1924-2914_B7.cont.auto.fits ` (failed point source subtraction)
+- `gen_all_image_run1/J1924-2914/B7/uid___A002_Xd1daeb_Xa834.ms.split.cal.J1924-2914_B7.cont.auto.fits` (ear and large scale)
+- `gen_all_image_run1/J1924-2914/B7/uid___A002_Xe07f3e_X8f65.ms.split.cal.J1924-2914_B7.cont.auto.fits` (large scale and one-side ear)
+- `gen_all_image_run1/J1924-2914/B7/uid___A002_Xb76b01_X10c2.ms.split.cal.J1924-2914_B7.cont.auto.fits` (large scale, five clouds)
+- `gen_all_image_run1/J1924-2914/B7/uid___A002_Xb6d0c2_X96e6.ms.split.cal.J1924-2914_B7.cont.auto.fits` (large wave scale)
+
+Example for good images from J2232+1143:
+
+- `gen_all_image_run1/J2232+1143/B6/uid___A002_X6a533e_X15c7.ms.split.cal.J2232+117_B6.cont.auto.fits`
+- `gen_all_image_run1/J2232+1143/B6/uid___A002_X877956_X606.ms.split.cal.J2232+117_B6.cont.auto.fits`
+
+
+
+---
+
+**2021-1-2**
+
+- [ ] Checking the data combination from compact array and alam main array for one single observation with main array
+
+---
+
+**2021-1-13**
+
+- [ ] show_images function, marked the center of the galaxies
+
+- [ ] Using simalma to test the effect of resolved structure on the image of calibratorls
+
+Oteo2016_list = ['J1303-5540', 'J1744-3116', 'J2206-0031', 'J1933-6942', 'J2223-3137', 'J1010-0200', 'J2148+0657', 'J0241-0815', 'J0108+0135', 'J1058+0133'] 
+
+small files size: ['J1303-5540', 'J2206-0031', 'J1933-6942', 'J2223-3137', 'J1010-0200', 'J0241-0815', 'J0108+0135'] 
+
+large files size: ['J1058+0133', 'J2148+0657', 'J1744-3116']
+
+
+
+`check_image` pay attention to
+
+- ./testing_goodimages_oteo2016/all_images/J0241-0815/B6/uid___A002_Xe37224_Xdcfd.ms.split.cal.J0241-0815_B6.cont.auto.fits
+
+J1010-0200
+
+```text
+./testing_goodimages_oteo2016/all_images/J1010-0200/B6/uid___A002_Xe3da01_Xbf2d.ms.split.cal.J1010-0200_B6.cont.auto.fits
+./testing_goodimages_oteo2016/all_images/J1010-0200/B6/uid___A002_X9e4650_X1dd9.ms.split.cal.J1010-0200_B6.cont.auto.fits
+./testing_goodimages_oteo2016/all_images/J1010-0200/B6/uid___A002_Xe3da01_X3b23.ms.split.cal.J1010-0200_B6.cont.auto.fits
+./testing_goodimages_oteo2016/all_images/J1010-0200/B6/uid___A002_Xe45e29_Xaee9.ms.split.cal.J1010-0200_B6.cont.auto.fits
+./testing_goodimages_oteo2016/all_images/J1010-0200/B6/uid___A002_Xe50c9e_X58e9.ms.split.cal.J1010-0200_B6.cont.auto.fits
+
+B7
+./testing_goodimages_oteo2016/all_images/J1010-0200/B7/uid___A002_Xe3da01_X3d31.ms.split.cal.J1010-0200_B7.cont.auto.fits
+```
+
