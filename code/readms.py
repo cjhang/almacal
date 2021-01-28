@@ -52,9 +52,9 @@ def read_refdir(vis):
                                       unit="deg").to_string('hmsdms')
     return direction
 
-def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5', 'B6', 'B7', 'B8'], 
-             figname=None, showfig=False, savedata=False, filename=None, 
-             z=0, lines=None, lines_names=None, debug=False):
+def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None, 
+        plotbands=['B5', 'B6', 'B7', 'B8'], figname=None, showfig=False,  
+        z=0, lines=None, lines_names=None, debug=False):
     """make the statistics about one calibrator
 
     Args:
@@ -62,12 +62,16 @@ def spw_stat(objfolder=None, vis=None, jsonfile=None, plot=False, plotbands=['B5
         vis: a single visibility or a list
         jsonfile: the json file to be read
         plot (bool): whehther plot the results interactively (default is False)
-            - plotbands (list): the band to be plotted (default is ['B5', 'B6', 'B7', 'B8'])
-            - figname (bool): the figname of the saved figure, if None, no figures will be saved (default is None)
-        savedata (bool): whether save the statistics into file, default to save as json file
+            - plotbands (list): the band to be plotted (default is ['B5', 'B6', 
+              'B7', 'B8'])
+            - figname (bool): the figname of the saved figure, if None, no figures 
+              will be saved (default is None)
+        savedata (bool): whether save the statistics into file, default to save as
+            json file
             - filename (str): the filename of the saved data
         
-        lines (list): the spectral lines to be added to the plots, in units of GHz, like: [115.3, 230.5, 345.8]
+        lines (list): the spectral lines to be added to the plots, in units of GHz,
+                      like: [115.3, 230.5, 345.8]
         lines_names (list): the names of the lines, like: ['CO1-0, CO2-1, CO3-2']
         z (float): the redshift of the source
     
