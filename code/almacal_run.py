@@ -384,8 +384,14 @@ def ms_restore(obs_list, allflux_file=None, basedir=None, outdir='./output', tmp
     # remove all the temperary files
     os.system('rm -rf {}'.format(tmpdir))
 
-def copy_ms(basedir, outdir, selectfile=None, debug=True):
+def copy_ms(basedir, outdir, selectfile=None, debug=False, time_select=False, 
+            start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
+            select_band=None):
+    p_obs = re.compile('uid___')
+    band_match = re.compile('_(?P<band>B\d{1,2})$')
     selectfiles_list = []
+    start_time = Time(start_time)
+    end_time = Time(end_time)
     if selectfile is not None:
         with open(selectfile) as f:
             selectfiles_readlines = f.readlines()
@@ -393,12 +399,42 @@ def copy_ms(basedir, outdir, selectfile=None, debug=True):
             # remove the '\n' at the end of item
             selectfiles_list.append(item.strip())
 
-    all_files = os.listdir(basedir)
-    for obs in all_files:
+    else:
+        selectfiles_list = []
+        all_files = os.listdir(basedir)
+        for obs in all_files:
+            if not p_obs.match(obs):
+                if debug:
+                    print("Not a valid file: {}".format(obs))
+                continue
+            if debug:
+                print('Find {}'.format(obs))
+            if time_select:
+                tb.open(os.path.join(basedir, obs))
+                obs_time = Time(tb.getcol('TIME').max()/24/3600, format='mjd')
+                tb.close()
+                if debug:
+                    print('> obs_time', obs_time.iso)
+                    print('> start_time', start_time.iso)
+                    print('> end_time', end_time.iso)
+                if obs_time < start_time or obs_time > end_time:
+                    if debug:
+                        print(">> Skip by wrong observation time: {}".format(obs))
+                    continue
+            if select_band:
+                obs_band = band_match.search(obs).groupdict()['band']
+                if obs_band not in select_band:
+                    if debug:
+                        print(">> Skip by wrong band: {}".format(obs))
+                    continue
+            selectfiles_list.append(obs)
         if debug:
-            print(obs)
-        if obs in selectfiles_list:
-            os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir+'/'))
+            print(selectfiles_list)
+        for obs in selectfiles_list:
+            print("Copying {}".format(obs))
+            if not os.path.isdir(outdir):
+                os.system('mkdir -p {}'.format(outdir))
+            os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir))
 
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
@@ -738,6 +774,24 @@ def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None,
             np.sum(obj_stat['B9']['time']),
             np.sum(obj_stat['B10']['time']),
             ))
+
+def run_gen_oteo2016_data(basedir, outdir, select_band=['B6', 'B7'], debug=False):
+    """copy the data used in oteo2016
+
+    default run: run_gen_oteo2016_data('/science_ALMACAL/data', outdir='./')
+    """
+    p_obj = re.compile('J\d+[+-]\d+')
+    for obj in os.listdir(basedir):
+        if not p_obj.match(obj):
+            print('Error load obj:', obj)
+            continue
+        obj_input_folder = os.path.join(basedir, obj)
+        obj_output_folder = os.path.join(outdir, obj)
+        print("Copying {}".format(obj))
+        copy_ms(obj_input_folder, obj_output_folder, time_select=True, 
+                end_time='2015-07-01T00:00:00',
+                select_band=select_band, debug=debug)
+
 
 def run_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, **kwargs):
