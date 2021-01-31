@@ -12,6 +12,7 @@ import scipy
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from astropy.table import Table
+from astropy.time import Time
 from astropy.wcs import WCS
 from astropy.io import fits
 from matplotlib import pyplot as plt
