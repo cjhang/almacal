@@ -411,9 +411,14 @@ def copy_ms(basedir, outdir, selectfile=None, debug=False, time_select=False,
             if debug:
                 print('Find {}'.format(obs))
             if time_select:
-                tb.open(os.path.join(basedir, obs))
-                obs_time = Time(tb.getcol('TIME').max()/24/3600, format='mjd')
-                tb.close()
+                try:
+                    tb.open(os.path.join(basedir, obs))
+                    obs_time = Time(tb.getcol('TIME').max()/24/3600, format='mjd')
+                    tb.close()
+                except:
+                    if debug:
+                        print("Error in opening the visibility!")
+                    continue
                 if debug:
                     print('> obs_time', obs_time.iso)
                     print('> start_time', start_time.iso)
