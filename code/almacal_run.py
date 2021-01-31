@@ -742,6 +742,9 @@ def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None,
 def run_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, **kwargs):
     """fix the missing and wrong images for gen_all_image output
+    
+
+    default run: run_gen_all_image('all_image_dir', outdir='gen_all_image_run1')
     """
     filelist = []
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -782,6 +785,8 @@ def run_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=Tr
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
                            debug=False, only_fits=False, update=True, **kwargs):
     """generate the good image list for all the calibrators
+
+    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./', only_fits=True) 
     """
     if imgs_dir:
         obj_match = re.compile('^J\d*[+-]\d*$')
