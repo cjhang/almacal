@@ -428,7 +428,10 @@ def copy_ms(basedir, outdir, selectfile=None, debug=False, time_select=False,
                         print(">> Skip by wrong observation time: {}".format(obs))
                     continue
             if select_band:
-                obs_band = band_match.search(obs).groupdict()['band']
+                if band_match.search(obs):
+                    obs_band = band_match.search(obs).groupdict()['band']
+                else:
+                    continue
                 if obs_band not in select_band:
                     if debug:
                         print(">> Skip by wrong band: {}".format(obs))
