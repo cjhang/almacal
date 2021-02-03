@@ -60,7 +60,8 @@ if True:
 
 if True:
 
-    fig = plt.figure(figsize=(11,4))
+    fig = plt.figure(figsize=(11,5))
+    plt.style.use('default')
     # fig.suptitle('Comparison', fontsize=16)
 
     # # plot the oteo2016
@@ -91,6 +92,7 @@ if True:
 
     # plot the new data
     ax = fig.add_subplot(121)
+    # ax.set_xscale('log')
     ax.set_title('Band 6')
     # ax.text(3.2, 87, 'Band 6')
     im = plt.hist(np.log10(band_depth_new['B6']), bins=20, label='Whole dataset before 2020', alpha=0.5)
@@ -106,6 +108,9 @@ if True:
     ax.text(1.7, 60, r'$25\,\mu$Jy', color='b', alpha=0.5)
     ax.set_xlim(0, 3.7)
     ax.set_ylim(0, 95)
+    # locs, labels = plt.xticks()
+    plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
+    # print(locs, labels)
     ax.legend()
 
     ax = fig.add_subplot(122)
@@ -114,6 +119,7 @@ if True:
     im = plt.hist(np.log10(band_depth_new['B7']), bins=20, alpha=0.5)
     im = plt.hist(np.log10(band_depth_good['B7']), bins=20, alpha=0.7)
     im = plt.hist(np.log10(band_depth_oteo2016['B7']), bins=20, alpha=0.9)
+    plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
     ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
     ax.set_ylabel('Number')
     # for 1000 minutes, 43 antenna, at 345 GHz
