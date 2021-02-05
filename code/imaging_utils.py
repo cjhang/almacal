@@ -112,6 +112,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
             concat(vis=vis, concatvis=vis_combined)
             vis = vis_combined
     if clean:
+        rmtables('{}.*'.format(myimagename))
         tclean(vis=vis,
                imagename=myimagename,
                imsize=myimsize, 
