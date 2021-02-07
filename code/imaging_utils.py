@@ -1,8 +1,12 @@
-# This is file contains the program that imaging point source in ALMACAL project
+# This is file contains the program that related to imaging
+# It is designed for ALMACAL project
 #
 # Author: Jianhang Chen
 # Email: cjhastro@gmail.com
 # LastUpdate: 2020-11-05
+#
+# History:
+# 2020-11-05: First release
 
 import os
 import re
@@ -26,12 +30,45 @@ def efficient_imsize(imsize):
             imsize += 1
             continue
         
+def calculate_sensitivity(vis, full_pwv=False, debug=True):
+    """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
+
+    """
+    # Octile PWV(mm)
+    if not isinstance(vis, str):
+        raise ValueError("Only single visibility is supported.")
+    spw_list = read_spw(vis)
+    ss = spw_stat(vis)
+    central_freq = "{:.2f}GHz".format(np.mean(spw_list))
+    band_width = "{:.2f}GHz".format(np.sum(np.diff(spw_list)))
+    
+    total_onsourcetime = 0.0
+    for band in ss.values():
+        if band['time'] != []:
+            for t in band['time']:
+                total_onsourcetime += t
+    total_time = '{:.2f}min'.format(total_onsourcetime)
+    
+    antennalist = au.buildConfigurationFile(vis)
+    
+    
+    #remove the cfg file
+    if full_pwv: 
+        pwv_list = [0.472, 0.658, 0.913, 1.262, 1.796, 2.748, 5.186]
+        sensitivity = []
+        for pwv in pwv_list:
+            sensitivity.append(au.sensitivity(central_freq, band_width, '60s', pwv=pwv, antennalist=vis+'.cfg'))
+    else:
+        pwv = 1.262
+        sensitivity = au.sensitivity(central_freq, band_width, '60s', pwv=pwv, antennalist=vis+'.cfg')
+    os.system('rm -f {}.cfg'.format(vis))
+    return sensitivity
 
 def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=90,
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
                   cellsize_scale=1, datacolumn="data", specmode='mfs', outframe="LSRK", weighting='natural',
                   niter=0, interactive=False, usemask='auto-multithresh', only_fits=False,
-                  uvtaper_scale=None, debug=False, **kwargs):
+                  uvtaper_scale=None, debug=False, threshold=None, auto_threshold=2.0, **kwargs):
 
     """This function is used to make the continuum image
     
@@ -75,7 +112,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
         tb.open(vis + '/ANTENNA')
         antenna_diameter_list = tb.getcol('DISH_DIAMETER')
         tb.close()
-    antenna_diameter = np.median(antenna_diameter_list) * u.m
+    antenna_diameter = np.max(antenna_diameter_list) * u.m
 
     wavelength = const.c / (freq_mean * u.GHz) # in um
     fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
@@ -85,12 +122,15 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
         cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
         cellsize = cellsize_scale * cellsize
         mycell = "{:.4f}arcsec".format(cellsize)
-    
+    # calculate image size 
     if myimsize is None:
         myimsize = efficient_imsize(int(imgsize_scale * fov / cellsize))
         print(">>>", myimsize)
-    
+    # calculate frequecy
     myrestfreq = str(freq_mean)+'GHz'
+    # calcuate threshold
+    if not threshold:
+        threshold = "{}mJy".format(1000.0*auto_threshold*calculate_sensitivity(vis))
 
     if basename is None:
         if isinstance(vis, list):
@@ -123,6 +163,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                outframe=outframe, 
                weighting=weighting,
                niter=niter, 
+               threshold=threshold,
                interactive=interactive, 
                usemask=usemask,
                **kwargs)
@@ -164,6 +205,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                       outframe=outframe, 
                       weighting=weighting,
                       niter=niter, 
+                      threshold=threshold,
                       interactive=interactive, 
                       usemask=usemask,
                       uvtaper=[bmaj, bmin, bpa],
