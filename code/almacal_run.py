@@ -55,7 +55,7 @@ def gen_filenames(dirname=None, listfile=None, basedir=None, debug=False):
             file_list.append(line)
     return file_list
 
-def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, **kwargs):
+def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, **kwargs):
     """make images for one calibrator on all or specific band
 
     Params:
@@ -90,9 +90,29 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, debug=False, 
                 print("Excuding data from {}".format(antenna_diameter))
             return False
     try:
-        make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, **kwargs)
+        make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, niter=1000, **kwargs)
     except:
         print("Error in imaging {}".format(vis))
+    if check_calibrator:
+        imstat_info = imstat(myimagename+'.image')
+        if imstat_info['max'][0] > 0.05: #large than 0.05 Jy/beam
+            print("Maybe point source subtraction is failed")
+            outfile = os.path.join(outdir, os.path.basename(vis)+".point.cl")
+            # uvmodelfit(vis=vis, niter=3, comptype="P", sourcepar=[1.0, 0.0, 0.0], outfile=outfile)
+            uvmodelfit(vis=vis, niter=5, comptype="G", sourcepar=[1.0, 0.0, 0.0, 1.0, 0.9, 0], outfile=outfile)
+            ft(vis=vis, complist=outfile)
+            uvsub(vis=vis,reverse=False)
+            outputvis = os.path.join(outdir, 'data', os.path.basename(vis))
+            os.system('mkdir -p {}'.format(os.path.dirname(outputvis)))
+            split(vis=vis, outputvis=outputvis)
+            # if update_raw:
+                # os.system('mv {}.pointsub {}'.format(vis, vis))
+                # os.system('rm -rf {}.cont.auto.*'.format(myimagename))
+            # gen_images(vis=outputvis, band=band, outdir=outdir, exclude_aca=exclude_aca, check_calibrator=False, debug=debug, **kwargs)
+            # rmtables(myimagename+'.*')
+            make_cont_img(vis=outputvis, clean=True, myimagename=myimagename+'.pointsub', outdir=outdir, niter=1000, only_fits=True, **kwargs)
+            
+
     exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
     rmtables(tablenames=myimagename+'.*')
     return True
@@ -448,7 +468,7 @@ def copy_ms(basedir, outdir, selectfile=None, debug=False, time_select=False,
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=False, radius=6, debug=False, sigmaclip=False, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
+def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
                 gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=2.0):
     """This program designed to determine the validity of the image after point source subtraction
     
@@ -604,16 +624,16 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=False, check_f
         return False
     strick_mode = False
     # comparing the noise distribution with Gaussian
-    for deviation in [deviation_1sigma, deviation_2sigma, deviation_3sigma]:
+    for deviation in [deviation_1sigma, deviation_2sigma]:
         if deviation > gaussian_deviation:
             if debug:
                 print("Rjected, non-Gaussian noise")
             return False
     if strick_mode:
-        # if percent_outlier_3sigma >= 0.0027: #2*3sigma_boundary
-            # if debug:
-                # print("Rejected, non-Gaussian noise!\n")
-            # return False
+        if deviation_3sigma > gaussian_deviation:
+            if debug:
+                print("Rejected, non-Gaussian noise at 3sigma boudary!\n")
+            return False
         if percent_outlier_central >= outlier_frac:
             if debug:
                 print("Rejected, large central residual!\n")
@@ -800,7 +820,6 @@ def run_gen_oteo2016_data(basedir, outdir, select_band=['B6', 'B7'], debug=False
         copy_ms(obj_input_folder, obj_output_folder, time_select=True, 
                 end_time='2015-07-01T00:00:00',
                 select_band=select_band, debug=debug)
-
 
 def run_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, **kwargs):
