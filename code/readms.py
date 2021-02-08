@@ -87,18 +87,7 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
                 'B10':{'name':[], 'time':[], 'freq':[]},} 
     filelist = []
 
-    if objfolder:
-        if debug:
-            print("objfolder", objfolder)
-        base_dir = objfolder
-        obj = os.path.basename(objfolder)
-
-        p_obs = re.compile('uid___')
-
-        for obs in os.listdir(base_dir):
-            if p_obs.match(obs):
-                filelist.append(os.path.join(base_dir, obs))
-    elif vis:
+    if vis:
         if debug:
             print('vis', vis)
         if isinstance(vis, str):
