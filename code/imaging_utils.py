@@ -68,7 +68,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
                   cellsize_scale=1, datacolumn="data", specmode='mfs', outframe="LSRK", weighting='natural',
                   niter=0, interactive=False, usemask='auto-multithresh', only_fits=False,
-                  uvtaper_scale=None, debug=False, threshold=None, auto_threshold=2.0, **kwargs):
+                  uvtaper_scale=None, debug=False, threshold=None, auto_threshold=5.0, **kwargs):
 
     """This function is used to make the continuum image
     
