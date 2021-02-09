@@ -98,24 +98,28 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, check_calibra
         if imstat_info['max'][0] > 0.05: #large than 0.05 Jy/beam
             print("Maybe point source subtraction is failed")
             outfile = os.path.join(outdir, os.path.basename(vis)+".point.cl")
-            # uvmodelfit(vis=vis, niter=3, comptype="P", sourcepar=[1.0, 0.0, 0.0], outfile=outfile)
-            uvmodelfit(vis=vis, niter=5, comptype="G", sourcepar=[1.0, 0.0, 0.0, 1.0, 0.9, 0], outfile=outfile)
+            uvmodelfit(vis=vis, niter=5, comptype="P", sourcepar=[1.0, 0.0, 0.0], varypar=[True,False,False], outfile=outfile)
+            # uvmodelfit(vis=vis, niter=5, comptype="G", outfile=outfile,
+                       # sourcepar=[1.0, 0.0, 0.0, 1.0, 0.9, 0], 
+                       # varypar=[True, False, False, True, True, True])
             ft(vis=vis, complist=outfile)
             uvsub(vis=vis,reverse=False)
-            outputvis = os.path.join(outdir, 'data', os.path.basename(vis))
+            outputvis = os.path.join(outdir, 'updated_data', os.path.basename(vis))
             os.system('mkdir -p {}'.format(os.path.dirname(outputvis)))
             split(vis=vis, outputvis=outputvis)
-            # if update_raw:
-                # os.system('mv {}.pointsub {}'.format(vis, vis))
-                # os.system('rm -rf {}.cont.auto.*'.format(myimagename))
-            # gen_images(vis=outputvis, band=band, outdir=outdir, exclude_aca=exclude_aca, check_calibrator=False, debug=debug, **kwargs)
-            # rmtables(myimagename+'.*')
-            make_cont_img(vis=outputvis, clean=True, myimagename=myimagename+'.pointsub', outdir=outdir, niter=1000, only_fits=True, **kwargs)
+            if update_raw:
+                print('removing', vis)
+                rmtables(vis)
+                print('copying', outputvis, vis)
+                os.system('mv {} {}'.format(outputvis, vis))
+                outputvis = vis
+            rmtables(myimagename+'.*')
+            make_cont_img(vis=outputvis, clean=True, myimagename=myimagename, outdir=outdir, niter=1000, only_fits=True, **kwargs)
+            return 0
             
-
     exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
     rmtables(tablenames=myimagename+'.*')
-    return True
+    return 0
 
 def gen_images(allcal_dir=None, vis=None, outdir='./', bands=None, exclude_aca=True, 
                   debug=False, **kwargs):
