@@ -13,8 +13,6 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import analysisUtils as au
 
-plt.ioff()
-
 def read_spw(vis):
     """read the spectral windows
     """
