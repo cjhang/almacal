@@ -95,7 +95,7 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, check_calibra
         print("Error in imaging {}".format(vis))
     if check_calibrator:
         imstat_info = imstat(myimagename+'.image')
-        if imstat_info['max'][0] > 0.05: #large than 0.05 Jy/beam
+        if imstat_info['flux'][0] > 0.05: #flux/flux density large than 0.05 Jy
             print("Maybe point source subtraction is failed")
             outfile = os.path.join(outdir, os.path.basename(vis)+".point.cl")
             uvmodelfit(vis=vis, niter=5, comptype="P", sourcepar=[1.0, 0.0, 0.0], varypar=[True,False,False], outfile=outfile)
