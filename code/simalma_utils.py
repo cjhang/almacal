@@ -3,6 +3,15 @@ import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
+from astropy.io import fits
+from astropy.stats import sigma_clipped_stats, sigma_clip, SigmaClip
+from astropy.wcs import WCS
+from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
+from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry, 
+        RectangularAperture, find_peaks, Background2D, MedianBackground, SExtractorBackground)
+import matplotlib.pyplot as plt
+from matplotlib import patches
+
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=0.5, debug=False, savefile=None, clname=None,
         flux_range=[0, 1], fluxunit='mJy'):
@@ -132,19 +141,73 @@ def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False,
         make_cont_img(vis_testfile_new, outdir=outdir, clean=True, 
                       only_fits=True, basename=basename)
 
+def make_gaussian_image(shape, sigma, offset=(0,0), theta=0):
+    """make a gaussian image for testing
+
+    theta: in rad, rotating the gaussian counterclock wise
+    """
+    image = np.zeros(shape, dtype=float)
+    yidx, xidx = np.indices(shape)
+    yrad, xrad = yidx-shape[0]/2., xidx-shape[1]/2.
+    y = xrad*np.cos(theta) + yrad*np.sin(theta)
+    x = yrad*np.cos(theta) - xrad*np.sin(theta)
+    if isinstance(sigma, (list, tuple)):
+        ysigma, xsigma = sigma
+    elif isinstance(sigma, (int, float)):
+        ysigma = xsigma = sigma
+    if isinstance(offset, (list, tuple)):
+        y_offset, x_offset = offset
+    elif isinstance(offset, (int, float)):
+        y_offset = x_offset = offset
+    flux = np.exp(-(x-x_offset)**2/2./xsigma**2 - (y-y_offset)**2/2./ysigma**2) / (2*np.pi*xsigma*ysigma)
+
+    return flux
+
+def auto_photometry(image, a=1, b2a=1, theta=0, debug=False, ):
+    """automatically measure the flux with different methods
+    """
+    
+    ysize, xsize = image.shape
+    y_center, x_center = ysize/2., xsize/2.
+    
+    # Aperture Photometry
+    if method == 'aperture':
+        radii = np.arange(1., ysize/2./np.cos(theta), 1/np.cos(theta))
+
+        apertures = [EllipticalAperture((x_center, y_center), 1.*a, 1.*a*b2a, theta) for a in radii]
+        extract_area = lambda x: x.area()
+        area_apers = np.array(list(map(extract_area, apertures)))
+        
+        phot_table = aperture_photometry(image, apertures)
+        extract_qtable = lambda x: x.data[0]
+        flux_apers = np.array(list(map(extract_qtable, phot_table.columns[3:].values())))
+
+        slopes = np.ones_like(area_apers)
+        slopes[1:] = np.diff(flux_apers) / np.diff(area_apers)
+        slope_selection = slopes < 0.001
+        flux_apers_stable = flux_apers[slope_selection][0]
+        print(flux_apers_stable)
+        if debug:
+            print('radii', radii)
+            print(area_apers)
+            print(flux_apers)
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.imshow(image, origin='lower')
+            for ap in apertures:
+                ap.plot(color='gray', lw=2)
+        return flux_apers_stable
+    elif method == 'gaussian':
+        pass
+        return 0
+
+
+
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
                   filter_size=None, box_size=None):
     """finding point source in the image
     """
-    from astropy.io import fits
-    from astropy.stats import sigma_clipped_stats, sigma_clip, SigmaClip
-    from astropy.wcs import WCS
-    from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
-    from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry, 
-            find_peaks, Background2D, MedianBackground, SExtractorBackground)
-    import matplotlib.pyplot as plt
-    from matplotlib import patches
 
 
     hdu = fits.open(fitsimage)
@@ -165,6 +228,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     beamsize = np.pi*a*b/4*np.log(2)
     
     if debug:
+        print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
         print('fwhm_pixel:', fwhm_pixel)
         print('a, b', a, b)
@@ -217,6 +281,12 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     aper_found = EllipticalAperture(sources_found_center, 1*a, 1*b, theta=theta/180*np.pi)
     phot_table_found = aperture_photometry(data_masked, aper_found)
     flux_aper_found = (phot_table_found['aperture_sum'] * beamsize).tolist() # convert mJy
+    if True:
+        segments = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
+        print(segments)
+        segments_mask = segments.to_mask(method='center')
+        print(segments_mask)
+        return segments_mask
     if debug:
         print("sources_found_center", sources_found_center)
         print("aper_found.positions", aper_found.positions)
