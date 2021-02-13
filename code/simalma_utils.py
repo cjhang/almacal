@@ -11,6 +11,7 @@ from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry,
         RectangularAperture, find_peaks, Background2D, MedianBackground, SExtractorBackground)
 import matplotlib.pyplot as plt
 from matplotlib import patches
+from astropy.modeling import models, fitting
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=0.5, debug=False, savefile=None, clname=None,
@@ -141,7 +142,7 @@ def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False,
         make_cont_img(vis_testfile_new, outdir=outdir, clean=True, 
                       only_fits=True, basename=basename)
 
-def make_gaussian_image(shape, sigma, offset=(0,0), theta=0):
+def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
     """make a gaussian image for testing
 
     theta: in rad, rotating the gaussian counterclock wise
@@ -159,22 +160,23 @@ def make_gaussian_image(shape, sigma, offset=(0,0), theta=0):
         y_offset, x_offset = offset
     elif isinstance(offset, (int, float)):
         y_offset = x_offset = offset
-    flux = np.exp(-(x-x_offset)**2/2./xsigma**2 - (y-y_offset)**2/2./ysigma**2) / (2*np.pi*xsigma*ysigma)
+    flux = area * np.exp(-(x-x_offset)**2/2./xsigma**2 - (y-y_offset)**2/2./ysigma**2) / (2*np.pi*xsigma*ysigma)
 
     return flux
 
-def auto_photometry(image, a=1, b2a=1, theta=0, debug=False, ):
+def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['aperture','gaussian']):
     """automatically measure the flux with different methods
     """
     
     ysize, xsize = image.shape
     y_center, x_center = ysize/2., xsize/2.
     
+    flux_list = []
     # Aperture Photometry
-    if method == 'aperture':
-        radii = np.arange(1., ysize/2./np.cos(theta), 1/np.cos(theta))
+    if 'aperture' in methods:
+        radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 1/np.cos(theta))
 
-        apertures = [EllipticalAperture((x_center, y_center), 1.*a, 1.*a*b2a, theta) for a in radii]
+        apertures = [EllipticalAperture((x_center, y_center), a, a*bmin/bmaj, theta) for a in radii]
         extract_area = lambda x: x.area()
         area_apers = np.array(list(map(extract_area, apertures)))
         
@@ -196,10 +198,35 @@ def auto_photometry(image, a=1, b2a=1, theta=0, debug=False, ):
             ax.imshow(image, origin='lower')
             for ap in apertures:
                 ap.plot(color='gray', lw=2)
-        return flux_apers_stable
-    elif method == 'gaussian':
+        flux_list.append(flux_apers_stable)
+    if 'gaussian' in methods:
         pass
-        return 0
+        yidx, xidx = np.indices((ysize, xsize))
+        yrad, xrad = yidx-ysize/2., xidx-xsize/2.
+
+        p_init = models.Gaussian2D(amplitude=1, x_stddev=1.*bmaj, y_stddev=1.*bmin, theta=theta)
+        fit_p = fitting.LevMarLSQFitter()
+        p = fit_p(p_init, xrad, yrad, image)
+        flux_fitted = 2*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
+
+        if debug:
+            print("Initial guess:", p_init)
+            print("Fitting:", p)
+            print("Flux:", flux_fitted)
+            fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
+            ax[0].imshow(image, origin='lower', interpolation='nearest')
+            gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
+                    width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
+                    linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
+            ax[0].add_patch(gaussian_init)
+            ax[0].set_title("Data")
+            ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='nearest')
+            ax[1].set_title("Model")
+            ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='nearest')
+            ax[2].set_title("Residual")
+        flux_list.append(flux_fitted)
+
+    return flux_list
 
 
 
@@ -286,7 +313,11 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         print(segments)
         segments_mask = segments.to_mask(method='center')
         print(segments_mask)
-        return segments_mask
+        for s in segments_mask:
+            print(s.cutout(data_masked).shape)
+            flux_list = auto_photometry(s.cutout(data_masked))
+            print(np.array(flux_list) * beamsize)
+        # return segments_mask
     if debug:
         print("sources_found_center", sources_found_center)
         print("aper_found.positions", aper_found.positions)
