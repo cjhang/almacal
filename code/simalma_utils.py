@@ -14,7 +14,7 @@ from matplotlib import patches
 from astropy.modeling import models, fitting
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
-        prune_threshold=0.5, debug=False, savefile=None, clname=None,
+        prune_threshold=2, debug=False, savefile=None, clname=None,
         flux=None, fluxunit='mJy', known_file=None):
     """This function used to add random source around a given direction
         
@@ -73,11 +73,8 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         # print('known_sources ra:', known_sources.ra.value)
         # print('known_sources dec:', known_sources.dec.value)
         for ra,dec in zip(ra_random, dec_random):
-            print(ra, dec)
             if np.sum(np.abs(ra - known_sources.ra) < distance)>0 and np.sum(np.abs(dec - known_sources.dec) < distance)>0:
-                print('skipping ...', (ra,dec))
-                print('ra difference:',np.abs(ra - known_sources.ra))# < distance.value)
-                print('dec difference:',np.abs(dec - known_sources.dec))# < distance.value)
+                print('skipping one source')
                 continue
             selected_after_known_ra.append(ra)
             selected_after_known_dec.append(dec)
@@ -109,8 +106,9 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     else:
         return [ra_random, dec_random, flux_input]
 
-def add_raondom_sources(vis, n=5, radius=10, outdir='./', make_image=False, 
-        basename=None, debug=False, flux=None, known_file=None):
+def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True, 
+        basename=None, debug=False, flux=None, known_file=None, 
+        uvtaper_scale=[1.0, 2.0]):
     """
     radius : in arcsec
     """
@@ -120,6 +118,9 @@ def add_raondom_sources(vis, n=5, radius=10, outdir='./', make_image=False,
         basename = os.path.basename(vis) + '.tmp'
     vis_testfile = os.path.join(outdir, basename)
     rmtables(vis_testfile)
+
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
    
     # make a copy of the original file
     split(vis=vis, outputvis=vis_testfile, datacolumn='data') 
@@ -147,8 +148,9 @@ def add_raondom_sources(vis, n=5, radius=10, outdir='./', make_image=False,
     rmtables(vis_testfile_new)
     split(vis=vis_testfile, datacolumn='corrected', outputvis=vis_testfile_new)
     if make_image:
-        make_cont_img(vis_testfile_new, outdir=outdir, clean=True, 
-                      only_fits=True, basename=basename)
+        make_cont_img(vis_testfile_new, outdir=outdir, clean=True, niter=1000, 
+                      only_fits=True, uvtaper_scale=uvtaper_scale, 
+                      basename=basename)
 
 def subtract_sources(vis, complist=None, ):
     md = msmdtool()
