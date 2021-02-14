@@ -260,13 +260,14 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
     ratio = header['BMIN'] / header['BMAJ']
     theta = header['BPA']
-    beamsize = np.pi*a*b/4*np.log(2)
+    beamsize = np.pi*a*b/(4*np.log(2))
     
     if debug:
         print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
         print('fwhm_pixel:', fwhm_pixel)
         print('a, b', a, b)
+        print('beamsize', beamsize)
 
     if model_background:
         if filter_size is None:
@@ -318,7 +319,8 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     if True:
         aper_found = EllipticalAperture(sources_found_center, 1*a, 1*b, theta=theta+90/180*np.pi)
         phot_table_found = aperture_photometry(data_masked, aper_found)
-        flux_aper_found = (phot_table_found['aperture_sum'] * beamsize).tolist() # convert mJy
+        flux_aper_found = (phot_table_found['aperture_sum'] / beamsize).tolist() # convert mJy
+        print(">>>>>>>>Aperture phot", phot_table_found['aperture_sum'].tolist())
     # automatically aperture photometry
     if True:
         flux_auto = []
@@ -327,8 +329,8 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         for s in segments_mask:
             flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
                                         theta=theta/180*np.pi, debug=debug, methods=methods)
-            # print('flux_list', flux_list)
-            flux_auto.append(np.array(flux_list) * beamsize)
+            print('>>>>flux_list', flux_list)
+            flux_auto.append(np.array(flux_list) / beamsize)
         # return segments_mask
     if debug:
         print("sources_found_center", sources_found_center)
@@ -355,7 +357,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         aper_input = EllipticalAperture(sources_input_center, 3*b, 3*a, 
                                   theta=theta/180*np.pi)
         phot_table_input = aperture_photometry(data_masked, aper_input)
-        flux_aper_input = (phot_table_input['aperture_sum'] * beamsize).tolist() # convert mJy
+        flux_aper_input = (phot_table_input['aperture_sum'] / beamsize).tolist() # convert mJy
         # automatically aperture photometry
         if True:
             flux_input_auto = []
@@ -364,7 +366,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             for s in segments_mask:
                 flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
                                             theta=theta/180*np.pi, debug=debug, methods=methods)
-                flux_input_auto.append(np.array(flux_list) * beamsize)
+                flux_input_auto.append(np.array(flux_list) / beamsize)
  
         if debug:
             print(flux_input)
