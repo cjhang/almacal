@@ -945,7 +945,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                         tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
-def run_gen_fake_images(basedir, bands=['B7',]):
+def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
     for obj in os.listdir(basedir):
         if obj_match.match(obj):
@@ -953,7 +953,7 @@ def run_gen_fake_images(basedir, bands=['B7',]):
                 objfolder = os.path.join(basedir, obj)
                 vis_combined = os.path.join(objfolder, '{}_{}_combine.ms'.format(obj, band))
                 if os.path.isdir(vis_combined):
-                    gen_fake_images(vis=vis_combined, outdir=objfolder, 
+                    gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj), 
                                     known_file=os.path.join(objfolder, vis_combined+'.auto.cont.image.fits.source_found.txt'))
 
 def run_test_completeness():
