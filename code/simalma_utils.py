@@ -15,7 +15,7 @@ from astropy.modeling import models, fitting
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=0.5, debug=False, savefile=None, clname=None,
-        flux=None, fluxunit='mJy'):
+        flux=None, fluxunit='mJy', known_file=None):
     """This function used to add random source around a given direction
         
     This is a proximate solution, which treat the field of view as a plane.
@@ -36,8 +36,8 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     
     theta = 2*np.pi*np.random.uniform(0, 1, n)
     rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-    if flux is None:
-        flux_input = np.random.uniform(flux_range[0], flux_range[1], n)
+    if isinstance(flux, (list, tuple)):
+        flux_input = np.random.uniform(flux[0], flux[1], n)
     elif isinstance(flux, (int, float)):
         flux_input = np.full(n, flux)
     if debug:
@@ -54,6 +54,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
             coords_selected = SkyCoord(ra=np.array(selected_ra)*u.arcsec, dec=np.array(selected_dec)*u.arcsec)
             separation_with_select = coord_i.separation(coords_selected)
             if np.sum(separation_with_select<prune_threshold*u.arcsec)>=1:
+                print("pruning one point...")
                 continue
             selected_ra.append(delta_ra[i]) 
             selected_dec.append(delta_dec[i])
@@ -61,7 +62,28 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         delta_dec = np.array(selected_dec)
     ra_random = delta_ra*u.arcsec + skycoord.ra
     dec_random = delta_dec*u.arcsec+ skycoord.dec
-    
+   
+    if known_file:
+        distance = 2*u.arcsec
+        print('distance', distance)
+        selected_after_known_ra = []
+        selected_after_known_dec = []
+        known_data = np.loadtxt(known_file, skiprows=1)
+        known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+        # print('known_sources ra:', known_sources.ra.value)
+        # print('known_sources dec:', known_sources.dec.value)
+        for ra,dec in zip(ra_random, dec_random):
+            print(ra, dec)
+            if np.sum(np.abs(ra - known_sources.ra) < distance)>0 and np.sum(np.abs(dec - known_sources.dec) < distance)>0:
+                print('skipping ...', (ra,dec))
+                print('ra difference:',np.abs(ra - known_sources.ra))# < distance.value)
+                print('dec difference:',np.abs(dec - known_sources.dec))# < distance.value)
+                continue
+            selected_after_known_ra.append(ra)
+            selected_after_known_dec.append(dec)
+        ra_random = selected_after_known_ra
+        dec_random = selected_after_known_dec
+
 
     if savefile:
         with open(savefile, 'w+') as sfile:
@@ -70,7 +92,6 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
                 sfile.write('{:.5f} {:.6f} {:.4f}\n'.format(ra.value, dec.value, flux))
         # np.savetxt(savefile, [[ra_random], [dec_random], [flux_random]], 
                 # header='#ra[arcsec]  dec[arcsec]  flux[{}]'.format(fluxunit))
-
 
     if clname:
         # generate component list
@@ -88,30 +109,8 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     else:
         return [ra_random, dec_random, flux_input]
 
-    # skycoord_list = SkyCoord(ra=ra_random, dec=dec_random)
-    # f = lambda x: ('J2000 '+x.to_string('hmsdms')).encode('utf-8')
-    # return list(map(f, skycoord_list))
-   
-    # The old method
-    # direction_list = []
-    # while len(direction_list) < n:
-        # # random value for ra and dec
-        # # two_delta = (np.random.random_sample(2) - 0.5) * 2 * radius        
-        # delta1 = (np.random.random_sample() - 0.5) * 2 #* radius        
-        # delta2 = (np.random.random_sample() - 0.5) * 2 #* radius        
-        # two_delta = np.array([delta1, delta2]) * radius
-        # # print(two_delta[0], two_delta[1])
-        # if (two_delta[0]**2 + two_delta[1]**2) >= radius**2:
-            # continue
-        # ra_random = two_delta[0] + skycoord.ra
-        # dec_random = two_delta[1] + skycoord.dec
-        # skycoord_tmp = SkyCoord(ra=ra_random, dec=dec_random)
-        # direction_list.append('J2000 ' + skycoord_tmp.to_string('hmsdms'))
-   
-    # return direction_list
-
-def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False, 
-        basename=None, debug=False, flux=None):
+def add_raondom_sources(vis, n=5, radius=10, outdir='./', make_image=False, 
+        basename=None, debug=False, flux=None, known_file=None):
     """
     radius : in arcsec
     """
@@ -140,7 +139,7 @@ def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False,
     rmtables(clname_fullpath)
     os.system('rm -rf {}'.format(savefile_fullpath))
     mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
-                                    clname=clname_fullpath, savefile=savefile_fullpath)
+                                    clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file)
     ft(vis=vis_testfile, complist=mycomplist)
     uvsub(vis=vis_testfile, reverse=True)
     
@@ -150,6 +149,18 @@ def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False,
     if make_image:
         make_cont_img(vis_testfile_new, outdir=outdir, clean=True, 
                       only_fits=True, basename=basename)
+
+def subtract_sources(vis, complist=None, ):
+    md = msmdtool()
+    if not md.open(vis):
+        raise ValueError("Failed to open {}".format(vis))
+    phasecenter = md.phasecenter()
+    mydirection = phasecenter['refer'] +' '+ SkyCoord(phasecenter['m0']['value'], phasecenter['m1']['value'], unit="rad").to_string('hmsdms')
+    myfreq = "{:.2f}GHz".format(np.mean(read_spw(vis)))
+    ft(vis=vis, complist=complist)
+    uvsub(vis=vis, reverse=False)
+    vis_new = vis+'.sourcessub'
+    split(vis=vis, datacolumn='corrected', outputvis=vis_new)
 
 def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
     """make a gaussian image for testing
@@ -240,10 +251,10 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
-                  filter_size=None, box_size=None, methods=['aperture', 'gaussian']):
+                  filter_size=None, box_size=None, methods=['aperture', 'gaussian'],
+                  known_file=None):
     """finding point source in the image
     """
-
 
     hdu = fits.open(fitsimage)
     header = hdu[0].header
@@ -261,6 +272,21 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     ratio = header['BMIN'] / header['BMAJ']
     theta = header['BPA']
     beamsize = np.pi*a*b/(4*np.log(2))
+
+    # read known_sources
+    known_mask = np.full((ny, nx), 0, dtype=bool)
+    if known_file:
+        known_data = np.loadtxt(known_file, skiprows=1)
+        known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+        known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+        known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
+        known_aper_mask = known_aper.to_mask(method='center')
+        for m in known_aper_mask:
+            known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
+        if False:
+            plt.figure()
+            plt.imshow(known_mask,origin='lower')
+            plt.show()
     
     if debug:
         print('image shape', ny, nx)
@@ -291,7 +317,8 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
         daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
-                                theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2)  
+                                theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,
+                                mask=known_mask)  
         sources_found = daofind(data_masked - background)
         if debug:
             print(sources_found)
@@ -301,7 +328,8 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         sources_found_x, sources_found_y = sources_found['xcentroid'], sources_found['ycentroid']
         
     elif algorithm == 'find_peak': # find_peak
-        sources_found = find_peaks(data_masked - background, threshold=threshold*std, box_size=fwhm_pixel)
+        sources_found = find_peaks(data_masked - background, threshold=threshold*std, box_size=fwhm_pixel,
+                                   mask=known_mask)
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
@@ -319,8 +347,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     if True:
         aper_found = EllipticalAperture(sources_found_center, 1*a, 1*b, theta=theta+90/180*np.pi)
         phot_table_found = aperture_photometry(data_masked, aper_found)
-        flux_aper_found = (phot_table_found['aperture_sum'] / beamsize).tolist() # convert mJy
-        print(">>>>>>>>Aperture phot", phot_table_found['aperture_sum'].tolist())
+        flux_aper_found = (phot_table_found['aperture_sum'] / beamsize * 1000).tolist() # convert mJy
     # automatically aperture photometry
     if True:
         flux_auto = []
@@ -329,8 +356,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         for s in segments_mask:
             flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
                                         theta=theta/180*np.pi, debug=debug, methods=methods)
-            print('>>>>flux_list', flux_list)
-            flux_auto.append(np.array(flux_list) / beamsize)
+            flux_auto.append(np.array(flux_list) / beamsize * 1000) #from Jy to mJy
         # return segments_mask
     if debug:
         print("sources_found_center", sources_found_center)
@@ -349,7 +375,13 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
 
         idx_found, idx_input, d2d, d3d = sources_input_coords.search_around_sky(
                 sources_found_coords, fwhm)
+
+        print(idx_found)
+        print(idx_input)
     
+        print(flux_input[idx_input])
+        print(np.array(flux_auto)[idx_found])
+
         # aperture photometry based on input coordinates
         # for s in source_input_pixels:
             # pos_list.append([s['xcentroid'], s['ycentroid']])
@@ -366,7 +398,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             for s in segments_mask:
                 flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
                                             theta=theta/180*np.pi, debug=debug, methods=methods)
-                flux_input_auto.append(np.array(flux_list) / beamsize)
+                flux_input_auto.append(np.array(flux_list) / beamsize) #already mJy
  
         if debug:
             print(flux_input)
@@ -398,14 +430,21 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
 
     if savefile:
         with open(savefile, 'w+') as sfile:
-            sfile.write('# ra[arcsec]  dec[arcsec]  flux[mJy]\n')
-            for ra, dec, flux in zip(sources_found_coords.ra, sources_found_coords.dec, flux_aper_found):
-                sfile.write('{:.5f} {:.6f} {:.4f}\n'.format(ra.to(u.arcsec).value,
-                    dec.to(u.arcsec).value, flux))
+            sfile.write('# ra[arcsec]  dec[arcsec] ')
+            for m in methods:
+                sfile.write(' '+m+'[mJy] ')
+            sfile.write('\n')
+            for ra, dec, flux in zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto):
+                sfile.write('{:.6f}  {:.6f} '.format(ra.to(u.arcsec).value,
+                    dec.to(u.arcsec).value))
+                for f_m in flux:
+                    sfile.write(" {:.8f} ".format(f_m))
+                sfile.write('\n')
     if return_image:
         return data_masked.data, background
 
     if sources_file:
         return flux_input, flux_auto
     return flux_auto
+
 
