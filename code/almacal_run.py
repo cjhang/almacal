@@ -739,6 +739,34 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
+def calculate_completeness(vis, flux_sampling=np.arange(1)):
+    """simulation the completeness of source finding algorithm
+    """
+    if isinstance(vis, str):
+        filelist = [vis,]
+    elif isinstance(vis, list):
+        filelist = vis
+
+def gen_fake_images(vis, known_file=None, fov_scale=1.5, outdir='./', basename=None):
+    """generate the fake images with man-made sources
+    """
+    # read information from vis 
+    spw_specrange = read_spw(vis)
+    freq_mean = np.mean(spw_specrange) # in GHz
+    tb.open(vis + '/ANTENNA')
+    antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+    tb.close()
+    antenna_diameter = np.max(antenna_diameter_list) * u.m
+    wavelength = const.c / (freq_mean * u.GHz) # in um
+    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+    print('fov', fov)
+    print('radius', 0.5*fov)
+    if basename is None:
+        basename = os.path.basename(vis)
+    for f in np.arange(0.1, 10, 5):
+        add_raondom_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
+                            basename=basename+'.{}mJy'.format(f), flux=f, known_file=known_file,
+                            uvtaper_scale=None)
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -909,11 +937,27 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                                         tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
                 obj_band_path = os.path.join(imgs_dir, obj, band)
-                good_imgs, band_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
+                good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
                                                     basename=obj+'_'+band, debug=debug, **kwargs)
                 if debug: 
                     print(good_imgs)
                 if make_image:
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                         tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+
+def run_test_completeness():
+    pass
+
+def run_find_source(basedir, summary_file=None):
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    for obj in os.listdir(basedir):
+        if obj_match.match(obj):
+            source_found = []
+            imgs = glob.glob(os.path.join(basedir, obj, '*.fits'))
+            for img in imgs:
+                savefile = img+ '.source_found.txt'
+                sources_found = source_finder(img, savefile=savefile)
+                if sources_found != 0:
+                    sources_found.append(len(sources_found))
+
 
