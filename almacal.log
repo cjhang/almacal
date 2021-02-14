@@ -250,3 +250,49 @@ B7
 ./testing_goodimages_oteo2016/all_images/J1010-0200/B7/uid___A002_Xe3da01_X3d31.ms.split.cal.J1010-0200_B7.cont.auto.fits
 ```
 
+---
+
+**2021-02-03**
+
+Four sources found by eye:
+
+- `J0139+1753` B6
+- `J1150+2417` B7, not in B6
+- `J1512+0203` B6
+- `J2253+1608` B6+B7
+
+---
+
+**2021-02-04**
+
+Oteo2016_list = ['J1303-5540', 'J1744-3116', 'J2206-0031', 'J1933-6942', 'J2223-3137', 'J1010-0200', 'J2148+0657', 'J0241-0815', 'J0108+0135', 'J1058+0133'] 
+
+Passed: [J1933-6942, J2148+0657, J0241-0815]
+
+Partial Passed: [J0241-0815, J2206-0031] 
+
+Not passed: [J1010-0200, J1744-3116]
+
+- [x] `J1010-0200` ~~cannot detect any source, find why~~, so many failed point source subtraction
+- [x] `J2206-0031` B7 and `J1303-5540`B6, `J0108+0135`B7, ~~uvtaper2.0 cannot pass, find why,~~ signal_to_noisy ratio has decreased
+- [x] `J2223-3137` B6, ~~uvtaper1.0 and 2.0 cannot pass~~, too strict  image selection criteria, most images were rejected
+- [x] `J1744-3116` ~~cannot find the B7 detection~~, failed point source subtraction
+- [x] `J2148+0657` ~~B6 with strong noise~~, true bad
+- [x] `J1058+0133` ~~not passed the good image selection~~, failed point source subtraction
+
+---
+
+2021-02-13
+
+files with split problems:
+
+- uid___A002_X984bbe_X21d2.ms.split.cal.J1058+0133_B6
+- uid___A002_X9652ea_X220.ms.split.cal.J1058+0133_B6
+- uid___A002_X9630c0_X1719.ms.split.cal.J1058+0133_B6
+
+---
+
+2021-02-14
+
+1. the effects of uvtaper for source finding
+2. random insert, measure flux for clean image, without pbcorrection, without change the direction
