@@ -152,7 +152,8 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
             concat(vis=vis, concatvis=vis_combined)
             vis = vis_combined
     if clean:
-        rmtables('{}.*'.format(myimagename))
+        rmtables('{}.fits'.format(myimagename))
+        os.system('rm -rf {}.fits'.format(myimagename))
         tclean(vis=vis,
                imagename=myimagename,
                imsize=myimsize, 
@@ -195,6 +196,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                     print("uvtaper cell size:", mycell)
                     print("uvtaper image size:", myimsize)
 
+                os.system('rm -rf {}.uvtaper{}.fits'.format(myimagename, uvt_scale))
                 tclean(vis=vis,
                       imagename=myimagename+'.uvtaper{}'.format(uvt_scale),
                       imsize=myimsize, 
