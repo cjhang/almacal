@@ -15,7 +15,7 @@ from astropy.modeling import models, fitting
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=0.5, debug=False, savefile=None, clname=None,
-        flux_range=[0, 1], fluxunit='mJy'):
+        flux=None, fluxunit='mJy'):
     """This function used to add random source around a given direction
         
     This is a proximate solution, which treat the field of view as a plane.
@@ -36,7 +36,10 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     
     theta = 2*np.pi*np.random.uniform(0, 1, n)
     rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-    flux_random = np.random.uniform(flux_range[0], flux_range[1], n)
+    if flux is None:
+        flux_input = np.random.uniform(flux_range[0], flux_range[1], n)
+    elif isinstance(flux, (int, float)):
+        flux_input = np.full(n, flux)
     if debug:
         print('fluxunit', fluxunit)
 
@@ -63,7 +66,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     if savefile:
         with open(savefile, 'w+') as sfile:
             sfile.write('# ra[arcsec]  dec[arcsec]  flux[{}]\n'.format(fluxunit))
-            for ra, dec, flux in zip(ra_random, dec_random, flux_random):
+            for ra, dec, flux in zip(ra_random, dec_random, flux_input):
                 sfile.write('{:.5f} {:.6f} {:.4f}\n'.format(ra.value, dec.value, flux))
         # np.savetxt(savefile, [[ra_random], [dec_random], [flux_random]], 
                 # header='#ra[arcsec]  dec[arcsec]  flux[{}]'.format(fluxunit))
@@ -76,14 +79,14 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         direction_list = list(map(f, skycoord_list))
         os.system('rm -rf {}'.format(clname))
         cl.done()
-        for d,f in zip(direction_list, flux_random):
+        for d,f in zip(direction_list, flux_input):
             cl.addcomponent(dir=d, flux=f, fluxunit=fluxunit, 
-                            freq=freq, shape='point')
+                            freq=freq, shape='point',index=0)
         cl.rename(clname)
         cl.done()
         return clname
     else:
-        return [ra_random, dec_random, flux_random]
+        return [ra_random, dec_random, flux_input]
 
     # skycoord_list = SkyCoord(ra=ra_random, dec=dec_random)
     # f = lambda x: ('J2000 '+x.to_string('hmsdms')).encode('utf-8')
@@ -108,13 +111,15 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     # return direction_list
 
 def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False, 
-        basename=None, debug=False):
+        basename=None, debug=False, flux=None):
     """
     radius : in arcsec
     """
     
     # clear the working place
-    vis_testfile = os.path.join(outdir, basename+'.ms')
+    if basename is None:
+        basename = os.path.basename(vis) + '.tmp'
+    vis_testfile = os.path.join(outdir, basename)
     rmtables(vis_testfile)
    
     # make a copy of the original file
@@ -131,7 +136,11 @@ def add_raondom_source(vis, n=5, radius=10, outdir='./', make_image=False,
         print(myfreq)
     clname_fullpath = os.path.join(outdir, basename+'.cl')
     savefile_fullpath = os.path.join(outdir, basename+'.txt')
-    mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, clname=clname_fullpath, savefile=savefile_fullpath)
+    # overwrite old files
+    rmtables(clname_fullpath)
+    os.system('rm -rf {}'.format(savefile_fullpath))
+    mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
+                                    clname=clname_fullpath, savefile=savefile_fullpath)
     ft(vis=vis_testfile, complist=mycomplist)
     uvsub(vis=vis_testfile, reverse=True)
     
@@ -174,7 +183,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
     flux_list = []
     # Aperture Photometry
     if 'aperture' in methods:
-        radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 1/np.cos(theta))
+        radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
 
         apertures = [EllipticalAperture((x_center, y_center), a, a*bmin/bmaj, theta) for a in radii]
         extract_area = lambda x: x.area()
@@ -185,22 +194,23 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
         flux_apers = np.array(list(map(extract_qtable, phot_table.columns[3:].values())))
 
         slopes = np.ones_like(area_apers)
-        slopes[1:] = np.diff(flux_apers) / np.diff(area_apers)
+        slopes[1:] = np.diff(flux_apers)/np.max(flux_apers)/np.diff(area_apers) #Normalized slope
         slope_selection = slopes < 0.001
-        flux_apers_stable = flux_apers[slope_selection][0]
-        print(flux_apers_stable)
         if debug:
-            print('radii', radii)
-            print(area_apers)
-            print(flux_apers)
+            print('position:{}/{}'.format(np.min(np.where(slope_selection)[0]), len(radii)))
+            # print('slopes', slopes)
+        if len(flux_apers[slope_selection])<3:
+            flux_apers_stable = flux_apers[-2]
+        else:
+            flux_apers_stable = flux_apers[slope_selection][0]
+        if debug:
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.imshow(image, origin='lower')
+            ax.imshow(image, origin='lower', interpolation='none')
             for ap in apertures:
                 ap.plot(color='gray', lw=2)
         flux_list.append(flux_apers_stable)
     if 'gaussian' in methods:
-        pass
         yidx, xidx = np.indices((ysize, xsize))
         yrad, xrad = yidx-ysize/2., xidx-xsize/2.
 
@@ -214,25 +224,23 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
             print("Fitting:", p)
             print("Flux:", flux_fitted)
             fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
-            ax[0].imshow(image, origin='lower', interpolation='nearest')
+            ax[0].imshow(image, origin='lower', interpolation='none')
             gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
                     width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
                     linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
             ax[0].add_patch(gaussian_init)
             ax[0].set_title("Data")
-            ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='nearest')
+            ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
             ax[1].set_title("Model")
-            ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='nearest')
+            ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='none')
             ax[2].set_title("Residual")
         flux_list.append(flux_fitted)
 
     return flux_list
 
-
-
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
-                  filter_size=None, box_size=None):
+                  filter_size=None, box_size=None, methods=['aperture', 'gaussian']):
     """finding point source in the image
     """
 
@@ -292,7 +300,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         sources_found_x, sources_found_y = sources_found['xcentroid'], sources_found['ycentroid']
         
     elif algorithm == 'find_peak': # find_peak
-        sources_found = find_peaks(data_masked - background, threshold=threshold*std)
+        sources_found = find_peaks(data_masked - background, threshold=threshold*std, box_size=fwhm_pixel)
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
@@ -304,24 +312,29 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
     sources_found_center = list(zip(sources_found_x, sources_found_y))
     sources_found_coords = pixel_to_skycoord(sources_found_x, sources_found_y, wcs)
+
     # aperture photometry based on source finding coordinates
-    aper_found = EllipticalAperture(sources_found_center, 1*a, 1*b, theta=theta/180*np.pi)
-    phot_table_found = aperture_photometry(data_masked, aper_found)
-    flux_aper_found = (phot_table_found['aperture_sum'] * beamsize).tolist() # convert mJy
+    ## simple aperture flux
     if True:
+        aper_found = EllipticalAperture(sources_found_center, 1*a, 1*b, theta=theta+90/180*np.pi)
+        phot_table_found = aperture_photometry(data_masked, aper_found)
+        flux_aper_found = (phot_table_found['aperture_sum'] * beamsize).tolist() # convert mJy
+    # automatically aperture photometry
+    if True:
+        flux_auto = []
         segments = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
-        print(segments)
         segments_mask = segments.to_mask(method='center')
-        print(segments_mask)
         for s in segments_mask:
-            print(s.cutout(data_masked).shape)
-            flux_list = auto_photometry(s.cutout(data_masked))
-            print(np.array(flux_list) * beamsize)
+            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
+                                        theta=theta/180*np.pi, debug=debug, methods=methods)
+            # print('flux_list', flux_list)
+            flux_auto.append(np.array(flux_list) * beamsize)
         # return segments_mask
     if debug:
         print("sources_found_center", sources_found_center)
         print("aper_found.positions", aper_found.positions)
         print('flux in aperture', flux_aper_found)
+        print('auto_photometry:', flux_auto)
 
 
     if sources_file:
@@ -338,15 +351,25 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         # aperture photometry based on input coordinates
         # for s in source_input_pixels:
             # pos_list.append([s['xcentroid'], s['ycentroid']])
-        aperture_input_centers = zip(*sources_input_pixels)
-        aper_input = EllipticalAperture(zip(*sources_input_pixels), 3*a, 3*b, 
+        sources_input_center = zip(*sources_input_pixels)
+        aper_input = EllipticalAperture(sources_input_center, 3*b, 3*a, 
                                   theta=theta/180*np.pi)
         phot_table_input = aperture_photometry(data_masked, aper_input)
         flux_aper_input = (phot_table_input['aperture_sum'] * beamsize).tolist() # convert mJy
-
+        # automatically aperture photometry
+        if True:
+            flux_input_auto = []
+            segments = RectangularAperture(sources_input_center, 2.*a, 2.*a, theta=0)
+            segments_mask = segments.to_mask(method='center')
+            for s in segments_mask:
+                flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
+                                            theta=theta/180*np.pi, debug=debug, methods=methods)
+                flux_input_auto.append(np.array(flux_list) * beamsize)
+ 
         if debug:
             print(flux_input)
             print(flux_aper_input)
+            print(flux_auto)
 
     if debug:
         # visualize the results
@@ -356,7 +379,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         
         if sources_file:
             # show the input sources
-            for i,e in enumerate(aperture_input_centers):
+            for i,e in enumerate(sources_input_center):
                 ellipse = patches.Ellipse(e, width=3*b, height=3*a, angle=theta, facecolor=None, fill=False, edgecolor='orange', alpha=0.8, linewidth=1)
                 ax.add_patch(ellipse)
                 if debug:
@@ -364,7 +387,6 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
 
         # show the sources found
         for i,e in enumerate(sources_found_center):
-            print(e)
             ellipse = patches.Ellipse(e, width=3*b, height=3*a, angle=theta, facecolor=None, fill=False, edgecolor='red', alpha=0.4, linewidth=4)
             ax.add_patch(ellipse)
             if debug:
@@ -381,5 +403,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     if return_image:
         return data_masked.data, background
 
-    return sources_found_coords
+    if sources_file:
+        return flux_input, flux_auto
+    return flux_auto
 
