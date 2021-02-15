@@ -739,7 +739,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
-def gen_fake_images(vis, known_file=None, snr=np.arange(1,20,0.5), fov_scale=1.5, outdir='./', basename=None):
+def gen_fake_images(vis, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.5), fov_scale=1.5, outdir='./', basename=None):
     """generate the fake images with man-made sources
     """
     # read information from vis 
@@ -758,9 +758,12 @@ def gen_fake_images(vis, known_file=None, snr=np.arange(1,20,0.5), fov_scale=1.5
         basename = os.path.basename(vis)
     for s in snr:
         print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
-        add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
-                            basename=basename+'.snr{}'.format(s), flux=s*sensitivity, known_file=known_file,
-                            uvtaper_scale=None)
+        for i in range(repeat):
+            basename_new = basename+'.snr{}.run{}'.format(s, i)
+            add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
+                               basename=basename_new, flux=s*sensitivity, known_file=known_file,)
+            # remove the measurements and component list
+    rmtables(os.path.join(outdir, '*'))
 
 def calculate_completeness(objfolder, image=None, known_file=None, obj=None, band=None, basename=None,):
     """simulation the completeness of source finding algorithm
