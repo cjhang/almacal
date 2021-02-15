@@ -285,9 +285,19 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     known_mask = np.full((ny, nx), 0, dtype=bool)
     if known_file:
         known_data = np.loadtxt(known_file, skiprows=1)
-        known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
-        known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-        known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
+        if len(known_data.shape) == 1:
+            known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
+            known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+            known_aper = RectangularAperture(known_sources_pixel, 2.*a, 2.*a, theta=0)
+        elif len(known_data.shape) > 1:
+            known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+            known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+            known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
+        else:
+            raise ValueError('Unsupported file: {}'.format(known_file))
+        # known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+        # known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+        # known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
         known_aper_mask = known_aper.to_mask(method='center')
         for m in known_aper_mask:
             known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
@@ -328,6 +338,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
                                 theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,
                                 mask=known_mask)  
         sources_found = daofind(data_masked - background)
+        source_found_peak = sources_found['peak']
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
@@ -344,6 +355,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             print("No point source!")
             return 0
         sources_found_x, sources_found_y = sources_found['x_peak'].data, sources_found['y_peak'].data
+        source_found_peak = sources_found['peak_value']
 
     else:
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
@@ -375,21 +387,30 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
 
     if sources_file:
         sources_input = np.loadtxt(sources_file, skiprows=1)
-        flux_input = sources_input[:,-1]
-        sources_input_coords = SkyCoord(ra=sources_input[:,0]*u.arcsec, 
-                                        dec=sources_input[:,1]*u.arcsec)
+        if len(sources_input.shape) == 1:
+            sources_input_coords = SkyCoord(ra=sources_input[0], dec=sources_input[1], unit='arcsec')
+            flux_input = sources_input[-1]
+        elif len(sources_input.shape) > 1:
+            sources_input_coords = SkyCoord(ra=sources_input[:,0], dec=sources_input[:,1], unit='arcsec')
+            flux_input = sources_input[:,-1]
+        else:
+            raise ValueError('Unsupported file: {}'.format(sources_file))
+        # flux_input = sources_input[:,-1]
+        # sources_input_coords = SkyCoord(ra=sources_input[:,0]*u.arcsec, 
+                                        # dec=sources_input[:,1]*u.arcsec)
 
         sources_input_pixels = skycoord_to_pixel(sources_input_coords, wcs)
 
         idx_found, idx_input, d2d, d3d = sources_input_coords.search_around_sky(
                 sources_found_coords, fwhm)
 
-        print(idx_found)
-        print(idx_input)
+        # print(idx_found)
+        # print(idx_input)
     
-        print(flux_input[idx_input])
-        print(np.array(flux_auto)[idx_found])
+        # print(flux_input[idx_input])
+        # print(np.array(flux_auto)[idx_found])
 
+        sources_input_found = [flux_input[idx_input], np.array(flux_auto)[idx_found], np.array(source_found_peak[idx_found])]
         # aperture photometry based on input coordinates
         # for s in source_input_pixels:
             # pos_list.append([s['xcentroid'], s['ycentroid']])
@@ -452,7 +473,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         return data_masked.data, background
 
     if sources_file:
-        return flux_input, flux_auto
+        return flux_input, flux_auto, sources_input_found
     return flux_auto
 
 
