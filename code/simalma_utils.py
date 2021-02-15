@@ -69,7 +69,12 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         selected_after_known_ra = []
         selected_after_known_dec = []
         known_data = np.loadtxt(known_file, skiprows=1)
-        known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+        if len(known_data.shape) == 1:
+            known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
+        elif len(known_data.shape) > 1:
+            known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+        else:
+            raise ValueError('Unsupported file: {}'.format(known_file))
         # print('known_sources ra:', known_sources.ra.value)
         # print('known_sources dec:', known_sources.dec.value)
         for ra,dec in zip(ra_random, dec_random):
@@ -149,7 +154,8 @@ def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True,
     split(vis=vis_testfile, datacolumn='corrected', outputvis=vis_testfile_new)
     if make_image:
         make_cont_img(vis_testfile_new, outdir=outdir, clean=True, niter=1000, 
-                      only_fits=True, uvtaper_scale=uvtaper_scale, 
+                      only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
+                      fov_scale=2.0,
                       basename=basename)
 
 def subtract_sources(vis, complist=None, ):
