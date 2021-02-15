@@ -739,11 +739,12 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
-def gen_fake_images(vis, known_file=None, flux=np.arange(0.1,10,0.5), fov_scale=1.5, outdir='./', basename=None):
+def gen_fake_images(vis, known_file=None, snr=np.arange(1,20,0.5), fov_scale=1.5, outdir='./', basename=None):
     """generate the fake images with man-made sources
     """
     # read information from vis 
     spw_specrange = read_spw(vis)
+    sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
     freq_mean = np.mean(spw_specrange) # in GHz
     tb.open(vis + '/ANTENNA')
     antenna_diameter_list = tb.getcol('DISH_DIAMETER')
@@ -755,9 +756,10 @@ def gen_fake_images(vis, known_file=None, flux=np.arange(0.1,10,0.5), fov_scale=
     print('radius', 0.5*fov)
     if basename is None:
         basename = os.path.basename(vis)
-    for f in flux:
+    for s in snr:
+        print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
         add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
-                            basename=basename+'.{}mJy'.format(f), flux=f, known_file=known_file,
+                            basename=basename+'.snr{}'.format(s), flux=s*sensitivity, known_file=known_file,
                             uvtaper_scale=None)
 
 def calculate_completeness(objfolder, image=None, known_file=None, obj=None, band=None, basename=None,):
@@ -997,7 +999,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                         make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                         tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
-def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp', flux=np.arange(0.1,10,0.5)):
+def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
     for obj in os.listdir(basedir):
         if obj_match.match(obj):
@@ -1005,7 +1007,7 @@ def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp', flux=np.arange(0
                 objfolder = os.path.join(basedir, obj)
                 vis_combined = os.path.join(objfolder, '{}_{}_combine.ms'.format(obj, band))
                 if os.path.isdir(vis_combined):
-                    gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj), flux=flux,
+                    gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj),
                                     known_file=vis_combined+'.auto.cont.image.fits.source_found.txt')
 
 def run_calculate_completeness():
@@ -1021,9 +1023,10 @@ def run_find_source(basedir, summary_file=None):
             for img in imgs:
                 print(img)
                 savefile = img+ '.source_found.txt'
-                sources_found = source_finder(img, savefile=None)
+                sources_found = source_finder(img, savefile=savefile)
                 if sources_found != 0:
-                    sources_nums.append(len(sources_found))
+                    sources_nums.append(len(sources_found),)
+            print('sources_nums', sources_nums)
         if summary_file:
             with open(summary_file, 'a+') as f:
                 f.write("{}, {}\n".format(obj, sources_nums))
