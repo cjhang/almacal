@@ -764,7 +764,7 @@ def gen_fake_images(vis, known_file=None, fov_scale=1.5, outdir='./', basename=N
     if basename is None:
         basename = os.path.basename(vis)
     for f in np.arange(0.1, 10, 5):
-        add_raondom_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
+        add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
                             basename=basename+'.{}mJy'.format(f), flux=f, known_file=known_file,
                             uvtaper_scale=None)
 
@@ -954,7 +954,7 @@ def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
                 vis_combined = os.path.join(objfolder, '{}_{}_combine.ms'.format(obj, band))
                 if os.path.isdir(vis_combined):
                     gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj), 
-                                    known_file=os.path.join(objfolder, vis_combined+'.auto.cont.image.fits.source_found.txt'))
+                                    known_file=vis_combined+'.auto.cont.image.fits.source_found.txt')
 
 def run_test_completeness():
     pass
@@ -963,12 +963,17 @@ def run_find_source(basedir, summary_file=None):
     obj_match = re.compile('^J\d*[+-]\d*$')
     for obj in os.listdir(basedir):
         if obj_match.match(obj):
-            source_found = []
+            print('>>>>> {}'.format(obj))
+            sources_nums = []
             imgs = glob.glob(os.path.join(basedir, obj, '*.fits'))
             for img in imgs:
+                print(img)
                 savefile = img+ '.source_found.txt'
-                sources_found = source_finder(img, savefile=savefile)
+                sources_found = source_finder(img, savefile=None)
                 if sources_found != 0:
-                    sources_found.append(len(sources_found))
+                    sources_nums.append(len(sources_found))
+        if summary_file:
+            with open(summary_file, 'a+') as f:
+                f.write("{}, {}\n".format(obj, sources_nums))
 
 
