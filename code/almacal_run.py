@@ -910,7 +910,7 @@ def run_gen_oteo2016_data(basedir, outdir, select_band=['B6', 'B7'], debug=False
                 end_time='2015-07-01T00:00:00',
                 select_band=select_band, debug=debug)
 
-def run_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=True, 
+def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, **kwargs):
     """fix the missing and wrong images for gen_all_image output
     
@@ -920,38 +920,42 @@ def run_gen_all_image(allcal_dir, outdir='./', bands=['B6','B7'], exclude_aca=Tr
     filelist = []
     obj_match = re.compile('^J\d*[+-]\d*$')
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
-    for obj in os.listdir(allcal_dir):
-        if obj_match.match(obj):
-            print(obj)
-            # start to go through each obj
+    if obj_list is None:
+        obj_list = []
+        for obj in os.listdir(allcal_dir):
+            if obj_match.match(obj):
+                obj_list.append(obj)
+    for obj in obj_list:
+        print(obj)
+        # start to go through each obj
 
-            for obs in os.listdir(os.path.join(allcal_dir, obj)):
-                if obs_match.match(obs):
-                    obs_band = obs_match.search(obs).groupdict()['band']
-                    infile = os.path.join(allcal_dir, obj, obs)
-                    if debug:
-                        print(obs)
-                    if obs_band in bands:
-                        outfile_fullpath = os.path.join(outdir, obj, obs_band)
-                        os.system('mkdir -p {}'.format(outfile_fullpath))
-                        
-                        outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
-                        if os.path.isfile(outfile_fullname):
-                            if exclude_aca:
-                                tb.open(infile + '/ANTENNA')
-                                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-                                tb.close()
-                                if antenna_diameter < 12.0:
-                                    print("Removing aca image: {}".format(outfile_fullname))
-                                    os.system('rm -f {}'.format(outfile_fullname))
-                            else:
-                                if debug:
-                                    print(">> {} already exists.".format(outfile_fullname))
+        for obs in os.listdir(os.path.join(allcal_dir, obj)):
+            if obs_match.match(obs):
+                obs_band = obs_match.search(obs).groupdict()['band']
+                infile = os.path.join(allcal_dir, obj, obs)
+                if debug:
+                    print(obs)
+                if obs_band in bands:
+                    outfile_fullpath = os.path.join(outdir, obj, obs_band)
+                    os.system('mkdir -p {}'.format(outfile_fullpath))
+                    
+                    outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
+                    if os.path.isfile(outfile_fullname):
+                        if exclude_aca:
+                            tb.open(infile + '/ANTENNA')
+                            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                            tb.close()
+                            if antenna_diameter < 12.0:
+                                print("Removing aca image: {}".format(outfile_fullname))
+                                os.system('rm -f {}'.format(outfile_fullname))
                         else:
-                            if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=exclude_aca, 
-                                         debug=debug, **kwargs):
-                                if debug:
-                                    print("Adding new image: {}".format(outfile_fullname))
+                            if debug:
+                                print(">> {} already exists.".format(outfile_fullname))
+                    else:
+                        if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=exclude_aca, 
+                                     debug=debug, **kwargs):
+                            if debug:
+                                print("Adding new image: {}".format(outfile_fullname))
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
                            debug=False, only_fits=False, update=True, **kwargs):
