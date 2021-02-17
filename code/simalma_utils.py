@@ -14,7 +14,7 @@ from matplotlib import patches
 from astropy.modeling import models, fitting
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
-        prune_threshold=2, debug=False, savefile=None, clname=None,
+        prune_threshold=3, debug=False, savefile=None, clname=None,
         flux=None, fluxunit='mJy', known_file=None):
     """This function used to add random source around a given direction
         
@@ -64,7 +64,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     dec_random = delta_dec*u.arcsec+ skycoord.dec
    
     if known_file:
-        distance = 2*u.arcsec
+        distance = prune_threshold*u.arcsec
         print('distance', distance)
         selected_after_known_ra = []
         selected_after_known_dec = []
