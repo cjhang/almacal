@@ -266,10 +266,11 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
         else:
             flux_list.append(flux_fitted)
     if 'peak' in methods:
-        if beamsize:
-            flux_list.append(np.max(image)/beamsize)
-        else:
-            flux_list.append(np.max(image))
+        # the peak value has the same units of one pixel
+        # if beamsize:
+            # flux_list.append(np.max(image))#)#/beamsize)
+        # else:
+        flux_list.append(np.max(image))
 
     return flux_list
 
