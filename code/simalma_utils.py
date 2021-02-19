@@ -170,6 +170,9 @@ def subtract_sources(vis, complist=None, ):
     vis_new = vis+'.sourcessub'
     split(vis=vis, datacolumn='corrected', outputvis=vis_new)
 
+def read_source(sourcefile):
+    pass
+
 def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
     """make a gaussian image for testing
 
@@ -192,7 +195,7 @@ def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
 
     return flux
 
-def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['aperture','gaussian']):
+def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, methods=['aperture','gaussian', 'peak']):
     """automatically measure the flux with different methods
     """
     
@@ -200,6 +203,8 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
     y_center, x_center = ysize/2., xsize/2.
     
     flux_list = []
+    if beamsize is None:
+        print("Warning: Unit the sum and maximum, without dividing the beam size.")
     # Aperture Photometry
     if 'aperture' in methods:
         radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
@@ -228,7 +233,10 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
             ax.imshow(image, origin='lower', interpolation='none')
             for ap in apertures:
                 ap.plot(color='gray', lw=2)
-        flux_list.append(flux_apers_stable)
+        if beamsize:
+            flux_list.append(1.0*flux_apers_stable/beamsize)
+        else:
+            flux_list.append(flux_apers_stable)
     if 'gaussian' in methods:
         yidx, xidx = np.indices((ysize, xsize))
         yrad, xrad = yidx-ysize/2., xidx-xsize/2.
@@ -253,13 +261,21 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, debug=False, methods=['apert
             ax[1].set_title("Model")
             ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='none')
             ax[2].set_title("Residual")
-        flux_list.append(flux_fitted)
+        if beamsize:
+            flux_list.append(1.0*flux_fitted/beamsize)
+        else:
+            flux_list.append(flux_fitted)
+    if 'peak' in methods:
+        if beamsize:
+            flux_list.append(np.max(image)/beamsize)
+        else:
+            flux_list.append(np.max(image))
 
     return flux_list
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
-                  filter_size=None, box_size=None, methods=['aperture', 'gaussian'],
+                  filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   known_file=None):
     """finding point source in the image
     """
@@ -338,13 +354,15 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
                                 theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,
                                 mask=known_mask)  
         sources_found = daofind(data_masked - background)
-        source_found_peak = sources_found['peak']
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
             print("No point source!")
-            return 0
-        sources_found_x, sources_found_y = sources_found['xcentroid'], sources_found['ycentroid']
+            # return 0
+            sources_found = None
+        else:
+            sources_found_x, sources_found_y = sources_found['xcentroid'], sources_found['ycentroid']
+            source_found_peak = sources_found['peak']
         
     elif algorithm == 'find_peak': # find_peak
         sources_found = find_peaks(data_masked - background, threshold=threshold*std, box_size=fwhm_pixel,
@@ -353,30 +371,35 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             print(sources_found)
         if len(sources_found) < 1:
             print("No point source!")
-            return 0
-        sources_found_x, sources_found_y = sources_found['x_peak'].data, sources_found['y_peak'].data
-        source_found_peak = sources_found['peak_value']
+            # return 0
+            sources_found = None
+        else:
+            sources_found_x, sources_found_y = sources_found['x_peak'].data, sources_found['y_peak'].data
+            source_found_peak = sources_found['peak_value']
 
     else:
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
-    sources_found_center = list(zip(sources_found_x, sources_found_y))
-    sources_found_coords = pixel_to_skycoord(sources_found_x, sources_found_y, wcs)
+   
 
-    # aperture photometry based on source finding coordinates
-    ## simple aperture flux
-    if True:
+    if sources_found is not None:
+        print('source_found_peak',source_found_peak)
+        sources_found_center = list(zip(sources_found_x, sources_found_y))
+        sources_found_coords = pixel_to_skycoord(sources_found_x, sources_found_y, wcs)
+
+        # aperture photometry based on source finding coordinates
+        ## simple aperture flux
         aper_found = EllipticalAperture(sources_found_center, 1*a, 1*b, theta=theta+90/180*np.pi)
         phot_table_found = aperture_photometry(data_masked, aper_found)
         flux_aper_found = (phot_table_found['aperture_sum'] / beamsize * 1000).tolist() # convert mJy
-    # automatically aperture photometry
-    if True:
+
+        # automatically aperture photometry
         flux_auto = []
         segments = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
-            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
+            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=debug, methods=methods)
-            flux_auto.append(np.array(flux_list) / beamsize * 1000) #from Jy to mJy
+            flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
         # return segments_mask
     if debug:
         print("sources_found_center", sources_found_center)
@@ -398,41 +421,36 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         # flux_input = sources_input[:,-1]
         # sources_input_coords = SkyCoord(ra=sources_input[:,0]*u.arcsec, 
                                         # dec=sources_input[:,1]*u.arcsec)
-
         sources_input_pixels = skycoord_to_pixel(sources_input_coords, wcs)
-
-        idx_found, idx_input, d2d, d3d = sources_input_coords.search_around_sky(
-                sources_found_coords, fwhm)
-
-        # print(idx_found)
-        # print(idx_input)
-    
-        # print(flux_input[idx_input])
-        # print(np.array(flux_auto)[idx_found])
-
-        sources_input_found = [flux_input[idx_input], np.array(flux_auto)[idx_found], np.array(source_found_peak[idx_found])]
-        # aperture photometry based on input coordinates
-        # for s in source_input_pixels:
-            # pos_list.append([s['xcentroid'], s['ycentroid']])
         sources_input_center = zip(*sources_input_pixels)
-        aper_input = EllipticalAperture(sources_input_center, 3*b, 3*a, 
-                                  theta=theta/180*np.pi)
-        phot_table_input = aperture_photometry(data_masked, aper_input)
-        flux_aper_input = (phot_table_input['aperture_sum'] / beamsize).tolist() # convert mJy
-        # automatically aperture photometry
-        if True:
-            flux_input_auto = []
-            segments = RectangularAperture(sources_input_center, 2.*a, 2.*a, theta=0)
-            segments_mask = segments.to_mask(method='center')
-            for s in segments_mask:
-                flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, 
-                                            theta=theta/180*np.pi, debug=debug, methods=methods)
-                flux_input_auto.append(np.array(flux_list) / beamsize) #already mJy
- 
+        
+        #automatically aperture photometry
+        flux_input_auto = []
+        segments = RectangularAperture(sources_input_center, 2.*a, 2.*a, theta=0)
+        segments_mask = segments.to_mask(method='center')
+        for s in segments_mask:
+            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=None,#beamsize,
+                                        theta=theta/180*np.pi, debug=debug, methods=methods)
+            flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
+
+        if sources_found:
+            sources_input_pixels = skycoord_to_pixel(sources_input_coords, wcs)
+
+            idx_found, idx_input, d2d, d3d = sources_input_coords.search_around_sky(
+                    sources_found_coords, fwhm)
+            # sources_input_found = [flux_input[idx_input], np.array(flux_auto)[idx_found]]
+            idx_input_comp = np.array(list(set(range(len(flux_input))) - set(idx_input)), dtype=int)
+            idx_found_comp = np.array(list(set(range(len(flux_auto))) - set(idx_found)), dtype=int)
+            idxs = [idx_input, idx_found, idx_input_comp, idx_found_comp]
+        else:
+            sources_input_found = [np.array([]), np.array([])]
+            flux_auto = []
+            idxs = [np.array([]), np.array([]), np.array([]), np.array([])]
+
         if debug:
             print(flux_input)
-            print(flux_aper_input)
-            print(flux_auto)
+            print(flux_input_auto)
+            print(sources_input_found)
 
     if debug:
         # visualize the results
@@ -449,15 +467,16 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
                     ax.text(e[0], e[1], flux_input[i])
 
         # show the sources found
-        for i,e in enumerate(sources_found_center):
-            ellipse = patches.Ellipse(e, width=3*b, height=3*a, angle=theta, facecolor=None, fill=False, edgecolor='red', alpha=0.4, linewidth=4)
-            ax.add_patch(ellipse)
-            if debug:
-                ax.text(e[0], e[1], flux_aper_found[i])
+        if sources_found:
+            for i,e in enumerate(sources_found_center):
+                ellipse = patches.Ellipse(e, width=3*b, height=3*a, angle=theta, facecolor=None, fill=False, edgecolor='red', alpha=0.4, linewidth=4)
+                ax.add_patch(ellipse)
+                if debug:
+                    ax.text(e[0], e[1], flux_aper_found[i])
 
         plt.show()
 
-    if savefile:
+    if savefile and sources_found:
         with open(savefile, 'w+') as sfile:
             sfile.write('# ra[arcsec]  dec[arcsec] ')
             for m in methods:
@@ -473,7 +492,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         return data_masked.data, background
 
     if sources_file:
-        return flux_input, flux_auto, sources_input_found
+        return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
     return flux_auto
 
 
