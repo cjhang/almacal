@@ -224,3 +224,33 @@ def discrete_spw(spw_list, return_time=False):
         return count_time_list
     return count_list
 
+def readms(vis, bmaj=None, bmin=None):
+    """The uniform function to get all the neccessary information for a given visibility
+    """
+    ms_info = {}
+    ms_info['flux_units'] = 'mJy'
+    ms_info['sensitivity'] = 1000 * calculate_sensitivity(vis) # convert into mJy
+    beamsize = np.pi/(4*np.log(2))*bmaj*bmin 
+    ms_info['peak'] = ms_info['sensitivity'] /1000 * beamsize / (2*np.pi*bmaj*bmin)
+    return ms_info
+
+def readimage(image):
+    """The uniform function to read images
+    """
+    im_info = {}
+    im_head = imhead(image)
+    im_beam = im_head['restoringbeam']
+    im_incr = im_head['incr']
+    im_stat = imstat(image)
+    # beamsize = np.pi*a*b/(4*np.log(2))
+    beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+    im_info['beamsize'] = beamsize
+    rms = im_stat['rms'] * 1000 # in mJy/beam
+    im_info['flux_units'] = 'mJy'
+    im_info['sensitivity'] = rms * beamsize
+    im_info['rms'] = rms
+    im_info['bmaj'] = im_beam['major']['value'] / (im_incr[0]/np.pi*180*3600) 
+    im_info['bmin'] = im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600) 
+    im_info['peak'] = im_stat['max']
+    return im_info
+ 
