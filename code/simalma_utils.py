@@ -351,10 +351,10 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
-        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
-                                theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,
-                                mask=known_mask)  
-        sources_found = daofind(data_masked - background)
+        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std*0.5, ratio=ratio, 
+                                theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,)  
+        data_masked[known_mask] = std
+        sources_found = daofind(data_masked - background)#, mask=known_mask)
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
@@ -364,6 +364,10 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         else:
             sources_found_x, sources_found_y = sources_found['xcentroid'], sources_found['ycentroid']
             source_found_peak = sources_found['peak']
+            peak_select = source_found_peak > threshold
+            source_found_x = sources_found_x[peak_select]
+            source_found_y = sources_found_y[peak_select]
+            source_found_peak = source_found_peak[peak_select]
         
     elif algorithm == 'find_peak': # find_peak
         sources_found = find_peaks(data_masked - background, threshold=threshold*std, box_size=fwhm_pixel,
@@ -383,7 +387,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
    
 
     if sources_found is not None:
-        print('source_found_peak',source_found_peak)
+        # print('source_found_peak',source_found_peak)
         sources_found_center = list(zip(sources_found_x, sources_found_y))
         sources_found_coords = pixel_to_skycoord(sources_found_x, sources_found_y, wcs)
 
@@ -430,7 +434,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         segments = RectangularAperture(sources_input_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
-            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=None,#beamsize,
+            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=debug, methods=methods)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
 
