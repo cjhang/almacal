@@ -739,12 +739,30 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
-def gen_fake_images(vis, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.5), fov_scale=1.5, outdir='./', basename=None):
+def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None):
     """generate the fake images with man-made sources
     """
     # read information from vis 
     spw_specrange = read_spw(vis)
-    sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
+    if image_file:
+        im_head = imhead(image_file)
+        im_beam = im_head['restoringbeam']
+        im_incr = im_head['incr']
+        im_info = imstat(image_file)
+        # beamsize = np.pi*a*b/(4*np.log(2))
+        beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+        rms = im_info['rms'] * 1000 # in mJy
+        sensitivity = rms 
+        flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+        # peak = rms
+        
+    else:
+        # sensitivity = 1000. * calculate_sensitivity(vis)
+        sensitivity = 1000.*np.array(calculate_sensitivity(vis, full_pwv=True))
+        # sensitivity = 1000 * calculate_sensitivity(i*5*5 # convert into peak value of gaussian, assuming 5*5pixel beam
+        flux_base = sensitivity # * (2*np.pi)
+    # print(sensitivity, flux_base)
+    # return 0
     freq_mean = np.mean(spw_specrange) # in GHz
     tb.open(vis + '/ANTENNA')
     antenna_diameter_list = tb.getcol('DISH_DIAMETER')
@@ -756,75 +774,176 @@ def gen_fake_images(vis, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.
     print('radius', 0.5*fov)
     if basename is None:
         basename = os.path.basename(vis)
+    # snr_old = np.arange(1,20,0.5)
+    # snr_old2 = np.arange(1,20,0.1)
     for s in snr:
+        # if s in snr_old:
+            # continue
         print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
         for i in range(repeat):
             basename_new = basename+'.snr{}.run{}'.format(s, i)
             add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
-                               basename=basename_new, flux=s*sensitivity, known_file=known_file,)
+                               basename=basename_new, flux=s*flux_base, known_file=known_file,)
             # remove the measurements and component list
-    rmtables(os.path.join(outdir, '*'))
+            rmtables(os.path.join(outdir, basename_new+'.*'))
 
-def calculate_completeness(objfolder, image=None, known_file=None, obj=None, band=None, basename=None,):
+def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
+        suffix='auto', known_file=None, obj=None, band=None, basename=None, threshold=5.0, algorithm='find_peak',
+        savefile=None):
     """simulation the completeness of source finding algorithm
     """
-    # image statistics
-    im_info = imstat(image)
-    rms = im_info['rms']
-    print(rms)
+    # one time function
+    f_mean = lambda x: np.mean(x)
     
-    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)_combine.ms.(?P<flux>\d+.\d+)mJy')
+    # image statistics
+    im_head = imhead(baseimage)
+    im_beam = im_head['restoringbeam']
+    im_incr = im_head['incr']
+    im_info = imstat(baseimage)
+    # beamsize = np.pi*a*b/(4*np.log(2))
+    beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+    rms = im_info['rms']
+    rms_flux = rms * 1000 # convert to mJy/pixel
+    # sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
+    print('rms',rms)
+    print('beamsize',beamsize) 
+    print('rms_flux',rms_flux)
+    
+    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)_combine.ms.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
     if basename is None:
         basename = os.path.join(objfolder, '{obj}_{band}_combine.ms'.format(obj=obj, band=band))
         print('basename', basename)
-    all_fake_images = glob.glob(basename+'.*.fits')
+    all_fake_images = glob.glob(basename+'*.{}.fits'.format(suffix))
 
-    flux_list = []
     flux_input_list = []
-    flux_peak_list = []
-    completeness_list = []
-    flux_found_list = []
-    for img in all_fake_images:
-        search_result = flux_match.search(img)
-        if search_result:
-            flux = search_result.groupdict()['flux']
+    flux_input_autolist = []
+    flux_input_foundlist = []
+    flux_found_autolist = []
+    snr_input_list = []
+    # snr_inputfound_comp = []
+    detection_input_array = np.array([[0., 0.]])
+    detection_found_array = np.array([[0., 0.]])
+    for s in snr:
+        n_input = 0
+        n_found = 0
+        # flux = s*sensitivity
+        # flux_input_list.append(flux)
+        for run in np.arange(repeat):
             #print('flux:', flux)
-            sf_return = source_finder(img, sources_file=basename+'.{}mJy.txt'.format(flux), known_file=known_file)
-            if sf_return == 0:
-                continue
-            flux_input, flux_auto, sources_input_found = sf_return 
-            #print('flux_input', flux_input)
-            #print('flux_auto', flux_auto)
-            #print('sources_input_found', sources_input_found)
+            img = "{basename}.snr{snr}.run{run}.cont.{suffix}.fits".format(basename=basename, snr=s, run=run, suffix=suffix)
+            sf_return = source_finder(img, sources_file=basename+'.snr{}.run{}.txt'.format(s, run), known_file=known_file, threshold=threshold,
+                                      algorithm=algorithm)
+            # if sf_return == 0:
+                # continue
+            flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
+            # print('flux_input', flux_input)
+            # print('flux_input_auto', flux_input_auto)
+            # print('flux_found_auto', flux_found_auto)
+            # print('idxs', idxs)
             
-            flux_list.append(float(flux))#sources_input_found[0])
-            flux_input_list.append(sources_input_found[0])
-            flux_peak_list.append(sources_input_found[2])
-            flux_found_list.append(sources_input_found[1])
-            completeness_list.append(1.*len(sources_input_found[1])/len(flux_input))
-    # print(flux_list)
-    # print(flux_peak_list)
-    # print(flux_found_list)
-    # print(completeness_list)
+            if len(idxs[0])<1:
+                print("Skip snr={}, run{}".format(s, run))
+                continue
+            flux_input_list.append(flux_input)
+            flux_input_autolist.append(flux_input_auto)
+            flux_found_autolist.append(flux_found_auto)
+
+
+            #calculate the snr of the measured peak flux
+            snr_input = flux_input_auto[:,2] / rms_flux
+            snr_input_list.append(snr_input)
+            # the snr of the detection
+            snr_input_found = flux_input_auto[:,2][idxs[0]] / rms_flux
+            snr_input_failed = flux_input_auto[:,2][idxs[2]] / rms_flux
+            snr_found_input = flux_found_auto[:,2][idxs[1]] / rms_flux
+            snr_found_fake = flux_found_auto[:,2][idxs[3]] / rms_flux
+            # snr_input_foundlist.append(snr_input_found)
+            # print('snr_inputfound',snr_inputfound)
+            # print('snr_inputfound_faild',snr_inputfound_failed)
+            # print('detection_array', detection_array)
+            if len(snr_input_found) > 0:
+                detection_input_array = np.vstack([detection_input_array, np.array(zip(snr_input_found, 
+                                                                      np.ones_like(snr_input_found)))])
+            if len(snr_input_failed) > 0:
+                detection_input_array = np.vstack([detection_input_array, np.array(zip(snr_input_failed, 
+                                                                      np.zeros_like(snr_input_failed)))])
+            if len(snr_found_input) > 0:
+                detection_found_array = np.vstack([detection_found_array, np.array(zip(snr_found_input, 
+                                                                      np.ones_like(snr_found_input)))])
+            if len(snr_found_fake) > 0:
+                detection_found_array = np.vstack([detection_found_array, np.array(zip(snr_found_fake, 
+                                                                      np.zeros_like(snr_found_fake)))])
+    # print('detection_array', detection_array)
+    completeness_list = []
+    fake_rate_list = []
+    for i in range(1, len(snr)):
+        s = snr[i]
+        s_b = snr[i-1]
+        # calculate the completeness
+        snr_select = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        n_input = np.sum(snr_select)
+        n_found = np.sum(np.array(detection_input_array[:,1][snr_select]))
+        completeness_list.append(1.0*n_found/n_input)
+        
+        # calculate the fake detaction rate
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        n_found2 = np.sum(snr_select2)
+        n_fake = np.sum(np.array(detection_found_array[:,1][snr_select2]))
+        fake_rate_list.append(1. - 1.0*n_fake/n_found2)
+
+
     if True:
-        fig = plt.figure(figsize=(8, 4))
-        ax = fig.add_subplot(1,2,1)
+        fig = plt.figure(figsize=(12, 3))
+        ax = fig.add_subplot(1,3,1)
         ax.set_xlabel('SNR')
         ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
-        for i in range(len(flux_list)):
-            ax.plot(flux_peak_list[i]/rms, flux_found_list[i][:,0]/flux_list[i], 'k.')
-            ax.plot(flux_peak_list[i]/rms, flux_found_list[i][:,1]/flux_list[i], 'r.')
+        for i in range(len(flux_input_list)):
+            if len(snr_input_list[i]>0):
+                # print(snr_inputfound_list[i])
+                # print(flux_input_list[i])
+                # print(flux_inputfound_list[i])
+                ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.')
+                ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.')
+        # ax.set_xlim((4., 8))
+        # ax.set_ylim((0.2, 4.0))
         # ax.plot(np.array(flux_peak_list)/rms, np.array(flux_found_list)/np.array(flux_list), 'o')
-        ax = fig.add_subplot(1,2,2)
-        f_mean = lambda x: np.mean(x)
-        ax.plot(map(f_mean, flux_peak_list)/rms, completeness_list, 'o')
+        ax = fig.add_subplot(1,3,2)
+        # print('snr', snr)
+        # print('completeness_list', completeness_list)
+        ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
         # ax.plot(np.array(flux_peak_list)/rms, completeness_list, 'o')
         ax.set_xlabel('SNR')
         ax.set_ylabel(r'Completeness')
-        ax.set_xlim((3., 12))
-        ax.set_ylim((0, 1.2))
+        # ax.set_xlim((0., 8))
+        ax.set_ylim((-0.1, 1.2))
+
+        ax = fig.add_subplot(1,3,3)
+        ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'Fake percentage')
+        ax.set_xlim((0., 8))
+        ax.set_ylim((-0.1, 1.2))
+
         plt.show()
-    return flux_list, flux_peak_list, flux_found_list, completeness_list
+
+    if savefile:
+        # save data into json
+        data_saved = {}
+        snr_flat = [item for sublist in snr_input_list for item in sublist]
+        flux_input_flat = [item for sublist in flux_input_list for item in sublist]
+        flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
+        flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
+        data_saved['snr_input'] = snr_flat
+        data_saved['flux_input'] = flux_input_flat
+        data_saved['flux_gaussian'] = flux_gaussian_flat
+        data_saved['flux_aperture'] = flux_aperture_flat
+        data_saved['detection_snr'] = detection_input_array[:,0].tolist()
+        data_saved['detection_input_array'] = detection_input_array[:,1].tolist()
+        # data_saved['detection_found_array'] = detection_found_array
+        with open(savefile, 'w') as fp:
+            json.dump(data_saved, fp)
+    return
+    #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
