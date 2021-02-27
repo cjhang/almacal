@@ -715,6 +715,146 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
+def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=3, nrow=3):
+    '''visual inspection of the classification results from check_images
+    
+    '''
+    if imagedir is None:
+        raise ValueError("basedir should be defined along with filelist")
+    all_good_files = []
+    all_bad_files = []
+    if goodfile:
+        if debug:
+            print('goodfile', goodfile)
+        if not os.path.isfile(goodfile):
+            raise ValueError("{} is not found".format(goodfile))
+        if isinstance(goodfile, str):
+            try:
+                flist = []
+                with open(goodfile) as f:
+                    filelist_lines = f.readlines()
+                for line in filelist_lines:
+                    flist.append(line.strip()+'.cont.auto.fits')
+            except:
+                raise ValueError("file {} cannot be open".format(goodfile))
+        else:
+            raise ValueError("Wrong file type of filelist!")
+        for item in flist:
+            all_good_files.append(os.path.join(imagedir, item))
+
+    if badfile:
+        if debug:
+            print('badfile', badfile)
+        if not os.path.isfile(badfile):
+            raise ValueError("{} is not found".format(badfile))
+        if isinstance(badfile, str):
+            try:
+                flist = []
+                with open(badfile) as f:
+                    filelist_lines = f.readlines()
+                for line in filelist_lines:
+                    flist.append(line.strip()+'.cont.auto.fits')
+            except:
+                raise ValueError("file {} cannot be open".format(badfile))
+        else:
+            raise ValueError("Wrong file type of filelist!")
+        for item in flist:
+            all_bad_files.append(os.path.join(imagedir, item))
+
+    list_patches = {}
+    for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
+        print(">>>>>>>>>>> {} images".format(desc))
+        total_num = len(all_files)
+        if total_num == 1:
+            ncol = nrow = 1
+        select_num = 0
+        print("Find {} files".format(total_num))
+        all_select = []
+        for i in range(0, len(all_files), ncol*nrow):
+            fig = plt.figure(figsize=(4*nrow,4*ncol))
+            for j in range(0, nrow*ncol):
+                if (i+j)>=len(all_files):
+                    continue
+                try:
+                    with fits.open(all_files[i+j]) as fitsimage:
+                        imageheader = fitsimage[0].header
+                        imagedata = fitsimage[0].data
+                        wcs = WCS(imageheader)
+                        # wcs2 = wcs.dropaxis(3)
+                        # wcs2 = wcs2.dropaxis(2)
+
+                        #with wcs projection
+                        scale = np.abs(imageheader['CDELT1'])*3600
+                        ny, nx = imagedata.shape[-2:]
+                        x_index = (np.arange(0, nx) - nx/2.0) * scale
+                        y_index = (np.arange(0, ny) - ny/2.0) * scale
+                        x_map, y_map = np.meshgrid(x_index, y_index)
+
+                except:
+                    print("Error in reading: {}".format(all_files[i+j]))
+                    continue
+                ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs2, slices=(0, 0, 'x', 'y'))
+                # ax.text(10, 10, str(j), fontsize=20)
+                ax.set_title(str(j+1))
+                #ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
+                imagedata = np.ma.masked_invalid(imagedata)
+                #imagedata = imagedata.filled(0)
+                ax.pcolormesh(x_map, y_map, imagedata[0,0,:,:])
+                ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+                        verticalalignment='center')
+                ax.set_xlabel('RA [arcsec]')
+                ax.set_ylabel('Dec [arcsec]')
+            # show the image and record the 
+            plt.show()
+            print('Input the index of images (1-9), seperate with comma:')
+            try:
+                find_zero = False
+                idx_input = input()
+                if idx_input == 0:
+                    print("Currently at {}/{}".format(i, len(all_files)))
+                    plt.close('all')
+                    break
+                if isinstance(idx_input, int):
+                    idx_input = [idx_input]
+                select_num += len(idx_input)
+                for ind in idx_input:
+                    if ind == 0:
+                        print("Currently at {}/{}".format(i, len(all_files)))
+                        plt.close('all')
+                        find_zero = True
+                        break
+                    all_select.append(all_files[i+ind-1])
+                if find_zero:
+                    break
+            except:
+                plt.close('all')
+                continue
+            # plt.clf()
+            plt.close('all')
+        list_patches[desc] = all_select
+        print("Totally {}% of data have been selected.".format(100.*select_num/total_num))
+
+    list_updated = {}
+    list_updated['good'] = (set(all_good_files) - set(list_patches['good'])).union(set(list_patches['bad']))
+    list_updated['bad'] = (set(all_bad_files) - set(list_patches['bad'])).union(set(list_patches['good']))
+    
+    if debug:
+        print('list_patches')
+        print(list_patches)
+        print("list_updated")
+        print(list_updated)
+    else:
+        obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
+        for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
+            with open(f+'.updated', 'w+') as f:
+                for item in list_updated[desc]:
+                    try:
+                        obsname = obsname_match.search(item).groupdict()['obsname']
+                        f.write(obsname+'\n')
+                    except:
+                        print("Error in matching the obs name for filname: {}".format(item))
+                        continue
+
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False, only_fits=False,
                     niter=100, clean=True, pblimit=-0.01, fov_scale=2.0, uvtaper_scale=[1.0, 2.0], **kwargs):
     """make the final good image with all the good observations
@@ -888,8 +1028,8 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
         # calculate the fake detaction rate
         snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
         n_found2 = np.sum(snr_select2)
-        n_fake = np.sum(np.array(detection_found_array[:,1][snr_select2]))
-        fake_rate_list.append(1. - 1.0*n_fake/n_found2)
+        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
+        fake_rate_list.append(1.0*n_fake/n_found2)
 
 
     if True:
