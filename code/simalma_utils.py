@@ -388,6 +388,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
    
 
+    flux_auto = []
     if sources_found is not None:
         # print('source_found_peak',source_found_peak)
         sources_found_center = list(zip(sources_found_x, sources_found_y))
@@ -400,19 +401,19 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         flux_aper_found = (phot_table_found['aperture_sum'] / beamsize * 1000).tolist() # convert mJy
 
         # automatically aperture photometry
-        flux_auto = []
         segments = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
             flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=beamsize,
-                                        theta=theta/180*np.pi, debug=debug, methods=methods)
+                                        theta=theta/180*np.pi, debug=False, methods=methods)
             flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
         # return segments_mask
     if debug:
-        print("sources_found_center", sources_found_center)
-        print("aper_found.positions", aper_found.positions)
-        print('flux in aperture', flux_aper_found)
-        print('auto_photometry:', flux_auto)
+        if sources_found:
+            print("sources_found_center", sources_found_center)
+            print("aper_found.positions", aper_found.positions)
+            print('flux in aperture', flux_aper_found)
+            print('auto_photometry:', flux_auto)
 
 
     if sources_file:
@@ -437,7 +438,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
             flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=beamsize,
-                                        theta=theta/180*np.pi, debug=debug, methods=methods)
+                                        theta=theta/180*np.pi, debug=False, methods=methods)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
 
         if sources_found:
@@ -450,14 +451,13 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             idx_found_comp = np.array(list(set(range(len(flux_auto))) - set(idx_found)), dtype=int)
             idxs = [idx_input, idx_found, idx_input_comp, idx_found_comp]
         else:
-            sources_input_found = [np.array([]), np.array([])]
+            # sources_input_found = [np.array([]), np.array([])]
             flux_auto = []
             idxs = [np.array([]), np.array([]), np.array([]), np.array([])]
 
         if debug:
             print(flux_input)
             print(flux_input_auto)
-            print(sources_input_found)
 
     if debug:
         # visualize the results
