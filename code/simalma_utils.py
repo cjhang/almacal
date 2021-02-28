@@ -113,7 +113,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
 
 def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True, 
         basename=None, debug=False, flux=None, known_file=None, 
-        uvtaper_scale=[1.0, 2.0]):
+        uvtaper_scale=None):
     """
     radius : in arcsec
     """
@@ -241,7 +241,9 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
         yidx, xidx = np.indices((ysize, xsize))
         yrad, xrad = yidx-ysize/2., xidx-xsize/2.
 
-        p_init = models.Gaussian2D(amplitude=1, x_stddev=1.*bmaj, y_stddev=1.*bmin, theta=theta)
+        p_init = models.Gaussian2D(amplitude=1, x_stddev=1.*bmaj, y_stddev=1.*bmin, theta=theta, 
+                                   bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
+                                           "x_stddev":(xsize/8., xsize), "y_stddev":(ysize/8., ysize)})
         fit_p = fitting.LevMarLSQFitter()
         p = fit_p(p_init, xrad, yrad, image)
         flux_fitted = 2*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
