@@ -614,13 +614,14 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         ax.ticklabel_format(style='sci',scilimits=(-3,4),axis='x')
         ax.legend(loc=2, prop={'size': 6})
         # plt.tight_layout()
+        if debug:
+            plt.show()
+        else:
+            plt.close()
         if savefig:
             if not figname:
                 figname = img + '.png'
-            fig.savefig(figname, dpi=fig.dpi)
-        if debug:
-            plt.show()
-        plt.close()
+            fig.savefig(figname, dpi=2*fig.dpi)
     
     # return the checking results
     # check the fiiting
@@ -704,8 +705,7 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
     good_imgs = []
     bad_imgs = []
     for img in all_files:
-        if debug:
-            print("img: {}".format(img))
+        print("img: {}".format(img))
         # continue
         if p_uidimg.search(img):
             uidname = p_uidimg.search(img).groupdict()['uidname']
@@ -726,6 +726,8 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 if debug:
                     print("{} is not include in the returns!".format(img))
     if outdir:
+        if not os.path.isdir(outdir):
+            os.system('mkdir -p {}'.format(outdir))
         if len(good_imgs) > 0:
             with open(os.path.join(outdir, basename+"_good_imgs.txt"), "w") as good_outfile:
                 good_outfile.write("\n".join(str(item) for item in good_imgs))
@@ -734,7 +736,7 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
-def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=3, nrow=1):
+def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=1, nrow=3):
     '''visual inspection of the classification results from check_images
     
     '''
@@ -753,7 +755,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                 with open(goodfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    flist.append(line.strip()+'.cont.auto.fits')
+                    flist.append(line.strip()+'.cont.auto.fits.png')
             except:
                 raise ValueError("file {} cannot be open".format(goodfile))
         else:
@@ -772,7 +774,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                 with open(badfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    flist.append(line.strip()+'.cont.auto.fits')
+                    flist.append(line.strip()+'.cont.auto.fits.png')
             except:
                 raise ValueError("file {} cannot be open".format(badfile))
         else:
@@ -790,106 +792,24 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         print("Find {} files".format(total_num))
         all_select = []
         for i in range(0, len(all_files), ncol*nrow):
-            fig = plt.figure(figsize=(4*nrow,4*ncol))
+            fig = plt.figure(figsize=(12*ncol, 4*nrow))
             for j in range(0, nrow*ncol):
                 if (i+j)>=len(all_files):
                     continue
                 try:
-                    with fits.open(all_files[i+j]) as fitsimage:
-                        imageheader = fitsimage[0].header
-                        imagedata = fitsimage[0].data
-                        wcs = WCS(imageheader)
-                        # wcs2 = wcs.dropaxis(3)
-                        # wcs2 = wcs2.dropaxis(2)
-
-                        #with wcs projection
-                        scale = np.abs(imageheader['CDELT1'])*3600
-                        ny, nx = imagedata.shape[-2:]
-                        x_index = (np.arange(0, nx) - nx/2.0) * scale
-                        y_index = (np.arange(0, ny) - ny/2.0) * scale
-                        x_map, y_map = np.meshgrid(x_index, y_index)
-
-                        #get the image statistics
-                        data = imagedata
-                        ny, nx = data.shape[-2:]
-                        masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
-                        mask_invalid = masked_data.mask
-                        data4hist = masked_data[~mask_invalid]
-                        # sigma clip
-                        clipped_data, clip_low, clip_up = scipy.stats.sigmaclip(data4hist, 5, 5)
-                        data4hist = clipped_data    
-
-                        hist, bins = np.histogram(data4hist, bins=100)
-                        bins_mid = (bins[:-1] + bins[1:])*0.5
-                        p0 = (0, 1, 1e-4) # mean, max and std
-                        amp_scale = 1.0*np.max(hist) # change to int into float
-                        try:
-                            popt, pcov = curve_fit(gaussian, bins_mid, hist/amp_scale, p0=p0)
-                        except:
-                            print("`Fitting failed!")
-                            popt = p0
-                        hist_fit = gaussian(bins_mid, *popt)*amp_scale
-                        mean, amp, sigma = popt
-                        lower_1sigma = mean - 1.0*sigma
-                        lower_2sigma = mean - 2.0*sigma
-                        lower_3sigma = mean - 3.0*sigma
-                        upper_3sigma = mean + 3.0*sigma
-                        lower_5sigma = mean - 5.0*sigma
-                        upper_5sigma = mean + 5.0*sigma
-
-                        # statistics in the central region
-                        bmaj = header['BMAJ']
-                        bmin = header['BMIN']
-                        bpa = header['BPA']
-                        # print(bmaj, bmin, bpa)
-                        # radius = 5 
-                        bmaj_pixel_size = bmaj / np.abs(header['CDELT1'])
-                        bmin_pixel_size = bmaj / np.abs(header['CDELT2'])
-                        # select the central region with side length of radius*bmaj 
-                        x_index = np.arange(0, nx) - nx/2.0
-                        y_index = np.arange(0, ny) - ny/2.0
-                        x_map, y_map = np.meshgrid(x_index, y_index)
-                        mask = np.sqrt(x_map**2 + y_map**2) < radius*bmaj_pixel_size*0.5 #units in half major axis 
-                        mask = ~masked_data.mask & mask # also masked the central inf and nan
-
-                        hist_center, bins_center = np.histogram(masked_data[mask], bins=bins)
-                        bins_mid_center = (bins_center[:-1] + bins_center[1:])*0.5
-                        amp_scale_center = 1.0*np.max(hist_center) # change to int into float
-
+                    imagedata = plt.imread(all_files[i+j])
                 except:
                     print("Error in reading: {}".format(all_files[i+j]))
                     continue
                 ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs2, slices=(0, 0, 'x', 'y'))
                 # ax.text(10, 10, str(j), fontsize=20)
                 ax.set_title(str(j+1))
-                #ax.imshow(imagedata[0,0,:,:], origin='lower')#, cmap='viridis')
-                imagedata = np.ma.masked_invalid(imagedata)
-                #imagedata = imagedata.filled(0)
-                ax.pcolormesh(x_map, y_map, imagedata[0,0,:,:])
-                ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
-                        verticalalignment='center')
-                circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, edgecolor='red', linewidth=2, alpha=0.5)
-                ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin*3600, height=bmaj*3600, angle=bpa, facecolor='orange', edgecolor=None, alpha=0.8)
-                ax.add_patch(circle)
-                ax.add_patch(ellipse)
-                ax.set_xlabel('RA [arcsec]')
-                ax.set_ylabel('Dec [arcsec]')
-                # niose statistics
-                ax = fig.add_subplot(122)
-                ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
-                ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
-                ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
-                ax.vlines(upper_3sigma, 0, 2.0, color='k', label=r'3$\sigma$ boundary')
-                ax.vlines(lower_3sigma, 0, 2.0, color='k')
-                ax.vlines(upper_5sigma, 0, 2.0, color='k', lw=4, label=r'5$\sigma$ upper boundary')
-                ax.set_xlabel('Flux density [Jy/beam]')
-                ax.set_ylabel('Normalized Pixel numbers')
-                ax.legend()
-                plt.show()
-         
+                ax.imshow(imagedata, interpolation='none')
+                plt.tight_layout()
+        
             # show the image and record the 
             plt.show()
-            print('Input the index of images (1-9), seperate with comma:')
+            print('Input the index of images, seperate with comma:')
             try:
                 find_zero = False
                 idx_input = input()
@@ -962,7 +882,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
-def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None):
+def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
+                    uvtaper_scale=None):
     """generate the fake images with man-made sources
     """
     # read information from vis 
@@ -1005,7 +926,7 @@ def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=
         print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
         for i in range(repeat):
             basename_new = basename+'.snr{}.run{}'.format(s, i)
-            add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir, 
+            add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                basename=basename_new, flux=s*flux_base, known_file=known_file,)
             # remove the measurements and component list
             rmtables(os.path.join(outdir, basename_new+'.*'))
@@ -1066,6 +987,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
             
             if len(idxs[0])<1:
                 print("Skip snr={}, run{}".format(s, run))
+                print(idxs)
                 continue
             flux_input_list.append(flux_input)
             flux_input_autolist.append(flux_input_auto)
@@ -1171,9 +1093,6 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
             json.dump(data_saved, fp)
     return
     #flux_list, flux_peak_list, flux_found_list, completeness_list
-
-
-
 
 def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
     with open(jsonfile) as jf:
