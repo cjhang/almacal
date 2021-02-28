@@ -473,7 +473,7 @@ def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
 def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
-                gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=2.0):
+                gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=2.0, savefig=False, figname=None):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -574,8 +574,8 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
 
     if plot:
         # show the image
-        fig = plt.figure(figsize=(14, 6))
-        ax = fig.add_subplot(121)
+        fig = plt.figure(figsize=(16, 4.5))
+        ax = fig.add_subplot(131)
         scale = np.abs(header['CDELT1'])*3600
         x_index = (np.arange(0, nx) - nx/2.0) * scale
         y_index = (np.arange(0, ny) - ny/2.0) * scale
@@ -589,9 +589,19 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         ax.add_patch(ellipse)
         ax.set_xlabel('RA [arcsec]')
         ax.set_ylabel('Dec [arcsec]')
-        
+        # show the image of the most central region
+        ax = fig.add_subplot(132)
+        ax.pcolormesh(x_map, y_map, masked_data)
+        x1, x2, y1, y2 = -3, 3, -3, 3
+        ax.set_xlim(x1, x2)
+        ax.set_ylim(y1, y2)
+        ellipse = patches.Ellipse((0, 0), width=bmin*3600, height=bmaj*3600, angle=bpa, fill=None, facecolor=None, edgecolor='red', alpha=0.5)
+        ax.add_patch(ellipse)
+        ax.set_xlabel('RA [arcsec]')
+        ax.set_ylabel('Dec [arcsec]')
+
         # niose statistics
-        ax = fig.add_subplot(122)
+        ax = fig.add_subplot(133)
         ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
         ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
         ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
@@ -600,8 +610,17 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         ax.vlines(upper_5sigma, 0, 2.0, color='k', lw=4, label=r'5$\sigma$ upper boundary')
         ax.set_xlabel('Flux density [Jy/beam]')
         ax.set_ylabel('Normalized Pixel numbers')
-        ax.legend()
-        plt.show()
+        ax.tick_params(axis='x', which='major', labelsize=8)
+        ax.ticklabel_format(style='sci',scilimits=(-3,4),axis='x')
+        ax.legend(loc=2, prop={'size': 6})
+        # plt.tight_layout()
+        if savefig:
+            if not figname:
+                figname = img + '.png'
+            fig.savefig(figname, dpi=fig.dpi)
+        if debug:
+            plt.show()
+        plt.close()
     
     # return the checking results
     # check the fiiting
@@ -715,7 +734,7 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
-def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=3, nrow=3):
+def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=3, nrow=1):
     '''visual inspection of the classification results from check_images
     
     '''
@@ -1156,7 +1175,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
 
 
 
-def plot_completeness(jsonfile):
+def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
     with open(jsonfile) as jf:
         data = json.load(jf)
 
@@ -1173,7 +1192,6 @@ def plot_completeness(jsonfile):
     # print('detection_array', detection_array)
     completeness_list = []
     fake_rate_list = []
-    snr = np.arange(1.0, 10, 1)
     # print(detection_input_array)
     # print(np.array(detection_input_array).shape)
     for i in range(1, len(snr)):
