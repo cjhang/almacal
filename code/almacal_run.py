@@ -790,6 +790,53 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         y_index = (np.arange(0, ny) - ny/2.0) * scale
                         x_map, y_map = np.meshgrid(x_index, y_index)
 
+                        #get the image statistics
+                        data = imagedata
+                        ny, nx = data.shape[-2:]
+                        masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
+                        mask_invalid = masked_data.mask
+                        data4hist = masked_data[~mask_invalid]
+                        # sigma clip
+                        clipped_data, clip_low, clip_up = scipy.stats.sigmaclip(data4hist, 5, 5)
+                        data4hist = clipped_data    
+
+                        hist, bins = np.histogram(data4hist, bins=100)
+                        bins_mid = (bins[:-1] + bins[1:])*0.5
+                        p0 = (0, 1, 1e-4) # mean, max and std
+                        amp_scale = 1.0*np.max(hist) # change to int into float
+                        try:
+                            popt, pcov = curve_fit(gaussian, bins_mid, hist/amp_scale, p0=p0)
+                        except:
+                            print("`Fitting failed!")
+                            popt = p0
+                        hist_fit = gaussian(bins_mid, *popt)*amp_scale
+                        mean, amp, sigma = popt
+                        lower_1sigma = mean - 1.0*sigma
+                        lower_2sigma = mean - 2.0*sigma
+                        lower_3sigma = mean - 3.0*sigma
+                        upper_3sigma = mean + 3.0*sigma
+                        lower_5sigma = mean - 5.0*sigma
+                        upper_5sigma = mean + 5.0*sigma
+
+                        # statistics in the central region
+                        bmaj = header['BMAJ']
+                        bmin = header['BMIN']
+                        bpa = header['BPA']
+                        # print(bmaj, bmin, bpa)
+                        # radius = 5 
+                        bmaj_pixel_size = bmaj / np.abs(header['CDELT1'])
+                        bmin_pixel_size = bmaj / np.abs(header['CDELT2'])
+                        # select the central region with side length of radius*bmaj 
+                        x_index = np.arange(0, nx) - nx/2.0
+                        y_index = np.arange(0, ny) - ny/2.0
+                        x_map, y_map = np.meshgrid(x_index, y_index)
+                        mask = np.sqrt(x_map**2 + y_map**2) < radius*bmaj_pixel_size*0.5 #units in half major axis 
+                        mask = ~masked_data.mask & mask # also masked the central inf and nan
+
+                        hist_center, bins_center = np.histogram(masked_data[mask], bins=bins)
+                        bins_mid_center = (bins_center[:-1] + bins_center[1:])*0.5
+                        amp_scale_center = 1.0*np.max(hist_center) # change to int into float
+
                 except:
                     print("Error in reading: {}".format(all_files[i+j]))
                     continue
@@ -802,8 +849,25 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                 ax.pcolormesh(x_map, y_map, imagedata[0,0,:,:])
                 ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                         verticalalignment='center')
+                circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, edgecolor='red', linewidth=2, alpha=0.5)
+                ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin*3600, height=bmaj*3600, angle=bpa, facecolor='orange', edgecolor=None, alpha=0.8)
+                ax.add_patch(circle)
+                ax.add_patch(ellipse)
                 ax.set_xlabel('RA [arcsec]')
                 ax.set_ylabel('Dec [arcsec]')
+                # niose statistics
+                ax = fig.add_subplot(122)
+                ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
+                ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
+                ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
+                ax.vlines(upper_3sigma, 0, 2.0, color='k', label=r'3$\sigma$ boundary')
+                ax.vlines(lower_3sigma, 0, 2.0, color='k')
+                ax.vlines(upper_5sigma, 0, 2.0, color='k', lw=4, label=r'5$\sigma$ upper boundary')
+                ax.set_xlabel('Flux density [Jy/beam]')
+                ax.set_ylabel('Normalized Pixel numbers')
+                ax.legend()
+                plt.show()
+         
             # show the image and record the 
             plt.show()
             print('Input the index of images (1-9), seperate with comma:')
@@ -1042,8 +1106,8 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
                 # print(snr_inputfound_list[i])
                 # print(flux_input_list[i])
                 # print(flux_inputfound_list[i])
-                ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.')
-                ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.')
+                ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.', label='aperture')
+                ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.', label='gaussian')
         # ax.set_xlim((4., 8))
         # ax.set_ylim((0.2, 4.0))
         # ax.plot(np.array(flux_peak_list)/rms, np.array(flux_found_list)/np.array(flux_list), 'o')
@@ -1071,19 +1135,87 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
         data_saved = {}
         snr_flat = [item for sublist in snr_input_list for item in sublist]
         flux_input_flat = [item for sublist in flux_input_list for item in sublist]
-        flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
-        flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
+        flux_input_aperture_flat = [item for sublist in flux_input_autolist for item in sublist[:,0]]
+        flux_input_gaussian_flat = [item for sublist in flux_input_autolist for item in sublist[:,1]]
+        flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
+        flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
         data_saved['snr_input'] = snr_flat
         data_saved['flux_input'] = flux_input_flat
+        data_saved['flux_input_aperture'] = flux_input_aperture_flat
+        data_saved['flux_input_gaussian'] = flux_input_gaussian_flat
         data_saved['flux_gaussian'] = flux_gaussian_flat
         data_saved['flux_aperture'] = flux_aperture_flat
         data_saved['detection_snr'] = detection_input_array[:,0].tolist()
-        data_saved['detection_input_array'] = detection_input_array[:,1].tolist()
-        # data_saved['detection_found_array'] = detection_found_array
+        data_saved['detection_input_array'] = detection_input_array.tolist()
+        data_saved['detection_found_array'] = detection_found_array.tolist()
         with open(savefile, 'w') as fp:
             json.dump(data_saved, fp)
     return
     #flux_list, flux_peak_list, flux_found_list, completeness_list
+
+
+
+
+def plot_completeness(jsonfile):
+    with open(jsonfile) as jf:
+        data = json.load(jf)
+
+    snr_input = np.array(data['snr_input'])
+    flux_input = np.array(data['flux_input'])
+    flux_input_aperture = np.array(data['flux_input_aperture'])
+    flux_input_gaussian = np.array(data['flux_input_gaussian'])
+    flux_aperture = np.array(data['flux_aperture'])
+    flux_gaussian = np.array(data['flux_gaussian'])
+    detection_snr = np.array(data['detection_snr'])
+    detection_input_array = np.array(data['detection_input_array'])
+    detection_found_array = np.array(data['detection_found_array'])
+
+    # print('detection_array', detection_array)
+    completeness_list = []
+    fake_rate_list = []
+    snr = np.arange(1.0, 10, 1)
+    # print(detection_input_array)
+    # print(np.array(detection_input_array).shape)
+    for i in range(1, len(snr)):
+        s = snr[i]
+        s_b = snr[i-1]
+        # calculate the completeness
+        snr_select = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        n_input = np.sum(snr_select)
+        n_found = np.sum(np.array(detection_input_array[:,1][snr_select]))
+        completeness_list.append(1.0*n_found/n_input)
+        
+        # calculate the fake detaction rate
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        n_found2 = np.sum(snr_select2)
+        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
+        fake_rate_list.append(1.0*n_fake/n_found2)
+
+    if True:
+        fig = plt.figure(figsize=(12, 3))
+        ax = fig.add_subplot(1,3,1)
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
+        ax.plot(snr_input, flux_input_aperture/flux_input, 'k.', label='aperture')
+        ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian')
+        
+        ax = fig.add_subplot(1,3,2)
+        ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
+        # ax.plot(np.array(flux_peak_list)/rms, completeness_list, 'o')
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'Completeness')
+        # ax.set_xlim((0., 8))
+        ax.set_ylim((-0.1, 1.2))
+
+        ax = fig.add_subplot(1,3,3)
+        ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'Fake percentage')
+        ax.set_xlim((0., 8))
+        ax.set_ylim((-0.1, 1.2))
+
+        plt.show()
+
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
