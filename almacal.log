@@ -294,5 +294,17 @@ files with split problems:
 
 2021-02-14
 
-1. the effects of uvtaper for source finding
-2. random insert, measure flux for clean image, without pbcorrection, without change the direction
+1. ~~the effects of uvtaper for source finding~~
+2. ~~random insert, measure flux for clean image, without pbcorrection, without change the direction~~, no need
+3. ~~completeness, flux boosting, whether test different vutaper~~, only the one used for finder point source can be enough
+
+---
+
+2021-02-15
+
+- [ ] [debian] Find the best parameter for oteo2016
+- [ ] [debian]Testing the flux boosting with flux inserted by SNR not the flux density
+- [ ] [debian] Random source generator with primary beam units
+- [ ] [hltau] Test five source with completeness and flux density
+- [ ] [hltau] Testing effects of different UVtaper on completeness and flux density 
+
