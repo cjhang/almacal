@@ -473,7 +473,7 @@ def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
 def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
-                gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=2.0, savefig=False, figname=None):
+                gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, figname=None):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -648,7 +648,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         return False
     strick_mode = False
     # comparing the noise distribution with Gaussian
-    for deviation in [deviation_1sigma, deviation_2sigma]:
+    for deviation in [deviation_1sigma, deviation_2sigma, deviation_3sigma]:
         if deviation > gaussian_deviation:
             if debug:
                 print("Rjected, non-Gaussian noise")
@@ -669,28 +669,6 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         if debug:
             print("\n")
     return True
-
-    if 0:
-        imghead = imhead(img, mode='list')
-        imgstat = imstat(img)
-
-        unit = imghead['bunit']
-        rms = imgstat['rms']
-
-        # define the central region
-        beam_major = imghead['beammajor']['value']*u.Unit(imghead['beammajor']['unit'])
-        radius = 5 
-        region_string = 'circle[[{},{}], {}]'.format(str(imghead['crval1'])+imghead['cunit1'],
-                                                     str(imghead['crval2'])+imghead['cunit2'],
-                                                     radius*beam_major)
-        imgstat_central = imstat(img, region=region_string)
-        central_max = imgstat_central['max']
-        central_mean = imgstat_central['mean']
-        central_sum = imgstat_central['sum']
-
-        print("For whole image: RMS={} {}, sum={}".format(rms, unit, imgstat['sum']))
-        print("For the central region: max:{},   mean:{},   sum:{}".format(central_max, central_mean, central_sum))
-        print("For the ratio: max:{},   mean:{},   sum:{}".format(central_max/rms, central_mean/rms, central_sum/rms))
 
 def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
     """wraps up check_image to handle multiple images
