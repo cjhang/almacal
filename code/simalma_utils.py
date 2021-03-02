@@ -116,22 +116,17 @@ def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True,
         uvtaper_scale=None):
     """
     radius : in arcsec
+
+    Notes:
+        1. To make the reading and writing more efficiently, the model will be added directly
+           into original measurement. It is suggested to make a copy before calling this func
     """
     
-    # clear the working place
-    if basename is None:
-        basename = os.path.basename(vis) + '.tmp'
-    vis_testfile = os.path.join(outdir, basename)
-    rmtables(vis_testfile)
-
     if not os.path.isdir(outdir):
         os.system('mkdir -p {}'.format(outdir))
    
-    # make a copy of the original file
-    split(vis=vis, outputvis=vis_testfile, datacolumn='data') 
-    
     md = msmdtool()
-    if not md.open(vis_testfile):
+    if not md.open(vis):
         raise ValueError("Failed to open {}".format(vis))
     phasecenter = md.phasecenter()
     mydirection = phasecenter['refer'] +' '+ SkyCoord(phasecenter['m0']['value'], phasecenter['m1']['value'], unit="rad").to_string('hmsdms')
@@ -144,19 +139,21 @@ def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True,
     # overwrite old files
     rmtables(clname_fullpath)
     os.system('rm -rf {}'.format(savefile_fullpath))
+    # generate random sources
     mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
                                     clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file)
-    ft(vis=vis_testfile, complist=mycomplist)
-    uvsub(vis=vis_testfile, reverse=True)
+    ft(vis=vis, complist=mycomplist)
+    uvsub(vis=vis, reverse=True)
     
-    vis_testfile_new = vis_testfile+'.new'
-    rmtables(vis_testfile_new)
-    split(vis=vis_testfile, datacolumn='corrected', outputvis=vis_testfile_new)
     if make_image:
-        make_cont_img(vis_testfile_new, outdir=outdir, clean=True, niter=1000, 
+        make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
                       only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
-                      fov_scale=2.0,
+                      fov_scale=2.0, datacolumn='corrected',
                       basename=basename)
+    # clean up temperary files
+    rmtables(clname_fullpath)
+    delmod(vis=vis)
+    clearcal(vis=vis)
 
 def subtract_sources(vis, complist=None, ):
     md = msmdtool()

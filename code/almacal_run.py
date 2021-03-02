@@ -886,8 +886,15 @@ def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=
                     uvtaper_scale=None):
     """generate the fake images with man-made sources
     """
+    # make a copy of the original file
+    if basename is None:
+        basename = os.path.basename(vis)
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
+    vistmp = os.path.join(outdir, basename+'.tmp')
+    split(vis=vis, outputvis=vistmp, datacolumn='data')
     # read information from vis 
-    spw_specrange = read_spw(vis)
+    spw_specrange = read_spw(vistmp)
     if image_file:
         im_head = imhead(image_file)
         im_beam = im_head['restoringbeam']
@@ -901,14 +908,14 @@ def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=
         # peak = rms
         
     else:
-        # sensitivity = 1000. * calculate_sensitivity(vis)
-        sensitivity = 1000.*np.array(calculate_sensitivity(vis, full_pwv=True))
+        # sensitivity = 1000. * calculate_sensitivity(vistmp)
+        sensitivity = 1000.*np.array(calculate_sensitivity(vistmp, full_pwv=True))
         # sensitivity = 1000 * calculate_sensitivity(i*5*5 # convert into peak value of gaussian, assuming 5*5pixel beam
         flux_base = sensitivity # * (2*np.pi)
     # print(sensitivity, flux_base)
     # return 0
     freq_mean = np.mean(spw_specrange) # in GHz
-    tb.open(vis + '/ANTENNA')
+    tb.open(vistmp + '/ANTENNA')
     antenna_diameter_list = tb.getcol('DISH_DIAMETER')
     tb.close()
     antenna_diameter = np.max(antenna_diameter_list) * u.m
@@ -916,8 +923,6 @@ def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=
     fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
     print('fov', fov)
     print('radius', 0.5*fov)
-    if basename is None:
-        basename = os.path.basename(vis)
     # snr_old = np.arange(1,20,0.5)
     # snr_old2 = np.arange(1,20,0.1)
     for s in snr:
@@ -926,10 +931,10 @@ def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=
         print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
         for i in range(repeat):
             basename_new = basename+'.snr{}.run{}'.format(s, i)
-            add_random_sources(vis, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
+            add_random_sources(vistmp, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                basename=basename_new, flux=s*flux_base, known_file=known_file,)
-            # remove the measurements and component list
-            rmtables(os.path.join(outdir, basename_new+'.*'))
+    # clear temperary files
+    rmtables(vistmp)
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='auto', known_file=None, obj=None, band=None, basename=None, threshold=5.0, algorithm='find_peak',
