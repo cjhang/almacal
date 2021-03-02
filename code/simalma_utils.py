@@ -276,7 +276,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
-                  known_file=None):
+                  subtract_background=False, known_file=None):
     """finding point source in the image
     """
 
@@ -401,7 +401,10 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         segments = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
-            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=beamsize,
+            data_cutout = s.cutout(data_masked)
+            if subtract_background:
+                data_cutout = data_cutout - background
+            flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods)
             flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
         # return segments_mask
@@ -434,7 +437,10 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         segments = RectangularAperture(sources_input_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
-            flux_list = auto_photometry(s.cutout(data_masked), bmaj=b, bmin=a, beamsize=beamsize,
+            data_cutout = s.cutout(data_masked)
+            if subtract_background:
+                data_cutout = data_cutout - background
+            flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
 

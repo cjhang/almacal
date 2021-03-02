@@ -592,9 +592,9 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         # show the image of the most central region
         ax = fig.add_subplot(132)
         ax.pcolormesh(x_map, y_map, masked_data)
-        x1, x2, y1, y2 = -3, 3, -3, 3
-        ax.set_xlim(x1, x2)
-        ax.set_ylim(y1, y2)
+        xlim, ylim = 40*scale, 40*scale
+        ax.set_xlim(-xlim, xlim)
+        ax.set_ylim(-ylim, ylim)
         ellipse = patches.Ellipse((0, 0), width=bmin*3600, height=bmaj*3600, angle=bpa, fill=None, facecolor=None, edgecolor='red', alpha=0.5)
         ax.add_patch(ellipse)
         ax.set_xlabel('RA [arcsec]')
