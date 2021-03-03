@@ -1176,7 +1176,7 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
             total_time = 0
             obj_info = almacal_zselect[i]
             freq_observed = freq / (1.+obj_info['zCal'])
-            print('Observed freq:', freq_observed)
+            # print('Observed freq:', freq_observed)
             for band, band_freq in band_list.items():
                 if freq_observed>band_freq[0] and freq_observed<band_freq[1]:
                     target_band = band
@@ -1187,19 +1187,23 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
                     print("skip {}".format(obj))
                 continue
             print('>>>>>>>>>\n{}\n'.format(obj))
+            print('z={}'.format(obj_info['zCal']))
             for obs in os.listdir(obj_basedir):
                 if p_obs.search(obs):
                     if band_match.search(obs):
                         obsband = band_match.search(obs).groupdict()['band']
+                        print('band=',obsband)
                         if obsband != target_band:
                             continue
                         obs_fullname = os.path.join(obj_basedir, obs)
                         spw_list = read_spw(obs_fullname)
                         for spw in spw_list:
-                            if freq_observed>spw[0] and freq_observed<spw[0]:
-                                time_on_source = au.timeOnSource(obs_filename, verbose=False, debug=False)
-                                total_time += timeOnSource
-                                print()
+                            print(spw)
+                            if freq_observed>spw[0] and freq_observed<spw[1]:
+                                time_on_source = au.timeOnSource(obs_fullname, verbose=False, debug=False)
+                                print(time_on_source)
+                                total_time += time_on_source[0]['minutes_on_source']
+                                print(obs)
             print(obj, total_time)
             print('>>>>>>>>>>>>\n\n')
 
