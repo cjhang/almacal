@@ -970,7 +970,6 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
             
             if len(idxs[0])<1:
                 print("Skip snr={}, run{}".format(s, run))
-                print(idxs)
                 continue
             flux_input_list.append(flux_input)
             flux_input_autolist.append(flux_input_auto)
@@ -1140,7 +1139,7 @@ def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug=False):
+def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug=False, savefile=None):
     """
     Args:
         lines (dict):in units of GHz, example: {'CO1-0':115.3, 'CO2-1':230.5}
@@ -1171,7 +1170,10 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
 
     p_obs = re.compile('uid___')
     band_match = re.compile('_(?P<band>B\d{1,2})')
+
+    searching_info = {}
     for name, freq in lines.items():
+        searching_info[name] = []
         for i in range(n_select):
             total_time = 0
             obj_info = almacal_zselect[i]
@@ -1186,26 +1188,26 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
                 if debug:
                     print("skip {}".format(obj))
                 continue
-            print('>>>>>>>>>\n{}\n'.format(obj))
-            print('z={}'.format(obj_info['zCal']))
+            if debug:
+                print('>>>>>>>>>\n{}\n'.format(obj))
+                print('z={}'.format(obj_info['zCal']))
             for obs in os.listdir(obj_basedir):
                 if p_obs.search(obs):
                     if band_match.search(obs):
                         obsband = band_match.search(obs).groupdict()['band']
-                        print('band=',obsband)
                         if obsband != target_band:
                             continue
                         obs_fullname = os.path.join(obj_basedir, obs)
                         spw_list = read_spw(obs_fullname)
                         for spw in spw_list:
-                            print(spw)
                             if freq_observed>spw[0] and freq_observed<spw[1]:
                                 time_on_source = au.timeOnSource(obs_fullname, verbose=False, debug=False)
-                                print(time_on_source)
-                                total_time += time_on_source[0]['minutes_on_source']
-                                print(obs)
-            print(obj, total_time)
-            print('>>>>>>>>>>>>\n\n')
+                                # total_time += time_on_source[0]['minutes_on_source']
+                                searching_info[name].append([obj, obs, time_on_source[0]['minutes_on_source']])
+            if debug:
+                print(obj, total_time)
+                print('>>>>>>>>>>>>\n\n')
+    return searching_info
 
 def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None, 
         info_file=None, **kwargs):
