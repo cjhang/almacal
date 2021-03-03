@@ -1140,6 +1140,68 @@ def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug=False):
+    """
+    Args:
+        lines (dict):in units of GHz, example: {'CO1-0':115.3, 'CO2-1':230.5}
+    """
+    if basedir is None:
+        raise ValueError("ALMACAL database should be specified with basedir!")
+    if almacal_z is None:
+        almacal_z = os.path.join(os.path.expanduser('~'), 'Documents/projects/almacal/data/almacal_z.txt')
+    almacal_coords = Table.read(almacal_z, format='csv')
+
+    if zrange is None:
+        zrange = [0., np.inf]
+    zselect = np.bitwise_and(almacal_coords['zCal']>zrange[0], almacal_coords['zCal']<zrange[1]) 
+
+    almacal_zselect = almacal_coords[zselect]
+
+    source_list = []
+    base_dir = ''
+
+    #ALMA band information, in GHz
+    band_list = {'B3':[84, 116], 'B4':[125, 163], 'B5':[163, 211], 
+                 'B6':[211, 275], 'B7':[275, 373], 'B8':[385, 500],
+                 'B9':[602, 720], 'B10':[787, 950]}
+
+    CII = 1900.537 #GHz
+
+    n_select = len(almacal_zselect)
+
+    p_obs = re.compile('uid___')
+    band_match = re.compile('_(?P<band>B\d{1,2})')
+    for name, freq in lines.items():
+        for i in range(n_select):
+            total_time = 0
+            obj_info = almacal_zselect[i]
+            freq_observed = freq / (1.+obj_info['zCal'])
+            print('Observed freq:', freq_observed)
+            for band, band_freq in band_list.items():
+                if freq_observed>band_freq[0] and freq_observed<band_freq[1]:
+                    target_band = band
+            obj = obj_info['#calName']
+            obj_basedir = os.path.join(basedir, obj)
+            if not os.path.isdir(obj_basedir):
+                if debug:
+                    print("skip {}".format(obj))
+                continue
+            print('>>>>>>>>>\n{}\n'.format(obj))
+            for obs in os.listdir(obj_basedir):
+                if p_obs.search(obs):
+                    if band_match.search(obs):
+                        obsband = band_match.search(obs).groupdict()['band']
+                        if obsband != target_band:
+                            continue
+                        obs_fullname = os.path.join(obj_basedir, obs)
+                        spw_list = read_spw(obs_fullname)
+                        for spw in spw_list:
+                            if freq_observed>spw[0] and freq_observed<spw[0]:
+                                time_on_source = au.timeOnSource(obs_filename, verbose=False, debug=False)
+                                total_time += timeOnSource
+                                print()
+            print(obj, total_time)
+            print('>>>>>>>>>>>>\n\n')
 
 def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None, 
         info_file=None, **kwargs):
