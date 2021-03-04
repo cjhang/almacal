@@ -12,6 +12,7 @@ from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry,
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from astropy.modeling import models, fitting
+from astropy.convolution import Gaussian2DKernel, convolve
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=3, debug=False, savefile=None, clname=None,
@@ -111,7 +112,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     else:
         return [ra_random, dec_random, flux_input]
 
-def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True, 
+def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
         basename=None, debug=False, flux=None, known_file=None, 
         uvtaper_scale=None):
     """
@@ -125,35 +126,75 @@ def add_random_sources(vis, n=5, radius=10, outdir='./', make_image=True,
     if not os.path.isdir(outdir):
         os.system('mkdir -p {}'.format(outdir))
    
-    md = msmdtool()
-    if not md.open(vis):
-        raise ValueError("Failed to open {}".format(vis))
-    phasecenter = md.phasecenter()
-    mydirection = phasecenter['refer'] +' '+ SkyCoord(phasecenter['m0']['value'], phasecenter['m1']['value'], unit="rad").to_string('hmsdms')
-    myfreq = "{:.2f}GHz".format(np.mean(read_spw(vis)))
-    if debug:
-        print(mydirection)
-        print(myfreq)
-    clname_fullpath = os.path.join(outdir, basename+'.cl')
-    savefile_fullpath = os.path.join(outdir, basename+'.txt')
-    # overwrite old files
-    rmtables(clname_fullpath)
-    os.system('rm -rf {}'.format(savefile_fullpath))
-    # generate random sources
-    mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
-                                    clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file)
-    ft(vis=vis, complist=mycomplist)
-    uvsub(vis=vis, reverse=True)
-    
-    if make_image:
-        make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
-                      only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
-                      fov_scale=2.0, datacolumn='corrected',
-                      basename=basename)
-    # clean up temperary files
-    rmtables(clname_fullpath)
-    delmod(vis=vis)
-    clearcal(vis=vis)
+    if vis:
+        md = msmdtool()
+        if not md.open(vis):
+            raise ValueError("Failed to open {}".format(vis))
+        phasecenter = md.phasecenter()
+        mydirection = phasecenter['refer'] +' '+ SkyCoord(phasecenter['m0']['value'], phasecenter['m1']['value'], unit="rad").to_string('hmsdms')
+        myfreq = "{:.2f}GHz".format(np.mean(read_spw(vis)))
+        if debug:
+            print(mydirection)
+            print(myfreq)
+        clname_fullpath = os.path.join(outdir, basename+'.cl')
+        savefile_fullpath = os.path.join(outdir, basename+'.txt')
+        # overwrite old files
+        rmtables(clname_fullpath)
+        os.system('rm -rf {}'.format(savefile_fullpath))
+        # generate random sources
+        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
+                                        clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file)
+        ft(vis=vis, complist=mycomplist)
+        uvsub(vis=vis, reverse=True)
+        
+        if make_image:
+            make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
+                          only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
+                          fov_scale=2.0, datacolumn='corrected',
+                          basename=basename)
+        # clean up temperary files
+        rmtables(clname_fullpath)
+        delmod(vis=vis)
+        clearcal(vis=vis)
+    if fitsimage:
+        # add random sources directly into the image
+        pass
+        hdu = fits.open(fitsimage)
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+
+        # for DAOStarFinder, in pixel space
+        pixel_scale = 1/np.abs(header['CDELT1'])
+        fwhm = header['BMAJ']*3600*u.arcsec
+        fwhm_pixel = header['BMAJ']*pixel_scale
+        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        ratio = header['BMIN'] / header['BMAJ']
+        theta = header['BPA']
+        beamsize = np.pi*a*b/(4*np.log(2))
+
+        kernel = Gaussian2DKernel(stddev=0.5*(a+b))
+        refer = 'J'+str(int(header['EQUINOX']))
+        mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], unit="deg").to_string('hmsdms')
+        myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
+        if debug:
+            print(mydirection)
+            print(myfreq)
+        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
+                                        savefile=savefile_fullpath, known_file=known_file)
+        mycomplist_img = []
+        blank_image = np.zeros_like(data_masked)
+        for ra, dec, flux in zip(mycomplist):
+            ra_pix, dec_pix = map(np.around, skycoord_to_pixel(SkyCoord(ra, de, unit='arcsec'), wcs))
+            mycomplist_img.append([int(ra_pix), int(dec_pix), flux)])
+            blank_image[ra_pix,dec_pix] = flux
+        fake_image = convolve(blank_image, kernel) + data_masked
+        hdu[0].data = fake_image.filled(np.nan)
+        hdu.writeto(os.path.join(outdir ,basename+'.fits'))
+
 
 def subtract_sources(vis, complist=None, ):
     md = msmdtool()
