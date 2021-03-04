@@ -915,8 +915,7 @@ def gen_fake_images(vis, image_file=None, known_file=None, n=20, repeat=10, snr=
     rmtables(vistmp)
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
-        suffix='auto', known_file=None, obj=None, band=None, basename=None, threshold=5.0, algorithm='find_peak',
-        savefile=None):
+        suffix='auto', known_file=None, obj=None, band=None, basename=None, savefile=None, **kwargs):
     """simulation the completeness of source finding algorithm
     """
     # one time function
@@ -959,7 +958,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
             #print('flux:', flux)
             img = "{basename}.snr{snr}.run{run}.cont.{suffix}.fits".format(basename=basename, snr=s, run=run, suffix=suffix)
             sf_return = source_finder(img, sources_file=basename+'.snr{}.run{}.txt'.format(s, run), known_file=known_file, threshold=threshold,
-                                      algorithm=algorithm)
+                                      algorithm=algorithm, **kwargs)
             # if sf_return == 0:
                 # continue
             flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
