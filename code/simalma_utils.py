@@ -1,5 +1,6 @@
 # functions related with almacal simulation
 import numpy as np
+from scipy import signal, ndimage
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
@@ -13,6 +14,20 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 from astropy.modeling import models, fitting
 from astropy.convolution import Gaussian2DKernel, convolve
+
+def gkern(bmin=1., bmaj=1, theta=0, size=21,):
+    """
+    creates gaussian kernel with side length l and a sigma of sig
+    """
+    size = np.max([size, 2*int(bmaj)])
+    FWHM2sigma = 2.*np.sqrt(2*np.log(2))
+    gkernx = signal.gaussian(size, std=bmin/FWHM2sigma).reshape(size, 1)
+    gkerny = signal.gaussian(size, std=bmaj/FWHM2sigma).reshape(size, 1)
+
+    kernel = np.outer(gkerny, gkernx)
+    kernel_rot = ndimage.rotate(kernel, -1.*theta, reshape=False)
+    
+    return kernel_rot / np.sum(kernel_rot)
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=3, debug=False, savefile=None, clname=None,
@@ -34,7 +49,6 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
    """
     # generate a random radius
     skycoord = SkyCoord(direction[5:])
-    
     theta = 2*np.pi*np.random.uniform(0, 1, n)
     rho = radius * np.sqrt(np.random.uniform(0, 1, n))
     if isinstance(flux, (list, tuple)):
@@ -113,8 +127,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         return [ra_random, dec_random, flux_input]
 
 def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
-        basename=None, debug=False, flux=None, known_file=None, 
-        uvtaper_scale=None):
+        basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None):
     """
     radius : in arcsec
 
@@ -176,24 +189,30 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         theta = header['BPA']
         beamsize = np.pi*a*b/(4*np.log(2))
 
-        kernel = Gaussian2DKernel(stddev=0.5*(a+b))
+        # kernel = Gaussian2DKernel(stddev=0.25*(a+b))
+        kernel = gkern(bmaj=a, bmin=b, theta=theta)
         refer = 'J'+str(int(header['EQUINOX']))
         mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], unit="deg").to_string('hmsdms')
         myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
         if debug:
             print(mydirection)
             print(myfreq)
+        savefile_fullpath = os.path.join(outdir, basename+'.txt')
         mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
                                         savefile=savefile_fullpath, known_file=known_file)
-        mycomplist_img = []
-        blank_image = np.zeros_like(data_masked)
-        for ra, dec, flux in zip(mycomplist):
-            ra_pix, dec_pix = map(np.around, skycoord_to_pixel(SkyCoord(ra, de, unit='arcsec'), wcs))
-            mycomplist_img.append([int(ra_pix), int(dec_pix), flux)])
-            blank_image[ra_pix,dec_pix] = flux
-        fake_image = convolve(blank_image, kernel) + data_masked
+        print('mycomplist', mycomplist)
+        mycomplist_pixels = []
+        blank_image = np.zeros((ny, nx))
+        for ra, dec, flux in zip(*mycomplist):
+            ra_pix, dec_pix = map(np.around, skycoord_to_pixel(SkyCoord(ra, dec), wcs))
+            # print(ra_pix, dec_pix, flux)
+            mycomplist_pixels.append([int(ra_pix), int(dec_pix), flux])
+            blank_image[int(ra_pix), int(dec_pix)] = flux
+            
+        fake_image = convolve(blank_image, kernel)/1000*beamsize + data_masked # convert mJy into Jy before added into image
         hdu[0].data = fake_image.filled(np.nan)
-        hdu.writeto(os.path.join(outdir ,basename+'.fits'))
+        hdu.writeto(os.path.join(outdir ,basename+'.fits'), overwrite=True)
+        return fake_image 
 
 
 def subtract_sources(vis, complist=None, ):
