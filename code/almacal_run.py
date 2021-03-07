@@ -82,9 +82,12 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, check_calibra
     myimagename = os.path.join(outdir, basename + '.cont.auto')
 
     if exclude_aca:
-        tb.open(vis + '/ANTENNA')
-        antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-        tb.close()
+        try:
+            tb.open(vis + '/ANTENNA')
+            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+            tb.close()
+        except:
+            return False
         if antenna_diameter < 12.0:
             if debug:
                 print("Excuding data from {}".format(antenna_diameter))
