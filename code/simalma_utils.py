@@ -127,7 +127,8 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         return [ra_random, dec_random, flux_input]
 
 def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
-        basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None):
+        basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
+        inverse_image=False):
     """
     radius : in arcsec
 
@@ -138,6 +139,8 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
     
     if not os.path.isdir(outdir):
         os.system('mkdir -p {}'.format(outdir))
+    if inverse_image:
+        flux = -1.0 * flux
    
     if vis:
         md = msmdtool()
@@ -161,17 +164,34 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         uvsub(vis=vis, reverse=True)
         
         if make_image:
+            suffix = '.cont.auto'
             make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
                           only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
-                          fov_scale=2.0, datacolumn='corrected',
-                          basename=basename)
+                          fov_scale=2.0, datacolumn='corrected', usemask='user',
+                          basename=basename, suffix=suffix)
+            if inverse_image:
+                # tb = tbtool()
+                # tb.open(os.path.join(outdir, basename+suffix+'.fits'), nomodify=False)
+                # tb.put('map', -1.*tb.getcol('map'))
+                # tb.flush()
+                # tb.close()
+                with fits.open(os.path.join(outdir, basename+suffix+'.fits')) as hdu:
+                    hdu[0].data = -1.0 * hdu[0].data
+                    hdu.writeto(os.path.join(outdir ,basename+suffix+'.fits'), overwrite=True)
+
+            if uvtaper_scale:
+                tb = tbtool()
+                for taper in uvtaper_scale:
+                    tb.open(os.path.join(outdir, basename+suffix+'uvtaper{}.fits'.format(taper)), nomodify=False)
+                    tb.put('map', -1.*tb.getcol('map'))
+                    tb.flush()
+                    tb.close()
         # clean up temperary files
         rmtables(clname_fullpath)
         delmod(vis=vis)
         clearcal(vis=vis)
     if fitsimage:
         # add random sources directly into the image
-        pass
         hdu = fits.open(fitsimage)
         header = hdu[0].header
         wcs = WCS(header)
@@ -200,17 +220,19 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         savefile_fullpath = os.path.join(outdir, basename+'.txt')
         mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
                                         savefile=savefile_fullpath, known_file=known_file)
-        print('mycomplist', mycomplist)
+        # print('mycomplist', mycomplist)
         mycomplist_pixels = []
         blank_image = np.zeros((ny, nx))
         for ra, dec, flux in zip(*mycomplist):
             ra_pix, dec_pix = map(np.around, skycoord_to_pixel(SkyCoord(ra, dec), wcs))
             # print(ra_pix, dec_pix, flux)
             mycomplist_pixels.append([int(ra_pix), int(dec_pix), flux])
-            blank_image[int(ra_pix), int(dec_pix)] = flux
+            blank_image[int(dec_pix), int(ra_pix)] = flux
             
         fake_image = convolve(blank_image, kernel)/1000*beamsize + data_masked # convert mJy into Jy before added into image
         hdu[0].data = fake_image.filled(np.nan)
+        if inverse_image:
+            hdu[0].data = -1.0*hdu[0].data
         hdu.writeto(os.path.join(outdir ,basename+'.fits'), overwrite=True)
         return fake_image 
 
@@ -407,13 +429,14 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         background = bkg.background
     else:
         background = median
+    data_masked_sub = data_masked - background
     
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
         daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std*0.5, ratio=ratio, 
                                 theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,)  
         data_masked[known_mask] = std
-        sources_found = daofind(data_masked - background)#, mask=known_mask)
+        sources_found = daofind(data_masked_sub)#, mask=known_mask)
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
@@ -429,7 +452,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             source_found_peak = source_found_peak[peak_select]
         
     elif algorithm == 'find_peak': # find_peak
-        sources_found = find_peaks(data_masked - background, threshold=threshold*std, box_size=fwhm_pixel,
+        sources_found = find_peaks(data_masked_sub, threshold=threshold*std, box_size=fwhm_pixel,
                                    mask=known_mask)
         if debug:
             print(sources_found)
@@ -461,9 +484,10 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         segments = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
-            data_cutout = s.cutout(data_masked)
             if subtract_background:
-                data_cutout = data_cutout - background
+                data_cutout = s.cutout(data_masked_sub)
+            else:
+                data_cutout = s.cutout(data_masked)
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods)
             flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
@@ -497,9 +521,10 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         segments = RectangularAperture(sources_input_center, 2.*a, 2.*a, theta=0)
         segments_mask = segments.to_mask(method='center')
         for s in segments_mask:
-            data_cutout = s.cutout(data_masked)
             if subtract_background:
-                data_cutout = data_cutout - background
+                data_cutout = s.cutout(data_masked_sub)
+            else:
+                data_cutout = s.cutout(data_masked)
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
