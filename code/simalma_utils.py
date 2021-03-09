@@ -19,7 +19,7 @@ def gkern(bmin=1., bmaj=1, theta=0, size=21,):
     """
     creates gaussian kernel with side length l and a sigma of sig
     """
-    size = np.max([size, 2*int(bmaj)])
+    size = np.max([size, 2*int(bmaj)+1])
     FWHM2sigma = 2.*np.sqrt(2*np.log(2))
     gkernx = signal.gaussian(size, std=bmin/FWHM2sigma).reshape(size, 1)
     gkerny = signal.gaussian(size, std=bmaj/FWHM2sigma).reshape(size, 1)
@@ -79,11 +79,16 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     dec_random = delta_dec*u.arcsec+ skycoord.dec
    
     if known_file:
+        try:
+            known_data = np.loadtxt(known_file, skiprows=1)
+        except:
+            print('No known file can be open.')
+            known_data = None
+    if known_data is not None:
         distance = prune_threshold*u.arcsec
         print('distance', distance)
         selected_after_known_ra = []
         selected_after_known_dec = []
-        known_data = np.loadtxt(known_file, skiprows=1)
         if len(known_data.shape) == 1:
             known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
         elif len(known_data.shape) > 1:
@@ -446,7 +451,7 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
         else:
             sources_found_x, sources_found_y = sources_found['xcentroid'], sources_found['ycentroid']
             source_found_peak = sources_found['peak']
-            peak_select = source_found_peak > threshold
+            peak_select = source_found_peak > threshold #two stage source finding
             source_found_x = sources_found_x[peak_select]
             source_found_y = sources_found_y[peak_select]
             source_found_peak = source_found_peak[peak_select]
