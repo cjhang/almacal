@@ -271,7 +271,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
         # plt.clf()
         plt.close('all')
     
-    print("Totally {}% of data have been selected.".format(100.*select_num/total_num))
+    print("Totally {:.2}% of data have been selected.".format(100.*select_num/(total_num+1e-6)))
     #print(all_select)
     if savefile:
         obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
