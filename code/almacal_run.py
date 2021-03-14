@@ -863,81 +863,6 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
 
-def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10, snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
-                    uvtaper_scale=None, mode='uv', inverse_image=False, debug=False):
-    """generate the fake images with man-made sources
-
-    Args:
-     mode: image or uv
-    """
-    # make a copy of the original file
-    if basename is None:
-        basename = os.path.basename(vis)
-    if not os.path.isdir(outdir):
-        os.system('mkdir -p {}'.format(outdir))
-    vistmp = os.path.join(outdir, basename+'.tmp')
-    split(vis=vis, outputvis=vistmp, datacolumn='data')
-    # read information from vis 
-    spw_specrange = read_spw(vistmp)
-    freq_mean = np.mean(spw_specrange) # in GHz
-    tb.open(vistmp + '/ANTENNA')
-    antenna_diameter_list = tb.getcol('DISH_DIAMETER')
-    tb.close()
-    antenna_diameter = np.max(antenna_diameter_list) * u.m
-    wavelength = const.c / (freq_mean * u.GHz) # in um
-    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
-    if debug:
-        print('fov', fov)
-        print('radius', 0.5*fov)
-    # read information from image files
-    imagefile_base, imagefile_extension = os.path.splitext(imagefile)
-    if imagefile_extension == 'fits':
-        fitsimage = imagefile
-        hdu = fits.open(fitsimage)
-        data = np.ma.masked_invalid(hdu[0].data)
-        rms = np.ma.std(data)
-        sensitivity = rms
-        flux_base = rms
-    else:
-        im_head = imhead(imagefile)
-        im_beam = im_head['restoringbeam']
-        im_incr = im_head['incr']
-        im_info = imstat(imagefile)
-        # beamsize = np.pi*a*b/(4*np.log(2))
-        beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
-        rms = im_info['rms'] * 1000 # in mJy
-        sensitivity = rms 
-        flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
-        if mode == 'image':
-            fitsimage = imagefile+'.fits'
-            exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
-    # else:
-        # if mode == 'image':
-            # raise ValueError("image must be given!")
-        # # sensitivity = 1000. * calculate_sensitivity(vistmp)
-        # sensitivity = 1000.*np.array(calculate_sensitivity(vistmp, full_pwv=True))
-        # # sensitivity = 1000 * calculate_sensitivity(i*5*5 # convert into peak value of gaussian, assuming 5*5pixel beam
-        # flux_base = sensitivity # * (2*np.pi)
-    # print(sensitivity, flux_base)
-    # return 0
-    # snr_old = np.arange(1,20,0.5)
-    # snr_old2 = np.arange(1,20,0.1)
-    for s in snr:
-        # if s in snr_old:
-            # continue
-        print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
-        for i in range(repeat):
-            basename_new = basename+'.snr{}.run{}'.format(s, i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
-                                   basename=basename_new, flux=s*flux_base, known_file=known_file, 
-                                   inverse_image=inverse_image)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
-                                   basename=basename_new, flux=s*flux_base, known_file=known_file, inverse_image=inverse_image)
-    # clear temperary files
-    rmtables(vistmp)
-
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 
         threshold=5.0, plot=False, **kwargs):
@@ -1158,11 +1083,14 @@ def plot_completeness(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug=False, savefile=None):
+def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug=False, savefile=None, 
+                    v_tol=500, strick_mode=False):
     """
     Args:
         lines (dict):in units of GHz, example: {'CO1-0':115.3, 'CO2-1':230.5}
+        v_tol: velocity tolerance, units in km/s
     """
+    c = 299792.458 # speed of light, in km/s
     if basedir is None:
         raise ValueError("ALMACAL database should be specified with basedir!")
     if almacal_z is None:
@@ -1183,7 +1111,6 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
                  'B6':[211, 275], 'B7':[275, 373], 'B8':[385, 500],
                  'B9':[602, 720], 'B10':[787, 950]}
 
-    CII = 1900.537 #GHz
 
     n_select = len(almacal_zselect)
 
@@ -1192,11 +1119,11 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
 
     searching_info = {}
     for name, freq in lines.items():
-        searching_info[name] = []
         for i in range(n_select):
-            total_time = 0
             obj_info = almacal_zselect[i]
             freq_observed = freq / (1.+obj_info['zCal'])
+            freq_tol = v_tol/c * freq_observed
+            freq_observed_range = [freq_observed-freq_tol, freq_observed+freq_tol]
             # print('Observed freq:', freq_observed)
             for band, band_freq in band_list.items():
                 if freq_observed>band_freq[0] and freq_observed<band_freq[1]:
@@ -1210,6 +1137,8 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
             if debug:
                 print('>>>>>>>>>\n{}\n'.format(obj))
                 print('z={}'.format(obj_info['zCal']))
+            obj_searching_info = {'obj':obj}
+            obj_total_time = 0
             for obs in os.listdir(obj_basedir):
                 if p_obs.search(obs):
                     if band_match.search(obs):
@@ -1219,13 +1148,25 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
                         obs_fullname = os.path.join(obj_basedir, obs)
                         spw_list = read_spw(obs_fullname)
                         for spw in spw_list:
-                            if freq_observed>spw[0] and freq_observed<spw[1]:
+                            if strick_mode:
+                                is_coveraged = (freq_observed_range[0]>spw[0]) and (freq_observed_range[1]<spw[1])
+                            else:
+                                is_coveraged = (freq_observed_range[1]>spw[0]) or (freq_observed_range[0]<spw[1])
+                            if is_coveraged:
                                 time_on_source = au.timeOnSource(obs_fullname, verbose=False, debug=False)
                                 # total_time += time_on_source[0]['minutes_on_source']
-                                searching_info[name].append([obj, obs, time_on_source[0]['minutes_on_source']])
+                                obj_searching_info[obs] = time_on_source[0]['minutes_on_source']
+                                obj_total_time += time_on_source[0]['minutes_on_source']
+                                break
+            if obj_total_time > 1e-8:
+                obj_searching_info['total_time'] = obj_total_time
+                searching_info[name] = obj_searching_info
             if debug:
-                print(obj, total_time)
+                print(obj, obj_searching_info)
                 print('>>>>>>>>>>>>\n\n')
+    if savefile:
+        with open(savefile, 'w+') as jf:
+            json.dump(jf, searching_info)
     return searching_info
 
 def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None, 
