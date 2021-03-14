@@ -1153,7 +1153,11 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
                             else:
                                 is_coveraged = (freq_observed_range[1]>spw[0]) or (freq_observed_range[0]<spw[1])
                             if is_coveraged:
-                                time_on_source = au.timeOnSource(obs_fullname, verbose=False, debug=False)
+                                try:
+                                    time_on_source = au.timeOnSource(obs_fullname, verbose=False, debug=False)
+                                except:
+                                    print("Faild when reading {}".format(obs_fullname))
+                                    timeOnSource = 0
                                 # total_time += time_on_source[0]['minutes_on_source']
                                 obj_searching_info[obs] = time_on_source[0]['minutes_on_source']
                                 obj_total_time += time_on_source[0]['minutes_on_source']
