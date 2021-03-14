@@ -940,7 +940,7 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10, 
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 
-        threshold=5.0, **kwargs):
+        threshold=5.0, plot=False, **kwargs):
     """simulation the completeness of source finding algorithm
     """
     # one time function
@@ -960,7 +960,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     print('beamsize',beamsize) 
     print('rms_flux',rms_flux)
     
-    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)_combine.ms.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
+    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
     if basename is None:
         basename = os.path.join(objfolder, '{obj}_{band}_combine.ms'.format(obj=obj, band=band))
         print('basename', basename)
@@ -980,6 +980,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
         # flux = s*sensitivity
         # flux_input_list.append(flux)
         for run in np.arange(repeat):
+            print('SNR: {}, RUN:{}'.format(s, run))
             #print('flux:', flux)
             img = "{basename}.snr{snr}.run{run}{suffix}.fits".format(basename=basename, snr=s, run=run, suffix=suffix)
             sf_return = source_finder(img, sources_file=basename+'.snr{}.run{}.txt'.format(s, run), known_file=known_file, **kwargs)
@@ -1024,110 +1025,35 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
                 detection_found_array = np.vstack([detection_found_array, np.array(zip(snr_found_fake, 
                                                                       np.zeros_like(snr_found_fake)))])
 
-    snr_flat = np.array([item for sublist in snr_input_list for item in sublist])
-    flux_input_flat = np.array([item for sublist in flux_input_list for item in sublist])
-    flux_input_aperture_flat = np.array([item for sublist in flux_input_autolist for item in sublist[:,0]])
-    flux_input_gaussian_flat = np.array([item for sublist in flux_input_autolist for item in sublist[:,1]])
-    flux_aperture_flat = np.array([item for sublist in flux_found_autolist for item in sublist[:,0]])
-    flux_gaussian_flat = np.array([item for sublist in flux_found_autolist for item in sublist[:,1]])
-
-    # calculate flux boosting and completeness
-    snr_mid = 0.5*(snr[1:] + snr[:-1])
-    aperture_mean = []
-    gaussian_mean = []
-    completeness_list = []
-    fake_rate_list = []
-    for i in range(1, len(snr)):
-        s = snr[i]
-        s_b = snr[i-1]
-        # calculate mean flux boosting
-        snr_select = np.bitwise_and((snr_flat<s), (snr_flat>s_b))
-        aperture_boosting = flux_input_aperture_flat[snr_select] / flux_input_flat[snr_select]
-        gaussian_boosting = flux_input_gaussian_flat[snr_select] / flux_input_flat[snr_select]
-        aperture_mean.append([np.median(aperture_boosting), np.std(aperture_boosting)])
-        gaussian_mean.append([np.median(gaussian_boosting), np.std(gaussian_boosting)])
-
-
-        # calculate the completeness
-        snr_select1 = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
-        n_input = np.sum(snr_select1)
-        n_found = np.sum(np.array(detection_input_array[:,1][snr_select1]))
-        completeness_list.append(1.0*n_found/n_input)
-        
-        # calculate the fake detaction rate
-        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
-        n_found2 = np.sum(snr_select2)
-        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
-        fake_rate_list.append(1.0*n_fake/n_found2)
-
-
-    if True:
-        fig = plt.figure(figsize=(12, 3))
-        ax = fig.add_subplot(1,3,1)
-        ax.set_xlabel('SNR')
-        ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
-        ax.plot(snr_flat, flux_input_aperture_flat/flux_input_flat, 'k.', label='aperture')
-        ax.plot(snr_flat, flux_input_gaussian_flat/flux_input_flat, 'r.', label='gaussian')
-        aperture_mean = np.array(aperture_mean)
-        gaussian_mean = np.array(gaussian_mean)
-        ax.plot(snr_mid, aperture_mean[:,0], 'ko', label='aperture')
-        ax.errorbar(snr_mid, aperture_mean[:,0], yerr=aperture_mean[:,1], color='k', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
-        ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian')
-        ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
-        # for i in range(len(flux_input_list)):
-            # if len(snr_input_list[i]>0):
-                # # print(snr_inputfound_list[i])
-                # # print(flux_input_list[i])
-                # # print(flux_inputfound_list[i])
-                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.', label='aperture')
-                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.', label='gaussian')
-        
-        ax = fig.add_subplot(1,3,2)
-        # print('snr', snr)
-        # print('completeness_list', completeness_list)
-        ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
-        # ax.plot(np.array(flux_peak_list)/rms, completeness_list, 'o')
-        ax.set_xlabel('SNR')
-        ax.set_ylabel(r'Completeness')
-        # ax.set_xlim((0., 8))
-        ax.set_ylim((-0.1, 1.2))
-
-        ax = fig.add_subplot(1,3,3)
-        ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
-        ax.set_xlabel('SNR')
-        ax.set_ylabel(r'Fake percentage')
-        ax.set_xlim((0., 8))
-        ax.set_ylim((-0.1, 1.2))
-
-        plt.show()
-
+    # save data into json
+    data_saved = {}
+    snr_flat = [item for sublist in snr_input_list for item in sublist]
+    flux_input_flat = [item for sublist in flux_input_list for item in sublist]
+    flux_input_aperture_flat = [item for sublist in flux_input_autolist for item in sublist[:,0]]
+    flux_input_gaussian_flat = [item for sublist in flux_input_autolist for item in sublist[:,1]]
+    flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
+    flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
+    data_saved['snr_input'] = snr_flat
+    data_saved['flux_input'] = flux_input_flat
+    data_saved['flux_input_aperture'] = flux_input_aperture_flat
+    data_saved['flux_input_gaussian'] = flux_input_gaussian_flat
+    data_saved['flux_gaussian'] = flux_gaussian_flat
+    data_saved['flux_aperture'] = flux_aperture_flat
+    data_saved['detection_snr'] = detection_input_array[:,0].tolist()
+    data_saved['detection_input_array'] = detection_input_array.tolist()
+    data_saved['detection_found_array'] = detection_found_array.tolist()
     if savefile:
-        # save data into json
-        data_saved = {}
-        snr_flat = [item for sublist in snr_input_list for item in sublist]
-        flux_input_flat = [item for sublist in flux_input_list for item in sublist]
-        flux_input_aperture_flat = [item for sublist in flux_input_autolist for item in sublist[:,0]]
-        flux_input_gaussian_flat = [item for sublist in flux_input_autolist for item in sublist[:,1]]
-        flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
-        flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
-        data_saved['snr_input'] = snr_flat
-        data_saved['flux_input'] = flux_input_flat
-        data_saved['flux_input_aperture'] = flux_input_aperture_flat
-        data_saved['flux_input_gaussian'] = flux_input_gaussian_flat
-        data_saved['flux_gaussian'] = flux_gaussian_flat
-        data_saved['flux_aperture'] = flux_aperture_flat
-        data_saved['detection_snr'] = detection_input_array[:,0].tolist()
-        data_saved['detection_input_array'] = detection_input_array.tolist()
-        data_saved['detection_found_array'] = detection_found_array.tolist()
         with open(savefile, 'w') as fp:
-            json.dump(data_saved, fp)
-    return 
+           json.dump(data_saved, fp)
+    if plot:
+        plot_completeness(data_saved)
+    # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
-def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
-    with open(jsonfile) as jf:
-        data = json.load(jf)
-
+def plot_completeness(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
+    if jsonfile:
+        with open(jsonfile) as jf:
+            data = json.load(jf)
     snr_input = np.array(data['snr_input'])
     flux_input = np.array(data['flux_input'])
     flux_input_aperture = np.array(data['flux_input_aperture'])
@@ -1158,6 +1084,36 @@ def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
         n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
         fake_rate_list.append(1.0*n_fake/n_found2)
 
+    # calculate flux boosting and completeness
+    snr_mid = 0.5*(snr[1:] + snr[:-1])
+    aperture_mean = []
+    gaussian_mean = []
+    completeness_list = []
+    fake_rate_list = []
+    for i in range(1, len(snr)):
+        s = snr[i]
+        s_b = snr[i-1]
+        # calculate mean flux boosting
+        snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
+        aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
+        gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
+        aperture_mean.append([np.median(aperture_boosting), np.std(aperture_boosting)])
+        gaussian_mean.append([np.median(gaussian_boosting), np.std(gaussian_boosting)])
+
+
+        # calculate the completeness
+        snr_select1 = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        n_input = np.sum(snr_select1)
+        n_found = np.sum(np.array(detection_input_array[:,1][snr_select1]))
+        completeness_list.append(1.0*n_found/n_input)
+        
+        # calculate the fake detaction rate
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        n_found2 = np.sum(snr_select2)
+        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
+        fake_rate_list.append(1.0*n_fake/n_found2)
+
+
     if True:
         fig = plt.figure(figsize=(12, 3))
         ax = fig.add_subplot(1,3,1)
@@ -1165,8 +1121,23 @@ def plot_completeness(jsonfile, snr = np.arange(1.0, 10, 0.1)):
         ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
         ax.plot(snr_input, flux_input_aperture/flux_input, 'k.', label='aperture')
         ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian')
+        aperture_mean = np.array(aperture_mean)
+        gaussian_mean = np.array(gaussian_mean)
+        ax.plot(snr_mid, aperture_mean[:,0], 'ko', label='aperture')
+        ax.errorbar(snr_mid, aperture_mean[:,0], yerr=aperture_mean[:,1], color='k', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
+        ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian')
+        ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
+        # for i in range(len(flux_input_list)):
+            # if len(snr_input_list[i]>0):
+                # # print(snr_inputfound_list[i])
+                # # print(flux_input_list[i])
+                # # print(flux_inputfound_list[i])
+                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.', label='aperture')
+                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.', label='gaussian')
         
         ax = fig.add_subplot(1,3,2)
+        # print('snr', snr)
+        # print('completeness_list', completeness_list)
         ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
         # ax.plot(np.array(flux_peak_list)/rms, completeness_list, 'o')
         ax.set_xlabel('SNR')
