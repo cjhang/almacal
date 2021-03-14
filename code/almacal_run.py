@@ -1117,6 +1117,7 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
 
     searching_info = {}
     for name, freq in lines.items():
+        searching_info[name] = []
         for i in range(n_select):
             obj_info = almacal_zselect[i]
             freq_observed = freq / (1.+obj_info['zCal'])
@@ -1162,13 +1163,13 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
                                 break
             if obj_total_time > 1e-8:
                 obj_searching_info['total_time'] = obj_total_time
-                searching_info[name] = obj_searching_info
+                searching_info[name].append(obj_searching_info)
             if debug:
                 print(obj, obj_searching_info)
                 print('>>>>>>>>>>>>\n\n')
     if savefile:
         with open(savefile, 'w+') as jf:
-            json.dump(jf, searching_info)
+            json.dump(searching_info, jf)
     return searching_info
 
 def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None, 
