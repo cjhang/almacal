@@ -387,27 +387,30 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
     # read known_sources
     known_mask = np.full((ny, nx), 0, dtype=bool)
     if known_file:
-        known_data = np.loadtxt(known_file, skiprows=1)
-        if len(known_data.shape) == 1:
-            known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
-            known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-            known_aper = RectangularAperture(known_sources_pixel, 2.*a, 2.*a, theta=0)
-        elif len(known_data.shape) > 1:
-            known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
-            known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-            known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
-        else:
-            raise ValueError('Unsupported file: {}'.format(known_file))
-        # known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
-        # known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-        # known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
-        known_aper_mask = known_aper.to_mask(method='center')
-        for m in known_aper_mask:
-            known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
-        if False:
-            plt.figure()
-            plt.imshow(known_mask,origin='lower')
-            plt.show()
+        try:
+            known_data = np.loadtxt(known_file, skiprows=1)
+        except:
+            print('cannot open {}'.format(known_file))
+            known_data = None
+        if known_data is not None:
+            if len(known_data.shape) == 1:
+                known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
+                known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+                known_aper = RectangularAperture(known_sources_pixel, 2.*a, 2.*a, theta=0)
+            elif len(known_data.shape) > 1:
+                known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+                known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+                known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
+            # known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+            # known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
+            # known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
+            known_aper_mask = known_aper.to_mask(method='center')
+            for m in known_aper_mask:
+                known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
+            if False:
+                plt.figure()
+                plt.imshow(known_mask,origin='lower')
+                plt.show()
     
     if debug:
         print('image shape', ny, nx)
