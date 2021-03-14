@@ -767,8 +767,6 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
         print(">>>>>>>>>>> {} images".format(desc))
         total_num = len(all_files)
-        if total_num == 1:
-            ncol = nrow = 1
         select_num = 0
         print("Find {} files".format(total_num))
         all_select = []
