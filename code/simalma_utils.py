@@ -31,7 +31,8 @@ def gkern(bmin=1., bmaj=1, theta=0, size=21,):
 
 def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         prune_threshold=3, debug=False, savefile=None, clname=None,
-        flux=None, fluxunit='mJy', known_file=None):
+        flux=None, fluxunit='mJy', known_file=None, known_data=None,
+        sampler=np.random.power, scaler=1):
     """This function used to add random source around a given direction
         
     This is a proximate solution, which treat the field of view as a plane.
@@ -51,13 +52,16 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     skycoord = SkyCoord(direction[5:])
     theta = 2*np.pi*np.random.uniform(0, 1, n)
     rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-    if isinstance(flux, (list, tuple)):
-        flux_input = np.random.uniform(flux[0], flux[1], n)
+    print('flux', flux)
+    if isinstance(flux, (list, tuple, np.ndarray)):
+        flux_sampling = sampler(scaler, n)
+        flux_input = flux_sampling * np.diff(flux) + flux[0]
     elif isinstance(flux, (int, float)):
         flux_input = np.full(n, flux)
     if debug:
         print('fluxunit', fluxunit)
 
+    print('flux_input',flux_input)
     delta_ra = rho * np.cos(theta)/(np.cos(skycoord.dec).value)
     delta_dec = rho * np.sin(theta)
 
@@ -133,7 +137,7 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
 
 def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
         basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
-        inverse_image=False):
+        inverse_image=False, **kwargs):
     """
     radius : in arcsec
 
@@ -164,7 +168,7 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         os.system('rm -rf {}'.format(savefile_fullpath))
         # generate random sources
         mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
-                                        clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file)
+                                        clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file, **kwargs)
         ft(vis=vis, complist=mycomplist)
         uvsub(vis=vis, reverse=True)
         
@@ -241,7 +245,6 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         hdu.writeto(os.path.join(outdir ,basename+'.fits'), overwrite=True)
         return fake_image 
 
-
 def subtract_sources(vis, complist=None, ):
     md = msmdtool()
     if not md.open(vis):
@@ -257,7 +260,7 @@ def subtract_sources(vis, complist=None, ):
 def read_source(sourcefile):
     pass
 
-def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
+def make_gaussian_image(shape, fwhm=None, sigma=None, area=1., offset=(0,0), theta=0):
     """make a gaussian image for testing
 
     theta: in rad, rotating the gaussian counterclock wise
@@ -267,6 +270,9 @@ def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
     yrad, xrad = yidx-shape[0]/2., xidx-shape[1]/2.
     y = xrad*np.cos(theta) + yrad*np.sin(theta)
     x = yrad*np.cos(theta) - xrad*np.sin(theta)
+    if fwhm:
+        fwhm2sigma = 2.35482
+        sigma = (np.array(fwhm) / fwhm2sigma).tolist()
     if isinstance(sigma, (list, tuple)):
         ysigma, xsigma = sigma
     elif isinstance(sigma, (int, float)):
@@ -281,16 +287,76 @@ def make_gaussian_image(shape, sigma, area=1., offset=(0,0), theta=0):
 
 def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, methods=['aperture','gaussian', 'peak']):
     """automatically measure the flux with different methods
+    
+    aperture_size = 1.0 # in units of beam size
     """
     
     ysize, xsize = image.shape
     y_center, x_center = ysize/2., xsize/2.
-    
     flux_list = []
     if beamsize is None:
         print("Warning: Unit the sum and maximum, without dividing the beam size.")
     # Aperture Photometry
     if 'aperture' in methods:
+        aperture_size=1.0
+        aperture_correction = 1.068
+        sigma2FWHM = 2.35482
+        aperture = EllipticalAperture((x_center, y_center), aperture_size*bmaj, aperture_size*bmin, theta)
+        extract_area = lambda x: x.area()
+        # area_apers = np.array(list(map(extract_area, apertures)))
+        
+        phot_table = aperture_photometry(image, aperture)
+        flux_in_aper = phot_table['aperture_sum'].data[0] * aperture_correction
+        # extract_qtable = lambda x: x.data[0]
+        # flux_apers = np.array(list(map(extract_qtable, phot_table.columns[3:].values())))
+
+        if debug:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.imshow(image, origin='lower', interpolation='none')
+            aperture.plot(color='gray', lw=2)
+        if beamsize:
+            flux_list.append(1.0*flux_in_aper/beamsize)
+        else:
+            flux_list.append(flux_in_aper)
+    if 'gaussian' in methods:
+        yidx, xidx = np.indices((ysize, xsize))
+        yrad, xrad = yidx-ysize/2., xidx-xsize/2.
+
+        image_norm = image / np.max(image)
+        p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, theta=theta, 
+                                   bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
+                                           "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
+        fit_p = fitting.LevMarLSQFitter()
+        p = fit_p(p_init, xrad, yrad, image_norm)
+        flux_fitted = 2*np.max(image)*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
+
+        if debug:
+            print("Initial guess:", p_init)
+            print("Fitting:", p)
+            print("Flux:", flux_fitted)
+            fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
+            ax[0].imshow(image, origin='lower', interpolation='none')
+            gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
+                    width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
+                    linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
+            ax[0].add_patch(gaussian_init)
+            ax[0].set_title("Data")
+            ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
+            ax[1].set_title("Model")
+            ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='none')
+            ax[2].set_title("Residual")
+        if beamsize:
+            flux_list.append(1.0*flux_fitted/beamsize)
+        else:
+            flux_list.append(flux_fitted)
+    if 'peak' in methods:
+        # the peak value has the same units of one pixel
+        # if beamsize:
+            # flux_list.append(np.max(image))#)#/beamsize)
+        # else:
+        flux_list.append(np.max(image))
+    if 'aperture_auto' in methods:
         radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
 
         apertures = [EllipticalAperture((x_center, y_center), a, a*bmin/bmaj, theta) for a in radii]
@@ -321,44 +387,103 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
             flux_list.append(1.0*flux_apers_stable/beamsize)
         else:
             flux_list.append(flux_apers_stable)
-    if 'gaussian' in methods:
-        yidx, xidx = np.indices((ysize, xsize))
-        yrad, xrad = yidx-ysize/2., xidx-xsize/2.
-
-        p_init = models.Gaussian2D(amplitude=1, x_stddev=1.*bmaj, y_stddev=1.*bmin, theta=theta, 
-                                   bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
-                                           "x_stddev":(xsize/8., xsize), "y_stddev":(ysize/8., ysize)})
-        fit_p = fitting.LevMarLSQFitter()
-        p = fit_p(p_init, xrad, yrad, image)
-        flux_fitted = 2*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
-
-        if debug:
-            print("Initial guess:", p_init)
-            print("Fitting:", p)
-            print("Flux:", flux_fitted)
-            fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
-            ax[0].imshow(image, origin='lower', interpolation='none')
-            gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
-                    width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
-                    linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
-            ax[0].add_patch(gaussian_init)
-            ax[0].set_title("Data")
-            ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
-            ax[1].set_title("Model")
-            ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='none')
-            ax[2].set_title("Residual")
-        if beamsize:
-            flux_list.append(1.0*flux_fitted/beamsize)
-        else:
-            flux_list.append(flux_fitted)
-    if 'peak' in methods:
-        # the peak value has the same units of one pixel
-        # if beamsize:
-            # flux_list.append(np.max(image))#)#/beamsize)
-        # else:
-        flux_list.append(np.max(image))
-
     return flux_list
+
+def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10, 
+                    snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
+                    uvtaper_scale=None, mode='uv', inverse_image=False, 
+                    debug=False, **kwargs):
+    """generate the fake images with man-made sources
+
+    Args:
+     mode: image or uv
+    """
+    # make a copy of the original file
+    if basename is None:
+        basename = os.path.basename(vis)
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
+    vistmp = os.path.join(outdir, basename+'.tmp')
+    split(vis=vis, outputvis=vistmp, datacolumn='data')
+    # read information from vis 
+    spw_specrange = read_spw(vistmp)
+    freq_mean = np.mean(spw_specrange) # in GHz
+    tb.open(vistmp + '/ANTENNA')
+    antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+    tb.close()
+    antenna_diameter = np.max(antenna_diameter_list) * u.m
+    wavelength = const.c / (freq_mean * u.GHz) # in um
+    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+    if debug:
+        print('fov', fov)
+        print('radius', 0.5*fov)
+    # read information from image files
+    imagefile_base, imagefile_extension = os.path.splitext(imagefile)
+    if imagefile_extension == 'fits':
+        fitsimage = imagefile
+        hdu = fits.open(fitsimage)
+        data = np.ma.masked_invalid(hdu[0].data)
+        rms = np.ma.std(data)
+        sensitivity = rms
+        flux_base = rms
+    else:
+        im_head = imhead(imagefile)
+        im_beam = im_head['restoringbeam']
+        im_incr = im_head['incr']
+        im_info = imstat(imagefile)
+        # beamsize = np.pi*a*b/(4*np.log(2))
+        beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+        rms = im_info['rms'] * 1000 # in mJy
+        sensitivity = rms 
+        flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+        if mode == 'image':
+            fitsimage = imagefile+'.fits'
+            exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
+    # else:
+        # if mode == 'image':
+            # raise ValueError("image must be given!")
+        # # sensitivity = 1000. * calculate_sensitivity(vistmp)
+        # sensitivity = 1000.*np.array(calculate_sensitivity(vistmp, full_pwv=True))
+        # # sensitivity = 1000 * calculate_sensitivity(i*5*5 # convert into peak value of gaussian, assuming 5*5pixel beam
+        # flux_base = sensitivity # * (2*np.pi)
+    # print(sensitivity, flux_base)
+    # return 0
+    # snr_old = np.arange(1,20,0.5)
+    # snr_old2 = np.arange(1,20,0.1)
+    if len(snr)>3:
+        # the old method, which will be deprecated in the near future
+        for s in snr:
+            # if s in snr_old:
+                # continue
+            print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
+            for i in range(repeat):
+                basename_new = basename+'.snr{}.run{}'.format(s, i)
+                if mode == 'uv':
+                    add_random_sources(vis=vistmp, n=20, radius=0.5*fov, outdir=outdir,
+                            uvtaper_scale=uvtaper_scale, basename=basename_new, 
+                            flux=s*flux_base, known_file=known_file, 
+                            inverse_image=inverse_image)
+                elif mode == 'image':
+                    add_random_sources(fitsimage=fitsimage, n=20, radius=0.5*fov, 
+                            outdir=outdir,uvtaper_scale=uvtaper_scale, 
+                            basename=basename_new, flux=s*flux_base, known_file=known_file, 
+                            inverse_image=inverse_image)
+        # clear temperary files
+        rmtables(vistmp)
+    elif len(snr)==2:
+        flux = np.array(snr)*flux_base
+        for i in range(repeat):
+            basename_new = basename+'.run{}'.format(i)
+            if mode == 'uv':
+                add_random_sources(vis=vistmp, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
+                                   basename=basename_new, flux=flux, known_file=known_file, 
+                                   inverse_image=inverse_image, **kwargs)
+            elif mode == 'image':
+                add_random_sources(fitsimage=fitsimage, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
+                                   basename=basename_new, flux=flux, known_file=known_file, inverse_image=inverse_image,
+                                   **kwargs)
+        # clear temperary files
+        rmtables(vistmp)
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
@@ -460,8 +585,8 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             source_found_peak = source_found_peak[peak_select]
         
     elif algorithm == 'find_peak': # find_peak
-        sources_found = find_peaks(data_masked_sub, threshold=threshold*std, box_size=fwhm_pixel,
-                                   mask=known_mask)
+        sources_found = find_peaks(data_masked_sub, threshold=threshold*std, 
+                box_size=fwhm_pixel, mask=known_mask)
         if debug:
             print(sources_found)
         if len(sources_found) < 1:
@@ -469,7 +594,8 @@ def source_finder(fitsimage, sources_file=None, savefile=None, model_background=
             # return 0
             sources_found = None
         else:
-            sources_found_x, sources_found_y = sources_found['x_peak'].data, sources_found['y_peak'].data
+            sources_found_x = sources_found['x_peak'].data 
+            sources_found_y = sources_found['y_peak'].data
             source_found_peak = sources_found['peak_value']
 
     else:

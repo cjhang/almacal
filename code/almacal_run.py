@@ -412,7 +412,7 @@ def ms_restore(obs_list, allflux_file=None, basedir=None, outdir='./output', tmp
     # remove all the temperary files
     os.system('rm -rf {}'.format(tmpdir))
 
-def copy_ms(basedir, outdir, selectfile=None, debug=False, time_select=False, 
+def copy_ms(basedir=None, outdir=None, selectfile=None, debug=False, time_select=False, 
             start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
             select_band=None):
     p_obs = re.compile('uid___')
@@ -420,12 +420,16 @@ def copy_ms(basedir, outdir, selectfile=None, debug=False, time_select=False,
     selectfiles_list = []
     start_time = Time(start_time)
     end_time = Time(end_time)
-    if selectfile is not None:
+    if isinstance(selectfile, str):
+        if not os.path.isfile(selectfile):
+            raise ValueError("Cannot open the file {}".format(selectfile))
         with open(selectfile) as f:
             selectfiles_readlines = f.readlines()
         for item in selectfiles_readlines:
             # remove the '\n' at the end of item
             selectfiles_list.append(item.strip())
+    elif isinstance(selectfile, list):
+        selectfiles_list = selectfile
 
     else:
         selectfiles_list = []
@@ -863,8 +867,12 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 
-        threshold=5.0, plot=False, **kwargs):
+        threshold=5.0, plot=False, snr_mode='peak', **kwargs):
     """simulation the completeness of source finding algorithm
+
+    mode:
+        peak: snr is the peak value
+        integrated: snr is the integrated value
     """
     # one time function
     f_mean = lambda x: np.mean(x)
@@ -889,6 +897,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
         print('basename', basename)
     all_fake_images = glob.glob(basename+'*{}.fits'.format(suffix))
 
+    flux_input_theory = []
     flux_input_list = []
     flux_input_autolist = []
     flux_input_foundlist = []
@@ -898,12 +907,14 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     detection_input_array = np.array([[0., 0.]])
     detection_found_array = np.array([[0., 0.]])
     for s in snr:
+        print('SNR: {}'.format(s))
+        flux_input_theory.append(snr*s)
         n_input = 0
         n_found = 0
         # flux = s*sensitivity
         # flux_input_list.append(flux)
         for run in np.arange(repeat):
-            print('SNR: {}, RUN:{}'.format(s, run))
+            #print('SNR: {}, RUN:{}'.format(s, run))
             #print('flux:', flux)
             img = "{basename}.snr{snr}.run{run}{suffix}.fits".format(basename=basename, snr=s, run=run, suffix=suffix)
             sf_return = source_finder(img, sources_file=basename+'.snr{}.run{}.txt'.format(s, run), known_file=known_file, **kwargs)
@@ -922,10 +933,13 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
             flux_input_autolist.append(flux_input_auto)
             flux_found_autolist.append(flux_found_auto)
 
-
-            #calculate the snr of the measured peak flux
-            snr_input = flux_input_auto[:,2] / rms_flux
-            snr_input_list.append(snr_input)
+            #calculate the snr
+            if mode == 'peak':
+                snr_input = flux_input_auto[:,2] / rms_flux
+                snr_input_list.append(snr_input)
+            elif mode == 'integrated':
+                snr_input = flux_input / rms_flux
+                snr_input_list.append(snr_input)
             # the snr of the detection
             snr_input_found = flux_input_auto[:,2][idxs[0]] / rms_flux
             snr_input_failed = flux_input_auto[:,2][idxs[2]] / rms_flux
@@ -948,6 +962,128 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
                 detection_found_array = np.vstack([detection_found_array, np.array(zip(snr_found_fake, 
                                                                       np.zeros_like(snr_found_fake)))])
 
+    # save data into json
+    data_saved = {}
+    snr_flat = [item for sublist in snr_input_list for item in sublist]
+    flux_input_flat = [item for sublist in flux_input_list for item in sublist]
+    flux_input_aperture_flat = [item for sublist in flux_input_autolist for item in sublist[:,0]]
+    flux_input_gaussian_flat = [item for sublist in flux_input_autolist for item in sublist[:,1]]
+    flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
+    flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
+    data_saved['snr_input'] = snr_flat
+    data_saved['flux_input'] = flux_input_flat
+    data_saved['flux_input_aperture'] = flux_input_aperture_flat
+    data_saved['flux_input_gaussian'] = flux_input_gaussian_flat
+    data_saved['flux_gaussian'] = flux_gaussian_flat
+    data_saved['flux_aperture'] = flux_aperture_flat
+    data_saved['detection_snr'] = detection_input_array[:,0].tolist()
+    data_saved['detection_input_array'] = detection_input_array.tolist()
+    data_saved['detection_found_array'] = detection_found_array.tolist()
+    if savefile:
+        with open(savefile, 'w') as fp:
+           json.dump(data_saved, fp)
+    if plot:
+        plot_completeness(data_saved)
+    # return data_saved
+    #flux_list, flux_peak_list, flux_found_list, completeness_list
+
+def calculate_completeness2(objfolder, vis=None, baseimage=None, n=20, repeat=10, 
+        known_file=None, obj=None, band=None, basename=None, savefile=None, 
+        threshold=5.0, plot=False, snr_mode='peak', **kwargs):
+    """simulation the completeness of source finding algorithm
+
+    mode:
+        peak: snr is the peak value
+        integrated: snr is the integrated value
+    """
+    # one time function
+    f_mean = lambda x: np.mean(x)
+    
+    # image statistics
+    im_head = imhead(baseimage)
+    im_beam = im_head['restoringbeam']
+    im_incr = im_head['incr']
+    im_info = imstat(baseimage)
+    # beamsize = np.pi*a*b/(4*np.log(2))
+    beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+    rms = im_info['rms']
+    rms_flux = rms * 1000 # convert to mJy/pixel
+    # sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
+    print('rms',rms)
+    print('beamsize',beamsize) 
+    print('rms_flux',rms_flux)
+    
+    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
+    if basename is None:
+        basename = os.path.join(objfolder, '{obj}_{band}_combine.ms'.format(obj=obj, band=band))
+        print('basename', basename)
+    # all_fake_images = glob.glob(basename+'*{}.fits'.format(suffix))
+
+    flux_input_list = []
+    flux_input_autolist = []
+    flux_input_foundlist = []
+    flux_found_autolist = []
+    snr_input_list = []
+    # snr_inputfound_comp = []
+    detection_input_array = np.array([[0., 0.]])
+    detection_found_array = np.array([[0., 0.]])
+    for run in np.arange(repeat):
+        n_input = 0
+        n_found = 0
+        # flux = s*sensitivity
+        # flux_input_list.append(flux)
+        #print('SNR: {}, RUN:{}'.format(s, run))
+        #print('flux:', flux)
+        img = "{basename}.run{run}.fits".format(basename=basename, run=run)
+        sf_return = source_finder(img, sources_file=basename+'.run{}.txt'.format(run), known_file=known_file, **kwargs)
+        # if sf_return == 0:
+            # continue
+        flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
+        # print('flux_input', flux_input)
+        # print('flux_input_auto', flux_input_auto)
+        # print('flux_found_auto', flux_found_auto)
+        # print('idxs', idxs)
+        
+        if len(idxs[0])<1:
+            print("Skip run{}".format(run))
+            continue
+        flux_input_list.append(flux_input)
+        flux_input_autolist.append(flux_input_auto)
+        flux_found_autolist.append(flux_found_auto)
+
+
+        # print('peak', flux_input_auto[:,2] / rms_flux)
+        # print('integrated', flux_input / rms_flux)
+        #calculate the snr
+        if snr_mode == 'peak':
+            snr_input = flux_input_auto[:,2] / rms_flux
+            snr_input_list.append(snr_input)
+        elif snr_mode == 'integrated':
+            snr_input = flux_input / rms_flux
+            snr_input_list.append(snr_input)
+        # the snr of the detection
+        snr_input_found = flux_input_auto[:,2][idxs[0]] / rms_flux
+        snr_input_failed = flux_input_auto[:,2][idxs[2]] / rms_flux
+        snr_found_input = flux_found_auto[:,2][idxs[1]] / rms_flux
+        snr_found_fake = flux_found_auto[:,2][idxs[3]] / rms_flux
+        # snr_input_foundlist.append(snr_input_found)
+        # print('snr_inputfound',snr_inputfound)
+        # print('snr_inputfound_faild',snr_inputfound_failed)
+        # print('detection_array', detection_array)
+        if len(snr_input_found) > 0:
+            detection_input_array = np.vstack([detection_input_array, 
+                np.array(zip(snr_input_found, np.ones_like(snr_input_found)))])
+        if len(snr_input_failed) > 0:
+            detection_input_array = np.vstack([detection_input_array, 
+                np.array(zip(snr_input_failed, np.zeros_like(snr_input_failed)))])
+        if len(snr_found_input) > 0:
+            detection_found_array = np.vstack([detection_found_array, 
+                np.array(zip(snr_found_input, np.ones_like(snr_found_input)))])
+        if len(snr_found_fake) > 0:
+            detection_found_array = np.vstack([detection_found_array, 
+                np.array(zip(snr_found_fake, np.zeros_like(snr_found_fake)))])
+
+    # print(snr_input_list)
     # save data into json
     data_saved = {}
     snr_flat = [item for sublist in snr_input_list for item in sublist]
