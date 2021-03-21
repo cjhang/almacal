@@ -1208,8 +1208,8 @@ def plot_completeness(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
         ax.set_xlabel('SNR')
         ax.set_ylabel(r'Fake percentage')
-        ax.set_xlim((0., 8))
-        ax.set_ylim((-0.1, 1.2))
+        # ax.set_xlim((0., 8))
+        # ax.set_ylim((-0.1, 1.2))
 
         plt.show()
 
@@ -1457,32 +1457,32 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                         continue
                 else:
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
-            for band in os.listdir(os.path.join(imgs_dir, obj)):
-                if update:
-                    combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
-                    good_image_file = os.path.join(outdir, obj, obj+'_'+band+'_good_imgs.txt')
-                    if os.path.isdir(combined_file):
-                        print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                        make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                        tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-                    elif os.path.isfile(good_image_file):
-                        print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                        good_imgs = []
-                        with open(good_images_file) as f:
-                            good_imags_lines = f.readlines()
-                        for gi in good_imags_lines:
-                            good_imgs.append(gi.strip())
-                        make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                        tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+                for band in os.listdir(os.path.join(imgs_dir, obj)):
+                    if update:
+                        combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
+                        good_image_file = os.path.join(outdir, obj, obj+'_'+band+'_good_imgs.txt')
+                        if os.path.isdir(combined_file):
+                            print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
+                            make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+                        elif os.path.isfile(good_image_file):
+                            print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
+                            good_imgs = []
+                            with open(good_images_file) as f:
+                                good_imags_lines = f.readlines()
+                            for gi in good_imags_lines:
+                                good_imgs.append(gi.strip())
+                            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
-                obj_band_path = os.path.join(imgs_dir, obj, band)
-                good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
-                                                    basename=obj+'_'+band, debug=debug, **kwargs)
-                if debug: 
-                    print(good_imgs)
-                if make_image:
-                        make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                        tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+                    obj_band_path = os.path.join(imgs_dir, obj, band)
+                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
+                                                        basename=obj+'_'+band, debug=debug, **kwargs)
+                    if debug: 
+                        print(good_imgs)
+                    if make_image:
+                            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
+                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
