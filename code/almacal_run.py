@@ -559,7 +559,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
     median_central = np.ma.median(masked_data[mask])
     
     n_outlier_central = np.sum(hist_center[bins_mid_center>upper_5sigma])
-    percent_outlier_central = 1.0*n_outlier_central/np.sum(hist_center)
+    percent_outlier_central = 1.0*n_outlier_central/np.sum(hist_center+1e-6)
     
     if debug:
         print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
