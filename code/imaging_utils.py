@@ -118,14 +118,16 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     wavelength = const.c / (freq_mean * u.GHz) # in um
     fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
 
+    cellsize,imsize,ID = au.pickCellSize(vis,imsize=True)
     # calcuate the cell size
     if mycell is None:
-        cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
+        # cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
         cellsize = cellsize_scale * cellsize
         mycell = "{:.4f}arcsec".format(cellsize)
     # calculate image size 
     if myimsize is None:
-        myimsize = efficient_imsize(int(imgsize_scale * fov / cellsize))
+        # myimsize = efficient_imsize(int(imgsize_scale * fov / cellsize))
+        myimsize = np.max(imsize)
         print(">>>", myimsize)
     # calculate frequecy
     myrestfreq = str(freq_mean)+'GHz'
