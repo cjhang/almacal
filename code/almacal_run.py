@@ -864,8 +864,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
         if uvtaper == []:
             uvtaper_name = ''
         else:
-            uvtaper_name = uvtaper[0]
-        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont.{}'.format(uvtaper_name), clean=clean, niter=niter, pblimit=pblimit, 
+            uvtaper_name = '.'+uvtaper[0]
+        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont{}'.format(uvtaper_name), clean=clean, niter=niter, pblimit=pblimit, 
                       fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, **kwargs)
 
     if only_fits:
@@ -1518,7 +1518,8 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
                            debug=False, only_fits=True, update=True, suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
-    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./', only_fits=True) 
+    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./make_good_image', 
+                                        only_fits=True, niter=5000) 
     """
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objlist is None:
