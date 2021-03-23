@@ -858,7 +858,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
         concatvis = os.path.join(tmpdir, basename+'_combine.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
-        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=clean, niter=niter, pblimit=pblimit, 
+        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont.{}'.format(uvtaper), clean=clean, niter=niter, pblimit=pblimit, 
                       fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, **kwargs)
 
     if only_fits:
@@ -1512,7 +1512,8 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
                     make_good_image(combined_vis, concatvis=concatvis_name, basedir=basedir, 
-                                    tmpdir=obj_outdir, only_fits=only_fits, **kwargs)
+                                    outdir=obj_outdir, tmpdir=obj_outdir, only_fits=only_fits, 
+                                    **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
