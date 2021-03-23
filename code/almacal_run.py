@@ -1436,6 +1436,27 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
+def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
+    """manually checking all the images
+    """
+    if isinstance(objlist, str):
+        if os.path.isfile(objlist):
+            objlist = gen_filenames(listfile=objlist)
+    if not isinstance(objlist, (list, np.ndarray)):
+        raise ValueError("Unsupported objlist!")
+    for obj in objlist:
+        obj_imagedir = os.path.join(imagedir, obj)
+        for band in bands:
+            obj_band_imagedir = os.path.join(obj_imagedir, band)
+            obj_outdir = os.path.join(outdir, obj)
+            goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
+            badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
+            if os.path.isfile(goodfile+'.updated'):
+                continue
+            else:
+                print(obj_band_imagedir)
+                check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
+
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
                            debug=False, only_fits=False, update=True, suffix='_good_imgs.txt', **kwargs):
     """generate the good image list for all the calibrators
@@ -1513,7 +1534,7 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=basedir=os.path.join(basedir, obj), 
+                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=os.path.join(basedir, obj), 
                                     outdir=obj_outdir, tmpdir=obj_outdir, only_fits=only_fits, 
                                     **kwargs)
 
