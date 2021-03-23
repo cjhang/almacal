@@ -15,6 +15,7 @@ import numpy as np
 from astropy import units as u
 from astropy import constants as const
 import matplotlib.pyplot as plt 
+from cleanhelper import cleanhelper
 import analysisUtils as au
 
 def efficient_imsize(imsize):
@@ -120,11 +121,10 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calcuate the cell size
     if mycell is None:
         cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
-        cellsize = cellsize_scale * cellsize
         mycell = "{:.4f}arcsec".format(cellsize)
     # calculate image size 
     if myimsize is None:
-        myimsize = efficient_imsize(int(imgsize_scale * fov / cellsize))
+        myimsize = cleanhelper.getOptimumSize(int(imgsize_scale * fov / cellsize))
         print(">>>", myimsize)
     # calculate frequecy
     myrestfreq = str(freq_mean)+'GHz'
