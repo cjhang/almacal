@@ -1485,7 +1485,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                             make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                             tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
-def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], make_image=False, outdir='./', 
+def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
                            debug=False, only_fits=True, update=True, suffix='good_imgs.txt.update', **kwargs):
     """generate the good image with updated list
 
@@ -1511,7 +1511,7 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], make
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=obj_outdir, 
+                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=basedir, 
                                     tmpdir=obj_outdir, only_fits=only_fits, **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
