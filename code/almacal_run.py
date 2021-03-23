@@ -790,7 +790,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         
             # show the image and record the 
             plt.show()
-            print('Input the index of images, seperate with comma:')
+            print('Input the index of images, seperate with comma: [{}/{}]'.format(i+3,total_num))
             try:
                 find_zero = False
                 idx_input = input()
@@ -816,7 +816,10 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
             # plt.clf()
             plt.close('all')
         list_patches[desc] = all_select
-        print("Totally {}% of data have been selected.".format(100.*select_num/total_num))
+        if total_num > 0:
+            print("Totally {}% of data have been selected.".format(100.*select_num/total_num))
+        else:
+            print("No data found.")
 
     list_updated = {}
     list_updated['good'] = (set(all_good_files) - set(list_patches['good'])).union(set(list_patches['bad']))
@@ -830,6 +833,8 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     else:
         obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
         for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
+            if f is None:
+                continue
             with open(f+'.updated', 'w+') as f:
                 for item in list_updated[desc]:
                     try:
@@ -856,7 +861,11 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
         concatvis = os.path.join(tmpdir, basename+'_combine.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
-        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont.{}'.format(uvtaper[0]), clean=clean, niter=niter, pblimit=pblimit, 
+        if uvtaper == []:
+            uvtaper_name = ''
+        else:
+            uvtaper_name = uvtaper[0]
+        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont.{}'.format(uvtaper_name), clean=clean, niter=niter, pblimit=pblimit, 
                       fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, **kwargs)
 
     if only_fits:
@@ -1450,6 +1459,7 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
             goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
             badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
             if os.path.isfile(goodfile+'.updated'):
+                print('skip {} of {}'.format(band, obj))
                 continue
             else:
                 print(obj_band_imagedir)
@@ -1529,6 +1539,7 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
             if os.path.isfile(good_image_file):
                 good_image_fitsfile = os.path.join(obj_outdir, concatvis_name+'.fits')
                 if os.path.isfile(good_image_fitsfile):
+                    print("Skip {} of {}".format(band,obj))
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
