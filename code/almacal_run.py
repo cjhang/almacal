@@ -1486,7 +1486,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                                             tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
 def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
-                           debug=False, only_fits=True, update=True, suffix='good_imgs.txt.update', **kwargs):
+                           debug=False, only_fits=True, update=True, suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./', only_fits=True) 
@@ -1500,18 +1500,20 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
     for obj in objlist:
         print(obj)
         obj_outdir = os.path.join(outdir, obj)
-        if not os.path.isdir(obj_dir):
+        if not os.path.isdir(obj_outdir):
+            print(obj_outdir)
             os.system('mkdir -p {}'.format(obj_outdir))
         for band in bands:
             good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, suffix))
             concatvis_name = "{}_{}_combine.ms".format(obj, band)
+            print(good_image_file, concatvis_name)
             if os.path.isfile(good_image_file):
                 good_image_fitsfile = os.path.join(obj_outdir, concatvis_name+'.fits')
                 if os.path.isfile(good_image_fitsfile):
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=basedir, 
+                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=basedir=os.path.join(basedir, obj), 
                                     outdir=obj_outdir, tmpdir=obj_outdir, only_fits=only_fits, 
                                     **kwargs)
 
