@@ -733,8 +733,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         if debug:
             print('goodfile', goodfile)
         if not os.path.isfile(goodfile):
-            raise ValueError("{} is not found".format(goodfile))
-        if isinstance(goodfile, str):
+            # raise ValueError("{} is not found".format(goodfile))
+            goodfile = None
+        elif isinstance(goodfile, str):
             try:
                 flist = []
                 with open(goodfile) as f:
@@ -743,17 +744,16 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                     flist.append(line.strip()+'.cont.auto.fits.png')
             except:
                 raise ValueError("file {} cannot be open".format(goodfile))
-        else:
-            raise ValueError("Wrong file type of filelist!")
-        for item in flist:
-            all_good_files.append(os.path.join(imagedir, item))
+            for item in flist:
+                all_good_files.append(os.path.join(imagedir, item))
 
     if badfile:
         if debug:
             print('badfile', badfile)
         if not os.path.isfile(badfile):
-            raise ValueError("{} is not found".format(badfile))
-        if isinstance(badfile, str):
+            badfile = None
+            # raise ValueError("{} is not found".format(badfile))
+        elif isinstance(badfile, str):
             try:
                 flist = []
                 with open(badfile) as f:
@@ -762,10 +762,8 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                     flist.append(line.strip()+'.cont.auto.fits.png')
             except:
                 raise ValueError("file {} cannot be open".format(badfile))
-        else:
-            raise ValueError("Wrong file type of filelist!")
-        for item in flist:
-            all_bad_files.append(os.path.join(imagedir, item))
+            for item in flist:
+                all_bad_files.append(os.path.join(imagedir, item))
 
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
@@ -858,7 +856,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
         concatvis = os.path.join(tmpdir, basename+'_combine.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
-        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont.{}'.format(uvtaper), clean=clean, niter=niter, pblimit=pblimit, 
+        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont.{}'.format(uvtaper[0]), clean=clean, niter=niter, pblimit=pblimit, 
                       fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, **kwargs)
 
     if only_fits:
