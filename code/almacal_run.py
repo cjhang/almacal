@@ -855,7 +855,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
     if debug:
         print(vis)
     if concatvis is None:
-        concatvis = os.path.join(tmpdir, basename+'combine.ms')
+        concatvis = os.path.join(tmpdir, basename+'_combine.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
         make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont', clean=clean, niter=niter, pblimit=pblimit, 
@@ -1484,6 +1484,35 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                     if make_image:
                             make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
                                             tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
+
+def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], make_image=False, outdir='./', 
+                           debug=False, only_fits=True, update=True, suffix='good_imgs.txt.update', **kwargs):
+    """generate the good image with updated list
+
+    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./', only_fits=True) 
+    """
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    if objlist is None:
+        objlist = []
+        for obj in os.listdir(imgs_dir):
+            if obj_match.match(obj):
+                objlist.append(obj)
+    for obj in objlist:
+        print(obj)
+        obj_outdir = os.path.join(outdir, obj)
+        if not os.path.isdir(obj_dir):
+            os.system('mkdir -p {}'.format(obj_outdir))
+        for band in bands:
+            good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, suffix))
+            concatvis_name = "{}_{}_combine.ms".format(obj, band)
+            if os.path.isfile(good_image_file):
+                good_image_fitsfile = os.path.join(obj_outdir, concatvis_name+'.fits')
+                if os.path.isfile(good_image_fitsfile):
+                    continue
+                else:
+                    combined_vis = gen_filenames(listfile=good_image_file)
+                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=obj_outdir, 
+                                    tmpdir=obj_outdir, only_fits=only_fits, **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
