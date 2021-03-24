@@ -844,7 +844,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         print("Error in matching the obs name for filname: {}".format(item))
                         continue
 
-def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./', concatvis=None, debug=False, only_fits=False,
+def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, only_fits=False,
                     niter=100, clean=True, pblimit=-0.01, fov_scale=2.0, uvtaper_list=[[],['0.3arcsec'], ['0.8arcsec']], **kwargs):
     """make the final good image with all the good observations
     """
@@ -858,15 +858,17 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', tmpdir='./
     if debug:
         print(vis)
     if concatvis is None:
-        concatvis = os.path.join(tmpdir, basename+'_combine.ms')
+        concatvis = os.path.join(outdir, basename+'_combine.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
         if uvtaper == []:
             uvtaper_name = ''
         else:
             uvtaper_name = '.'+uvtaper[0]
-        make_cont_img(vis=concatvis, myimagename=concatvis+'.auto.cont{}'.format(uvtaper_name), clean=clean, niter=niter, pblimit=pblimit, 
-                      fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, **kwargs)
+        myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
+        make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
+                      pblimit=pblimit, fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, 
+                      **kwargs)
 
     if only_fits:
         for i in glob.glob(concatvis+'.*.image'):
@@ -1545,8 +1547,7 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
                     make_good_image(combined_vis, concatvis=concatvis_name, basedir=os.path.join(basedir, obj), 
-                                    outdir=obj_outdir, tmpdir=obj_outdir, only_fits=only_fits, 
-                                    **kwargs)
+                                    outdir=obj_outdir, only_fits=only_fits, **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')

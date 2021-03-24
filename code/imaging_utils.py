@@ -139,6 +139,8 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
             basename = os.path.basename(vis)
     if myimagename is None:
         myimagename = os.path.join(outdir, basename + suffix)
+    # else:
+        # myimagename = o.path.join(outdir, myimagename)
     rmtables(tablenames=myimagename + '.*')
 
     print("mean frequecy:", freq_mean)
