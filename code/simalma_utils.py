@@ -167,7 +167,7 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         rmtables(clname_fullpath)
         os.system('rm -rf {}'.format(savefile_fullpath))
         # generate random sources
-        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
+        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, flux=flux, 
                                         clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file, **kwargs)
         ft(vis=vis, complist=mycomplist)
         uvsub(vis=vis, reverse=True)
@@ -227,7 +227,7 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
             print(mydirection)
             print(myfreq)
         savefile_fullpath = os.path.join(outdir, basename+'.txt')
-        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, prune=True, flux=flux, 
+        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, flux=flux, 
                                         savefile=savefile_fullpath, known_file=known_file)
         # print('mycomplist', mycomplist)
         mycomplist_pixels = []
@@ -391,7 +391,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
 
 def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10, 
                     snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
-                    uvtaper_scale=None, mode='uv', inverse_image=False, 
+                    uvtaper_scale=None, mode='image', inverse_image=False, 
                     debug=False, **kwargs):
     """generate the fake images with man-made sources
 
@@ -419,13 +419,22 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
         print('radius', 0.5*fov)
     # read information from image files
     imagefile_base, imagefile_extension = os.path.splitext(imagefile)
-    if imagefile_extension == 'fits':
+    print(imagefile_base, imagefile_extension)
+    if False:#imagefile_extension == 'fits':
         fitsimage = imagefile
         hdu = fits.open(fitsimage)
+        header = hdu[0].header
         data = np.ma.masked_invalid(hdu[0].data)
-        rms = np.ma.std(data)
-        sensitivity = rms
-        flux_base = rms
+        pixel_scale = 1/np.abs(header['CDELT1'])
+        fwhm = header['BMAJ']*3600*u.arcsec
+        fwhm_pixel = header['BMAJ']*pixel_scale
+        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        ratio = header['BMIN'] / header['BMAJ']
+        theta = header['BPA']
+        beamsize = np.pi*a*b/(4*np.log(2))
+        gaussian_norm = 2*np.pi*a*b/2.35482**2
+        sensitivity = np.ma.std(data) * 1000 # in mJy/pixel
+        # flux_base = rms
     else:
         im_head = imhead(imagefile)
         im_beam = im_head['restoringbeam']
@@ -433,23 +442,18 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
         im_info = imstat(imagefile)
         # beamsize = np.pi*a*b/(4*np.log(2))
         beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
-        rms = im_info['rms'] * 1000 # in mJy
-        sensitivity = rms 
-        flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+        gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
+        sensitivity = im_info['rms'] * 1000 # in mJy/pixel
+        # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
         if mode == 'image':
             fitsimage = imagefile+'.fits'
             exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
-    # else:
-        # if mode == 'image':
-            # raise ValueError("image must be given!")
-        # # sensitivity = 1000. * calculate_sensitivity(vistmp)
-        # sensitivity = 1000.*np.array(calculate_sensitivity(vistmp, full_pwv=True))
-        # # sensitivity = 1000 * calculate_sensitivity(i*5*5 # convert into peak value of gaussian, assuming 5*5pixel beam
-        # flux_base = sensitivity # * (2*np.pi)
-    # print(sensitivity, flux_base)
-    # return 0
-    # snr_old = np.arange(1,20,0.5)
-    # snr_old2 = np.arange(1,20,0.1)
+    # print('sensitivity', sensitivity)
+    # print('gaussian_norm', gaussian_norm)
+    # print('beamsize', beamsize)
+
+    # if snr_mode == 'peak':
+    flux_base = sensitivity #* gaussian_norm
     if len(snr)>3:
         # the old method, which will be deprecated in the near future
         for s in snr:
