@@ -52,16 +52,15 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     skycoord = SkyCoord(direction[5:])
     theta = 2*np.pi*np.random.uniform(0, 1, n)
     rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-    print('flux', flux)
     if isinstance(flux, (list, tuple, np.ndarray)):
         flux_sampling = sampler(scaler, n)
         flux_input = flux_sampling * np.diff(flux) + flux[0]
     elif isinstance(flux, (int, float)):
         flux_input = np.full(n, flux)
     if debug:
+        print('flux', flux)
         print('fluxunit', fluxunit)
 
-    print('flux_input',flux_input)
     delta_ra = rho * np.cos(theta)/(np.cos(skycoord.dec).value)
     delta_dec = rho * np.sin(theta)
 
@@ -228,7 +227,7 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
             print(myfreq)
         savefile_fullpath = os.path.join(outdir, basename+'.txt')
         mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, flux=flux, 
-                                        savefile=savefile_fullpath, known_file=known_file)
+                                        savefile=savefile_fullpath, known_file=known_file, **kwargs)
         # print('mycomplist', mycomplist)
         mycomplist_pixels = []
         blank_image = np.zeros((ny, nx))
@@ -479,11 +478,11 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
         for i in range(repeat):
             basename_new = basename+'.run{}'.format(i)
             if mode == 'uv':
-                add_random_sources(vis=vistmp, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
+                add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                    basename=basename_new, flux=flux, known_file=known_file, 
                                    inverse_image=inverse_image, **kwargs)
             elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=20, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
+                add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                    basename=basename_new, flux=flux, known_file=known_file, inverse_image=inverse_image,
                                    **kwargs)
         # clear temperary files

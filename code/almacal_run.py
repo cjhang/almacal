@@ -999,7 +999,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
 
 def calculate_completeness2(objfolder, vis=None, baseimage=None, n=20, repeat=10, 
         known_file=None, obj=None, band=None, basename=None, savefile=None, 
-        threshold=5.0, plot=False, snr_mode='peak', **kwargs):
+        threshold=5.0, plot=False, snr_mode='integrated', **kwargs):
     """simulation the completeness of source finding algorithm
 
     mode:
@@ -1166,8 +1166,8 @@ def plot_completeness(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
         aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
         gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
-        aperture_mean.append([np.median(aperture_boosting), np.std(aperture_boosting)])
-        gaussian_mean.append([np.median(gaussian_boosting), np.std(gaussian_boosting)])
+        aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
+        gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
 
 
         # calculate the completeness
