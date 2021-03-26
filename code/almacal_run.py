@@ -732,38 +732,25 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     if goodfile:
         if debug:
             print('goodfile', goodfile)
-        # if not os.path.isfile(goodfile):
-            # # raise ValueError("{} is not found".format(goodfile))
-            # continue
         if isinstance(goodfile, str):
             try:
                 flist = []
                 with open(goodfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    flist.append(line.strip()+'.cont.auto.fits.png')
-            # except:
-                # raise ValueError("file {} cannot be open".format(goodfile))
-                for item in flist:
-                    all_good_files.append(os.path.join(imagedir, item))
-
+                    pngfile = line.strip()+'.cont.auto.fits.png'
+                    all_bad_files.append(os.path.join(imagedir, pngfile))
+    
     if badfile:
         if debug:
             print('badfile', badfile)
-        # if not os.path.isfile(badfile):
-            # badfile = None
-            # # raise ValueError("{} is not found".format(badfile))
         if isinstance(badfile, str):
             try:
-                flist = []
                 with open(badfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    flist.append(line.strip()+'.cont.auto.fits.png')
-            # except:
-                # raise ValueError("file {} cannot be open".format(badfile))
-                for item in flist:
-                    all_bad_files.append(os.path.join(imagedir, item))
+                    pngfile = line.strip()+'.cont.auto.fits.png'
+                    all_bad_files.append(os.path.join(imagedir, pngfile))
 
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
