@@ -732,38 +732,38 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     if goodfile:
         if debug:
             print('goodfile', goodfile)
-        if not os.path.isfile(goodfile):
-            # raise ValueError("{} is not found".format(goodfile))
-            goodfile = None
-        elif isinstance(goodfile, str):
+        # if not os.path.isfile(goodfile):
+            # # raise ValueError("{} is not found".format(goodfile))
+            # continue
+        if isinstance(goodfile, str):
             try:
                 flist = []
                 with open(goodfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
                     flist.append(line.strip()+'.cont.auto.fits.png')
-            except:
-                raise ValueError("file {} cannot be open".format(goodfile))
-            for item in flist:
-                all_good_files.append(os.path.join(imagedir, item))
+            # except:
+                # raise ValueError("file {} cannot be open".format(goodfile))
+                for item in flist:
+                    all_good_files.append(os.path.join(imagedir, item))
 
     if badfile:
         if debug:
             print('badfile', badfile)
-        if not os.path.isfile(badfile):
-            badfile = None
-            # raise ValueError("{} is not found".format(badfile))
-        elif isinstance(badfile, str):
+        # if not os.path.isfile(badfile):
+            # badfile = None
+            # # raise ValueError("{} is not found".format(badfile))
+        if isinstance(badfile, str):
             try:
                 flist = []
                 with open(badfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
                     flist.append(line.strip()+'.cont.auto.fits.png')
-            except:
-                raise ValueError("file {} cannot be open".format(badfile))
-            for item in flist:
-                all_bad_files.append(os.path.join(imagedir, item))
+            # except:
+                # raise ValueError("file {} cannot be open".format(badfile))
+                for item in flist:
+                    all_bad_files.append(os.path.join(imagedir, item))
 
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
@@ -833,8 +833,8 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     else:
         obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
         for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
-            if f is None:
-                continue
+            # if f is None:
+                # continue
             with open(f+'.updated', 'w+') as f:
                 for item in list_updated[desc]:
                     try:
@@ -1461,10 +1461,11 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
             goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
             badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
             if os.path.isfile(goodfile+'.updated'):
-                print('skip {} of {}'.format(band, obj))
+                print('{} of {} already done'.format(band, obj))
                 continue
             else:
                 print(obj_band_imagedir)
+                print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
