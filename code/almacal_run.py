@@ -787,6 +787,11 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
             try:
                 find_zero = False
                 idx_input = input()
+                if idx_input == -1:
+                    print("Previous selection: {}".format(all_select[-1]))
+                    print("Selection of this page:")
+                    idx_input = input()
+
                 if idx_input == 0:
                     print("Currently at {}/{}".format(i, len(all_files)))
                     plt.close('all')
