@@ -739,7 +739,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
                     pngfile = line.strip()+'.cont.auto.fits.png'
-                    all_bad_files.append(os.path.join(imagedir, pngfile))
+                    all_good_files.append(os.path.join(imagedir, pngfile))
             except:
                 print("Failed in open {}".format(goodfile))
                 pass
