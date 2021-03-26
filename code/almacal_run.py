@@ -740,6 +740,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                 for line in filelist_lines:
                     pngfile = line.strip()+'.cont.auto.fits.png'
                     all_bad_files.append(os.path.join(imagedir, pngfile))
+            except:
+                print("Failed in open {}".format(goodfile))
+                pass
     
     if badfile:
         if debug:
@@ -751,6 +754,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                 for line in filelist_lines:
                     pngfile = line.strip()+'.cont.auto.fits.png'
                     all_bad_files.append(os.path.join(imagedir, pngfile))
+            except:
+                print("Failed in open {}".format(badfile))
+                pass
 
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
