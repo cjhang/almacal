@@ -843,7 +843,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         continue
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, only_fits=False,
-                    niter=100, clean=True, pblimit=-0.01, fov_scale=2.0, uvtaper_list=[[],['0.3arcsec'], ['0.8arcsec']], **kwargs):
+                    niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, uvtaper_list=[[],['0.3arcsec'], ['0.8arcsec']], **kwargs):
     """make the final good image with all the good observations
     """
     if len(vis) < 1:
