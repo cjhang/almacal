@@ -1537,9 +1537,11 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
         for band in bands:
             good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, suffix))
             concatvis_name = "{}_{}_combine.ms".format(obj, band)
-            print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis_name))
+            if debug:
+                print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis_name))
             if os.path.isfile(good_image_file):
-                good_image_fitsfile = os.path.join(obj_outdir, concatvis_name+'.fits')
+                good_image_fitsfile = os.path.join(obj_outdir, concatvis_name+'.auto.cont.image.fits')
+                # print('good_image_fitsfile: {}'.format(good_image_fitsfile))
                 if os.path.isfile(good_image_fitsfile):
                     print("Skip {} of {}".format(band,obj))
                     continue
