@@ -1529,10 +1529,10 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
             if obj_match.match(obj):
                 objlist.append(obj)
     for obj in objlist:
-        print(obj)
         obj_outdir = os.path.join(outdir, obj)
+        print(obj)
+        print(obj_outdir)
         if not os.path.isdir(obj_outdir):
-            print(obj_outdir)
             os.system('mkdir -p {}'.format(obj_outdir))
         for band in bands:
             good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, suffix))
@@ -1547,7 +1547,7 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis_name, basedir=os.path.join(basedir, obj), 
+                    make_good_image(combined_vis, basename=concatvis_name, basedir=os.path.join(basedir, obj), 
                                     outdir=obj_outdir, only_fits=only_fits, **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
