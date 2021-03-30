@@ -29,40 +29,66 @@ def gkern(bmin=1., bmaj=1, theta=0, size=21,):
     
     return kernel_rot / np.sum(kernel_rot)
 
-def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
+def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
         prune_threshold=3, debug=False, savefile=None, clname=None,
-        flux=None, fluxunit='mJy', known_file=None, known_data=None,
-        sampler=np.random.power, scaler=1):
+        fluxrange=1, fluxunit='mJy', known_file=None, known_data=None,
+        sampler=np.random.power, scaler=1, budget=None):
     """This function used to add random source around a given direction
         
     This is a proximate solution, which treat the field of view as a plane.
     Then calculate the longtitude and latitue using sin and cos functions.
 
     Args:
-    direction: the pointing direction
-    n: the number of points
-    radius: the largest radius that the points can be put, in arcsec
-    prune: remove close pairs, make it easier for pointsource testing
-    savefile: save the coordination files
-    clname: the component list filename
-
-    direction: 'J2000 13h03m49.215900s -55d40m31.60870s'
+        direction: the pointing direction
+        n: the number of points
+        radius: the largest radius that the points can be put, in arcsec
+        prune: remove close pairs, make it easier for pointsource testing
+        savefile: save the coordination files
+        clname: the component list filename
+        budget: The total flux density, conflict with flux
+        
+    Example:
+        direction = 'J2000 13h03m49.215900s -55d40m31.60870s'
    """
     # generate a random radius
     skycoord = SkyCoord(direction[5:])
-    theta = 2*np.pi*np.random.uniform(0, 1, n)
-    rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-    if isinstance(flux, (list, tuple, np.ndarray)):
+    if isinstance(fluxrange, (int, float)):
+        fluxrange = [fluxrange, fluxrange]
+    if n:
+        theta = 2*np.pi*np.random.uniform(0, 1, n)
+        rho = radius * np.sqrt(np.random.uniform(0, 1, n))
         flux_sampling = sampler(scaler, n)
-        flux_input = flux_sampling * np.diff(flux) + flux[0]
-    elif isinstance(flux, (int, float)):
-        flux_input = np.full(n, flux)
-    if debug:
-        print('flux', flux)
-        print('fluxunit', fluxunit)
+        flux_input = flux_sampling * np.diff(fluxrange) + fluxrange[0]
+        if debug:
+            print('flux range {} [{}]'.format(fluxrange, fluxunit))
+    elif budget:
+        theta = []
+        rho = []
+        flux_input = []
+        total_input = 0 # in mJy
+        while True:
+            theta_one = 2*np.pi*np.random.uniform(0, 1)
+            rho_one = radius * np.sqrt(np.random.uniform(0, 1))
+            flux_sampling = sampler(scaler, 1)
+            flux_input_one = flux_sampling * np.diff(fluxrange) + fluxrange[0]
+            
+            total_input += flux_input_one
+            if total_input < budget:
+                total_input += flux_input_one
+                theta.append(theta_one)
+                rho.append(rho_one)
+                flux_input.append(flux_input_one)
+            else:
+                break
+        theta, rho, flux_input = np.array(theta), np.array(rho), np.array(flux_input)
+        if debug:
+            print('flux range {} [{}]'.format(fluxrange, fluxunit))
+            print('flux input {}, budget: {}'.format(total_input, budget))
+    else:
+        raise ValueError("You need to specify n or budget!")
 
-    delta_ra = rho * np.cos(theta)/(np.cos(skycoord.dec).value)
-    delta_dec = rho * np.sin(theta)
+    delta_ra = np.array(rho) * np.cos(theta)/(np.cos(skycoord.dec).value)
+    delta_dec = np.array(rho) * np.sin(theta)
 
     if prune:
         selected_ra = [delta_ra[0],] 
@@ -109,7 +135,6 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
         ra_random = selected_after_known_ra
         dec_random = selected_after_known_dec
 
-
     if savefile:
         with open(savefile, 'w+') as sfile:
             sfile.write('# ra[arcsec]  dec[arcsec]  flux[{}]\n'.format(fluxunit))
@@ -134,11 +159,13 @@ def make_random_source(direction, freq=None, n=1, radius=1, prune=False,
     else:
         return [ra_random, dec_random, flux_input]
 
-def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
+def add_random_sources(vis=None, fitsimage=None, n=None, radius=None, outdir='./', make_image=True, 
         basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
-        inverse_image=False, **kwargs):
+        inverse_image=False, budget=None, **kwargs):
     """
-    radius : in arcsec
+    Args:
+        radius : in arcsec
+        budget: can be a single value, or a list, [mean, low_boundary, high_boundary]
 
     Notes:
         1. To make the reading and writing more efficiently, the model will be added directly
@@ -222,12 +249,13 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         refer = 'J'+str(int(header['EQUINOX']))
         mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], unit="deg").to_string('hmsdms')
         myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
+
         if debug:
             print(mydirection)
             print(myfreq)
         savefile_fullpath = os.path.join(outdir, basename+'.txt')
         mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, flux=flux, 
-                                        savefile=savefile_fullpath, known_file=known_file, **kwargs)
+                                        savefile=savefile_fullpath, known_file=known_file, budget=budget, **kwargs)
         # print('mycomplist', mycomplist)
         mycomplist_pixels = []
         blank_image = np.zeros((ny, nx))
@@ -487,6 +515,25 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
                                    **kwargs)
         # clear temperary files
         rmtables(vistmp)
+    elif snr is None:
+        # Limitation from extragalactic background
+        EBL = 14 # 14-18Jy/deg2
+        radius = 0.5*fov
+        budget_mean = (np.pi*(radius*u.arcsec)**2 * 14*u.Jy/u.deg**2).to(u.mJy).value
+        budget_sigma = 0.5
+        for i in range(repeat):
+            # generate the budget for each run
+            budget = budget_sigma * np.random.randn() + budget_mean
+
+            basename_new = basename+'.run{}'.format(i)
+            if mode == 'uv':
+                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, **kwargs)
+            elif mode == 'image':
+                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, **kwargs)
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
