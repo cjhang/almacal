@@ -856,7 +856,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     if debug:
         print(vis)
     if concatvis is None:
-        concatvis = os.path.join(outdir, basename+'_combine.ms')
+        concatvis = os.path.join(outdir, basename+'.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
         if uvtaper == []:
