@@ -18,19 +18,6 @@ import matplotlib.pyplot as plt
 from cleanhelper import cleanhelper
 import analysisUtils as au
 
-def efficient_imsize(imsize):
-    """This function try to optimize the imsize that can be divided by 2,3,5,7 only
-    Which is much faster for casa
-    """
-    while True:
-        # if ((imsize%3 == 0) | (imsize%5 == 0) | (imsize%7 == 0)) & (imsize%2 == 0):
-        if (imsize%5 == 0) | (imsize%2 == 0):
-            return imsize
-        else:
-            # print(imsize)
-            imsize += 1
-            continue
-        
 def calculate_sensitivity(vis, full_pwv=False, debug=True):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
@@ -58,7 +45,8 @@ def calculate_sensitivity(vis, full_pwv=False, debug=True):
         pwv_list = [0.472, 0.658, 0.913, 1.262, 1.796, 2.748, 5.186]
         sensitivity = []
         for pwv in pwv_list:
-            sensitivity.append(au.sensitivity(central_freq, band_width, '60s', pwv=pwv, antennalist=vis+'.cfg'))
+            sensitivity.append(au.sensitivity(central_freq, band_width, '60s', pwv=pwv, 
+                               antennalist=vis+'.cfg'))
     else:
         pwv = 1.262
         sensitivity = au.sensitivity(central_freq, band_width, '60s', pwv=pwv, antennalist=vis+'.cfg')
@@ -94,11 +82,6 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     if isinstance(vis, str):
         baselines_list = au.getBaselineLengths(vis, returnLengthsOnly=True)
         
-        # # another way is to use getBaselineStats directly
-        # baseline_stat = au.getBaselineStats(vis)
-        # baseline_max = baseline_stat[2] * u.m
-        # baseline_90 = baseline_stat[-1] * u.m
-        # baseline_typical = baseline_90
     baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
 
     # read the antenna_diameter

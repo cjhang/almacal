@@ -86,6 +86,9 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
             print('flux input {}, budget: {}'.format(total_input, budget))
     else:
         raise ValueError("You need to specify n or budget!")
+    plt.hist(flux_input)
+    plt.show()
+    return
 
     delta_ra = np.array(rho) * np.cos(theta)/(np.cos(skycoord.dec).value)
     delta_dec = np.array(rho) * np.sin(theta)
@@ -159,7 +162,7 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
     else:
         return [ra_random, dec_random, flux_input]
 
-def add_random_sources(vis=None, fitsimage=None, n=None, radius=None, outdir='./', make_image=True, 
+def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
         basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
         inverse_image=False, budget=None, **kwargs):
     """
@@ -532,7 +535,7 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
                         inverse_image=inverse_image, **kwargs)
             elif mode == 'image':
                 add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=None, known_file=known_file, 
                         inverse_image=inverse_image, **kwargs)
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 

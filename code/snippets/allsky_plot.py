@@ -4,6 +4,8 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
+plt.style.use('dark_background')
+
 almacal_info_file = os.path.join(os.path.expanduser('~'), 
         'Documents/projects/almacal/data/almacal_timeOnSource.txt')
 
@@ -55,6 +57,7 @@ for band in bands:
 
     ax = fig.add_subplot(122)
     im = plt.hist(depth_valid, bins=20)
+    plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
     ax.set_xlabel(r'$\log (t_{\rm obs}{\rm [Minutes]})$')
     ax.set_ylabel('Counts')
 
