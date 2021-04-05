@@ -1466,11 +1466,10 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
-                           debug=False, only_fits=False, update=True, suffix='_good_imgs.txt', **kwargs):
+def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', **kwargs):
     """generate the good image list for all the calibrators
 
-    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./', only_fits=True) 
+    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
     """
     if imgs_dir:
         obj_match = re.compile('^J\d*[+-]\d*$')
@@ -1489,33 +1488,13 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                 else:
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
                 for band in os.listdir(os.path.join(imgs_dir, obj)):
-                    if update:
-                        combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
-                        good_image_file = os.path.join(outdir, obj, obj+'_'+band+suffix)
-                        if os.path.isdir(combined_file):
-                            print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                            make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-                        elif os.path.isfile(good_image_file):
-                            print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                            good_imgs = []
-                            with open(good_images_file) as f:
-                                good_imags_lines = f.readlines()
-                            for gi in good_imags_lines:
-                                good_imgs.append(gi.strip())
-                            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-
                     obj_band_path = os.path.join(imgs_dir, obj, band)
-                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
-                                                        basename=obj+'_'+band, debug=debug, **kwargs)
+                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj),
+                            plot=True, savefig=True, basename=obj+'_'+band, debug=debug, **kwargs)
                     if debug: 
                         print(good_imgs)
-                    if make_image:
-                            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
-def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
+def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
                            debug=False, only_fits=True, update=True, suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
