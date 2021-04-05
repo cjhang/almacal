@@ -1466,7 +1466,7 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', **kwargs):
+def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', update=False, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
@@ -1480,12 +1480,7 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
                         continue
                     print(obj)
                 obj_dir = os.path.join(outdir, obj)
-                if os.path.isdir(obj_dir):
-                    if len(os.listdir(obj_dir)) > 0:
-                        if debug:
-                            print("Skip {}".format(obj))
-                        continue
-                else:
+                if not os.path.isdir(obj_dir):
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
                 for band in os.listdir(os.path.join(imgs_dir, obj)):
                     obj_band_path = os.path.join(imgs_dir, obj, band)
