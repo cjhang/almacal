@@ -761,6 +761,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
         print(">>>>>>>>>>> {} images".format(desc))
+        is_continue = input("Continue? File list has changed!\n")
+        if is_continue == 0:
+            break
         total_num = len(all_files)
         select_num = 0
         print("Find {} files".format(total_num))
