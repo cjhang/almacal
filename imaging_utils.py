@@ -16,7 +16,19 @@ from astropy import units as u
 from astropy import constants as const
 import matplotlib.pyplot as plt 
 from cleanhelper import cleanhelper
-import analysisUtils as au
+
+# tbtool
+try:
+    # for casa6
+    from casatool import table as tbtool
+except:
+    pass
+try: 
+    import analysisUtils as au
+    has_analysisUtils = True
+except:
+    has_analysisUtils = False
+
 
 def calculate_sensitivity(vis, full_pwv=False, debug=True):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
@@ -53,11 +65,33 @@ def calculate_sensitivity(vis, full_pwv=False, debug=True):
     os.system('rm -f {}.cfg'.format(vis))
     return sensitivity
 
+def get_baselines(vis=None,):
+    """calculate the baselines
+    """
+    tb = tbtool()
+    tb.open(os.path.join(vis, 'ANTENNA'))
+    positions = np.transpose(tb.getcol('POSITION'))
+    #stations = tb.getcol('STATION')
+    n_ant = len(positions)
+    lengths = []
+    for i in range(n_ant):
+        for j in range(i+1, n_ant):
+            x = positions[i][0]-positions[j][0]
+            y = positions[i][1]-positions[j][1]
+            z = positions[i][2]-positions[j][2]
+            print([i,j], x,y,z)
+            lengths.append((x**2 + y**2 + z**2)**0.5)
+    return lengths
+
+
+
 def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=90,
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
-                  cellsize_scale=1, datacolumn="corrected", specmode='mfs', outframe="LSRK", weighting='natural',
-                  niter=0, interactive=False, usemask='auto-multithresh', only_fits=False,
-                  suffix='', uvtaper_scale=None, debug=False, threshold=None, auto_threshold=5.0, **kwargs):
+                  myuvtaper=None, uvtaper=[],
+                  cellsize_scale=1, datacolumn="corrected", specmode='mfs', outframe="LSRK", 
+                  weighting='natural', niter=0, interactive=False, usemask='auto-multithresh', 
+                  threshold=None, auto_threshold=5.0, only_fits=False, suffix='', 
+                  uvtaper_scale=None, debug=False, **kwargs):
 
     """This function is used to make the continuum image
     
@@ -103,7 +137,13 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
 
     # calcuate the cell size
     if mycell is None:
-        cellsize = 206265 / (baseline_typical / wavelength).decompose() / 6
+        if myuvtaper:
+            myuvtaper_value = u.Unit(myuvtaper).to(u.arcsec)
+            uvtaper = str(myuvtaper_value)+'arcsec'
+            cellsize = np.sqrt((206265 / (baseline_typical / wavelength).decompose())**2 
+                               + myuvtaper_value**2)/ 6.0
+        else:
+            cellsize = 206265 / (baseline_typical / wavelength).decompose()/ 6.0
         mycell = "{:.4f}arcsec".format(cellsize)
     # calculate image size 
     if myimsize is None:
@@ -113,7 +153,11 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     myrestfreq = str(freq_mean)+'GHz'
     # calcuate threshold
     if not threshold:
-        threshold = "{}mJy".format(1000.0*auto_threshold*calculate_sensitivity(vis))
+        if has_analysisUtils:
+            threshold = "{}mJy".format(1000.0*auto_threshold*calculate_sensitivity(vis))
+        else:
+            print("Warning: no analysisUtils found, set threshold to 0.0!")
+            threshold = 0.0
 
     if basename is None:
         if isinstance(vis, list):
@@ -124,7 +168,6 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
         myimagename = os.path.join(outdir, basename + suffix)
     # else:
         # myimagename = o.path.join(outdir, myimagename)
-    rmtables(tablenames=myimagename + '.*')
 
     print("mean frequecy:", freq_mean)
     print("maximum baseline:", baseline_typical)
@@ -137,7 +180,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
             concat(vis=vis, concatvis=vis_combined)
             vis = vis_combined
     if clean:
-        rmtables('{}.fits'.format(myimagename))
+        rmtables('{}.*'.format(myimagename))
         os.system('rm -rf {}.fits'.format(myimagename))
         tclean(vis=vis,
                imagename=myimagename,
@@ -148,6 +191,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                specmode=specmode, 
                outframe=outframe, 
                weighting=weighting,
+               uvtaper=uvtaper,
                niter=niter, 
                threshold=threshold,
                interactive=interactive, 
@@ -155,7 +199,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                **kwargs)
 
         if uvtaper_scale:
-            if isinstance(uvtaper, (int, float)):
+            if isinstance(uvtaper_scale, (int, float)):
                 uvtaper_scale = [uvtaper_scale,]
             for uvt_scale in uvtaper_scale:
                 uvt_scale = uvt_scale*1.

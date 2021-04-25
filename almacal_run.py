@@ -868,7 +868,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             uvtaper_name = '.'+uvtaper[0]
         myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
         make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
-                      pblimit=pblimit, fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, 
+                      pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
                       **kwargs)
 
     if only_fits:
