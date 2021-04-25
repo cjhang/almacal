@@ -1,8 +1,12 @@
 import os
 
-home = os.path.expanduser('~')
+if os.environ['ALMACAL_NUMBERCOUNTS_HOME']:
+    root_path = os.environ['ALMACAL_NUMBERCOUNTS_HOME']
+else:
+    root_path = os.path.join(os.path.expanduser('~'), 'projects/almacal/number_counts')
+print("Project path: {}".format(root_path))
 
-execfile(home+'/Documents/projects/almacal/code/imaging_utils.py')
-execfile(home+'/Documents/projects/almacal/code/simalma_utils.py')
-execfile(home+'/Documents/projects/almacal/code/readms.py')
-execfile(home+'/Documents/projects/almacal/code/almacal_run.py')
+execfile(root_path+'/code/imaging_utils.py')
+execfile(root_path+'/code/simalma_utils.py')
+execfile(root_path+'/code/readms.py')
+execfile(root_path+'/code/almacal_run.py')
