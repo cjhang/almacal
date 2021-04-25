@@ -1,10 +1,13 @@
 import os
+import sys
 
 if os.environ['ALMACAL_NUMBERCOUNTS_HOME']:
     root_path = os.environ['ALMACAL_NUMBERCOUNTS_HOME']
 else:
     root_path = os.path.join(os.path.expanduser('~'), 'projects/almacal/number_counts')
 print("Project path: {}".format(root_path))
+
+sys.path.append(root_path+'/code')
 
 execfile(root_path+'/code/imaging_utils.py')
 execfile(root_path+'/code/simalma_utils.py')
