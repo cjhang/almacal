@@ -1,7 +1,7 @@
 import os
 import sys
 
-if os.environ['ALMACAL_NUMBERCOUNTS_HOME']:
+if 'ALMACAL_NUMBERCOUNTS_HOME' in os.environ.keys():
     root_path = os.environ['ALMACAL_NUMBERCOUNTS_HOME']
 else:
     root_path = os.path.join(os.path.expanduser('~'), 'projects/almacal/number_counts')
