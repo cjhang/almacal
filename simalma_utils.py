@@ -116,6 +116,9 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
             print(flux_input)
     else:
         raise ValueError("You need to specify n or budget!")
+    plt.hist(flux_input)
+    plt.show()
+    return
 
     delta_ra = np.array(rho) * np.cos(theta)/(np.cos(skycoord.dec).value)
     delta_dec = np.array(rho) * np.sin(theta)
@@ -189,8 +192,8 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
     else:
         return [ra_random, dec_random, flux_input]
 
-def add_random_sources(vis=None, fitsimage=None, n=None, radius=None, outdir='./', make_image=True, 
-        basename=None, debug=False, fluxrange=None, known_file=None, uvtaper_scale=None,
+def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
+        basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
         inverse_image=False, budget=None, **kwargs):
     """
     Args:
@@ -565,8 +568,27 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
                 add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                    basename=basename_new, flux=flux, known_file=known_file, inverse_image=inverse_image,
                                    debug=debug, **kwargs)
-    # clear temperary files
-    rmtables(vistmp)
+        # clear temperary files
+        rmtables(vistmp)
+    elif snr is None:
+        # Limitation from extragalactic background
+        EBL = 14 # 14-18Jy/deg2
+        radius = 0.5*fov
+        budget_mean = (np.pi*(radius*u.arcsec)**2 * 14*u.Jy/u.deg**2).to(u.mJy).value
+        budget_sigma = 0.5
+        for i in range(repeat):
+            # generate the budget for each run
+            budget = budget_sigma * np.random.randn() + budget_mean
+
+            basename_new = basename+'.run{}'.format(i)
+            if mode == 'uv':
+                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, **kwargs)
+            elif mode == 'image':
+                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=None, known_file=known_file, 
+                        inverse_image=inverse_image, **kwargs)
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,

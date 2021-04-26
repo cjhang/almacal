@@ -761,6 +761,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
         print(">>>>>>>>>>> {} images".format(desc))
+        is_continue = int(raw_input("Continue? File list has changed! \n ") or '1')
+        if is_continue == 0:
+            break
         total_num = len(all_files)
         select_num = 0
         print("Find {} files".format(total_num))
@@ -843,7 +846,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         continue
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, only_fits=False,
-                    niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, uvtaper_list=[[],['0.3arcsec'], ['0.8arcsec']], **kwargs):
+                    niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], **kwargs):
     """make the final good image with all the good observations
     """
     if len(vis) < 1:
@@ -856,7 +859,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     if debug:
         print(vis)
     if concatvis is None:
-        concatvis = os.path.join(outdir, basename+'_combine.ms')
+        concatvis = os.path.join(outdir, basename+'.ms')
     concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
         if uvtaper == []:
@@ -865,7 +868,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             uvtaper_name = '.'+uvtaper[0]
         myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
         make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
-                      pblimit=pblimit, fov_scale=fov_scale, uvtaper=uvtaper, debug=debug, 
+                      pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
                       **kwargs)
 
     if only_fits:
@@ -1469,11 +1472,10 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, basedir=None, make_image=False, outdir='./', 
-                           debug=False, only_fits=False, update=True, suffix='_good_imgs.txt', **kwargs):
+def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', update=False, **kwargs):
     """generate the good image list for all the calibrators
 
-    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./', only_fits=True) 
+    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
     """
     if imgs_dir:
         obj_match = re.compile('^J\d*[+-]\d*$')
@@ -1484,41 +1486,16 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, good_imgs_file=None, bas
                         continue
                     print(obj)
                 obj_dir = os.path.join(outdir, obj)
-                if os.path.isdir(obj_dir):
-                    if len(os.listdir(obj_dir)) > 0:
-                        if debug:
-                            print("Skip {}".format(obj))
-                        continue
-                else:
+                if not os.path.isdir(obj_dir):
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
                 for band in os.listdir(os.path.join(imgs_dir, obj)):
-                    if update:
-                        combined_file = os.path.join(outdir, obj, obj+'_'+band+'_combine.ms')
-                        good_image_file = os.path.join(outdir, obj, obj+'_'+band+suffix)
-                        if os.path.isdir(combined_file):
-                            print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                            make_good_image(combined_file, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-                        elif os.path.isfile(good_image_file):
-                            print("\n\n'n>>>>>>>>>>>Find combined file>>>>>>>>> \n\n")
-                            good_imgs = []
-                            with open(good_images_file) as f:
-                                good_imags_lines = f.readlines()
-                            for gi in good_imags_lines:
-                                good_imgs.append(gi.strip())
-                            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
-
                     obj_band_path = os.path.join(imgs_dir, obj, band)
-                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj), 
-                                                        basename=obj+'_'+band, debug=debug, **kwargs)
+                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj),
+                            plot=True, savefig=True, basename=obj+'_'+band, debug=debug, **kwargs)
                     if debug: 
                         print(good_imgs)
-                    if make_image:
-                            make_good_image(good_imgs, basename=obj+'_'+band+'_', basedir=os.path.join(basedir,obj), 
-                                            tmpdir=os.path.join(outdir,obj), only_fits=only_fits, debug=debug)
 
-def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
+def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
                            debug=False, only_fits=True, update=True, suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
@@ -1539,19 +1516,19 @@ def run_make_all_goodimags2(imgs_dir=None, objlist=None, bands=['B6','B7'], base
             os.system('mkdir -p {}'.format(obj_outdir))
         for band in bands:
             good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, suffix))
-            concatvis_name = "{}_{}_combine.ms".format(obj, band)
+            concatvis = os.path.join(obj_outdir,"{}_{}_combine.ms".format(obj, band))
             if debug:
-                print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis_name))
+                print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis))
             if os.path.isfile(good_image_file):
-                good_image_fitsfile = os.path.join(obj_outdir, concatvis_name+'.auto.cont.image.fits')
+                good_image_fitsfile = concatvis+'.auto.cont.image.fits'
                 # print('good_image_fitsfile: {}'.format(good_image_fitsfile))
                 if os.path.isfile(good_image_fitsfile):
                     print("Skip {} of {}".format(band,obj))
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, basename=concatvis_name, basedir=os.path.join(basedir, obj), 
-                                    outdir=obj_outdir, only_fits=only_fits, **kwargs)
+                    make_good_image(combined_vis, concatvis=concatvis, basedir=os.path.join(basedir, obj), 
+                                    only_fits=only_fits, **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
