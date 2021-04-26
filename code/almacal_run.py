@@ -1043,7 +1043,10 @@ def calculate_completeness2(objfolder, vis=None, baseimage=None, n=20, repeat=10
         #print('SNR: {}, RUN:{}'.format(s, run))
         #print('flux:', flux)
         img = "{basename}.run{run}.fits".format(basename=basename, run=run)
-        sf_return = source_finder(img, sources_file=basename+'.run{}.txt'.format(run), known_file=known_file, **kwargs)
+        try:
+            sf_return = source_finder(img, sources_file=basename+'.run{}.txt'.format(run), known_file=known_file, **kwargs)
+        except:
+            continue
         # if sf_return == 0:
             # continue
         flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
