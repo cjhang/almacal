@@ -1,6 +1,7 @@
 # functions related with almacal simulation
 import numpy as np
-from scipy import signal, ndimage
+from scipy import signal, ndimage 
+from scipy.interpolate import CubicSpline
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
@@ -28,6 +29,32 @@ def gkern(bmin=1., bmaj=1, theta=0, size=21,):
     kernel_rot = ndimage.rotate(kernel, -1.*theta, reshape=False)
     
     return kernel_rot / np.sum(kernel_rot)
+
+def aspectNC(s):
+    return 4.4e5*(s/0.1+1)**(-2.5)
+
+def loguniform(low, high, size=None):
+    return 10**(np.random.uniform(low, high, size))
+
+def aspectNC_pdf(radius=None, boundary=[0.01, 10], ):
+    """differential number
+
+    Args:
+        radius: in arcsec
+    """
+    xtmp = np.linspace(boundary[0], boundary[1], 10000)
+    xtmp_mid = 0.5*(xtmp[1:]+xtmp[:-1])
+    ytmp = aspectNC(xtmp_mid)/3600**2*np.pi*radius**2 #* (xtmp[1]-xtmp[0])
+    pdf_discrete = ytmp/np.sum(ytmp)
+    cs = CubicSpline(xtmp_mid, pdf_discrete)
+    return cs
+
+def aspect_sampler(n, niter=100, fluxrange=[0.02, 10], radius=15):
+    x = loguniform(np.log10(fluxrange[0]), np.log10(fluxrange[1]), niter) 
+    # print(x)
+    y = aspectNC(x)/3600**2*np.pi*radius**2 #* (xtmp[1]-xtmp[0])
+    y_pdf = y / np.sum(y)
+    return np.random.choice(x, n, p=y_pdf)
 
 def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
         prune_threshold=3, debug=False, savefile=None, clname=None,
@@ -69,21 +96,24 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
         while True:
             theta_one = 2*np.pi*np.random.uniform(0, 1)
             rho_one = radius * np.sqrt(np.random.uniform(0, 1))
-            flux_sampling = sampler(scaler, 1)
-            flux_input_one = flux_sampling * np.diff(fluxrange) + fluxrange[0]
+            # flux_sampling = sampler(scaler, 1)
+            flux_sampling = aspect_sampler(1, radius=radius)
+            flux_input_one = flux_sampling #* np.diff(fluxrange) + fluxrange[0]
             
             total_input += flux_input_one
             if total_input < budget:
                 total_input += flux_input_one
                 theta.append(theta_one)
                 rho.append(rho_one)
-                flux_input.append(flux_input_one)
+                flux_input.append(flux_input_one[0])
             else:
+                total_input -= flux_input_one
                 break
         theta, rho, flux_input = np.array(theta), np.array(rho), np.array(flux_input)
         if debug:
             print('flux range {} [{}]'.format(fluxrange, fluxunit))
             print('flux input {}, budget: {}'.format(total_input, budget))
+            print(flux_input)
     else:
         raise ValueError("You need to specify n or budget!")
 
@@ -160,7 +190,7 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
         return [ra_random, dec_random, flux_input]
 
 def add_random_sources(vis=None, fitsimage=None, n=None, radius=None, outdir='./', make_image=True, 
-        basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
+        basename=None, debug=False, fluxrange=None, known_file=None, uvtaper_scale=None,
         inverse_image=False, budget=None, **kwargs):
     """
     Args:
@@ -193,7 +223,7 @@ def add_random_sources(vis=None, fitsimage=None, n=None, radius=None, outdir='./
         rmtables(clname_fullpath)
         os.system('rm -rf {}'.format(savefile_fullpath))
         # generate random sources
-        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, flux=flux, 
+        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, fluxrange=fluxrange, 
                                         clname=clname_fullpath, savefile=savefile_fullpath, known_file=known_file, **kwargs)
         ft(vis=vis, complist=mycomplist)
         uvsub(vis=vis, reverse=True)
@@ -251,10 +281,10 @@ def add_random_sources(vis=None, fitsimage=None, n=None, radius=None, outdir='./
         myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
 
         if debug:
-            print(mydirection)
-            print(myfreq)
+            print('mydirection', mydirection)
+            print('myfreq', myfreq)
         savefile_fullpath = os.path.join(outdir, basename+'.txt')
-        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, flux=flux, 
+        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, fluxrange=fluxrange,
                                         savefile=savefile_fullpath, known_file=known_file, budget=budget, **kwargs)
         # print('mycomplist', mycomplist)
         mycomplist_pixels = []
@@ -481,7 +511,31 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
 
     # if snr_mode == 'peak':
     flux_base = sensitivity #* gaussian_norm
-    if len(snr)>3:
+    
+    if snr is None:
+        # Limitation from extragalactic background
+        EBL = 14 # 14-18Jy/deg2
+        radius = 0.5*fov
+        budget_mean = (np.pi*(radius*u.arcsec)**2 * 20*u.Jy/u.deg**2).to(u.mJy).value
+        print('budget_mean', budget_mean)
+        budget_sigma = 0.5
+        fluxrange = [1.0, 0.0001]
+        for i in range(repeat):
+            # generate the budget for each run
+            budget = budget_sigma * np.random.randn() + budget_mean
+
+            basename_new = basename+'.run{}'.format(i)
+            if mode == 'uv':
+                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
+            elif mode == 'image':
+                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
+
+
+    elif len(snr)>3:
         # the old method, which will be deprecated in the near future
         for s in snr:
             # if s in snr_old:
@@ -499,8 +553,6 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
                             outdir=outdir,uvtaper_scale=uvtaper_scale, 
                             basename=basename_new, flux=s*flux_base, known_file=known_file, 
                             inverse_image=inverse_image)
-        # clear temperary files
-        rmtables(vistmp)
     elif len(snr)==2:
         flux = np.array(snr)*flux_base
         for i in range(repeat):
@@ -508,32 +560,13 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
             if mode == 'uv':
                 add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                    basename=basename_new, flux=flux, known_file=known_file, 
-                                   inverse_image=inverse_image, **kwargs)
+                                   inverse_image=inverse_image, debug=debug, **kwargs)
             elif mode == 'image':
                 add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
                                    basename=basename_new, flux=flux, known_file=known_file, inverse_image=inverse_image,
-                                   **kwargs)
-        # clear temperary files
-        rmtables(vistmp)
-    elif snr is None:
-        # Limitation from extragalactic background
-        EBL = 14 # 14-18Jy/deg2
-        radius = 0.5*fov
-        budget_mean = (np.pi*(radius*u.arcsec)**2 * 14*u.Jy/u.deg**2).to(u.mJy).value
-        budget_sigma = 0.5
-        for i in range(repeat):
-            # generate the budget for each run
-            budget = budget_sigma * np.random.randn() + budget_mean
-
-            basename_new = basename+'.run{}'.format(i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, **kwargs)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, **kwargs)
+                                   debug=debug, **kwargs)
+    # clear temperary files
+    rmtables(vistmp)
 
 def source_finder(fitsimage, sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='find_peak', return_image=False,
