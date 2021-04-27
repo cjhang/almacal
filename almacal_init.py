@@ -9,6 +9,7 @@ print("Project path: {}".format(root_path))
 
 sys.path.append(root_path+'/code')
 
+execfile(root_path+'/code/almacal.py')
 execfile(root_path+'/code/imaging_utils.py')
 execfile(root_path+'/code/simalma_utils.py')
 execfile(root_path+'/code/readms.py')

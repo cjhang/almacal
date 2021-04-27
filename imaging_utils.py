@@ -17,18 +17,26 @@ from astropy import constants as const
 import matplotlib.pyplot as plt 
 from cleanhelper import cleanhelper
 
-# tbtool
-try:
-    # for casa6
-    from casatool import table as tbtool
-except:
-    pass
-try: 
-    import analysisUtils as au
-    has_analysisUtils = True
-except:
-    has_analysisUtils = False
+# # tbtool
+# try:
+    # # for casa6
+    # from casatool import table as tbtool
+    # from casatasks import exportfits
+    # from casatasks import rmtables
+    # # from casatasks import tclean
+# except:
+    # from taskinit import tbtool
+    # from exportfits_cli import exportfits_cli as exportfits # used by makeSimulatedImage()
+    # from rmtables_cli import rmtables_cli as rmtables # used by addGaussianToFITSImage()
+    # # from tclean_cli import tclean
+# try: 
+    # import analysisUtils as au
+    # has_analysisUtils = True
+# except:
+    # has_analysisUtils = False
 
+
+# from ms_utils import read_spw
 
 def calculate_sensitivity(vis, full_pwv=False, debug=True):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
@@ -38,19 +46,10 @@ def calculate_sensitivity(vis, full_pwv=False, debug=True):
     if not isinstance(vis, str):
         raise ValueError("Only single visibility is supported.")
     spw_list = read_spw(vis)
-    ss = spw_stat(vis)
     central_freq = "{:.2f}GHz".format(np.mean(spw_list))
     band_width = "{:.2f}GHz".format(np.sum(np.diff(spw_list)))
     
-    total_onsourcetime = 0.0
-    for band in ss.values():
-        if band['time'] != []:
-            for t in band['time']:
-                total_onsourcetime += t
-    total_time = '{:.2f}min'.format(total_onsourcetime)
-    
     antennalist = au.buildConfigurationFile(vis)
-    
     
     #remove the cfg file
     if full_pwv: 

@@ -1449,29 +1449,6 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
-    """manually checking all the images
-    """
-    if isinstance(objlist, str):
-        if os.path.isfile(objlist):
-            objlist = gen_filenames(listfile=objlist)
-    if not isinstance(objlist, (list, np.ndarray)):
-        raise ValueError("Unsupported objlist!")
-    for obj in objlist:
-        obj_imagedir = os.path.join(imagedir, obj)
-        for band in bands:
-            obj_band_imagedir = os.path.join(obj_imagedir, band)
-            obj_outdir = os.path.join(outdir, obj)
-            goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
-            badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
-            if os.path.isfile(goodfile+'.updated'):
-                print('{} of {} already done'.format(band, obj))
-                continue
-            else:
-                print(obj_band_imagedir)
-                print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
-                check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
-
 def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', update=False, **kwargs):
     """generate the good image list for all the calibrators
 
@@ -1529,6 +1506,29 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                     combined_vis = gen_filenames(listfile=good_image_file)
                     make_good_image(combined_vis, concatvis=concatvis, basedir=os.path.join(basedir, obj), 
                                     only_fits=only_fits, **kwargs)
+
+def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
+    """manually checking all the images
+    """
+    if isinstance(objlist, str):
+        if os.path.isfile(objlist):
+            objlist = gen_filenames(listfile=objlist)
+    if not isinstance(objlist, (list, np.ndarray)):
+        raise ValueError("Unsupported objlist!")
+    for obj in objlist:
+        obj_imagedir = os.path.join(imagedir, obj)
+        for band in bands:
+            obj_band_imagedir = os.path.join(obj_imagedir, band)
+            obj_outdir = os.path.join(outdir, obj)
+            goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
+            badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
+            if os.path.isfile(goodfile+'.updated'):
+                print('{} of {} already done'.format(band, obj))
+                continue
+            else:
+                print(obj_band_imagedir)
+                print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
+                check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
