@@ -55,7 +55,7 @@ def gen_filenames(dirname=None, listfile=None, basedir=None, debug=False):
             file_list.append(line)
     return file_list
 
-def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, **kwargs):
+def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, **kwargs):
     """make images for one calibrator on all or specific band
 
     Params:
@@ -93,7 +93,7 @@ def gen_image(vis=None, band=None, outdir='./', exclude_aca=False, check_calibra
                 print("Excuding data from {}".format(antenna_diameter))
             return False
     try:
-        make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, niter=1000, **kwargs)
+        make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, niter=niter, **kwargs)
     except:
         print("Error in imaging {}".format(vis))
     if check_calibrator:
@@ -1366,7 +1366,7 @@ def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None,
         obj_dirname = base_dir +'/'+ obj
         obj_output_dir = output_dir + '/' + obj
         os.system('mkdir {}'.format(obj_output_dir))
-        obj_stat = spw_stat(obj_dirname,
+        obj_stat = spw_stat(gen_filenames(obj_dirname),
                             savedata=True, 
                             filename=obj_output_dir+'/'+ obj+'.json', 
                             **kwargs)
