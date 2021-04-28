@@ -847,7 +847,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=False, niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, 
-                    uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], **kwargs):
+                    computwt=False, uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], **kwargs):
     """make the final good image with all the good observations
     """
     if len(vis) < 1:
@@ -861,6 +861,14 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         print(vis)
     if concatvis is None:
         concatvis = os.path.join(outdir, basename+'.ms')
+    if computwt:
+        vis_new = []
+        for v in vis:
+            v_new = os.path.join(outdir, os.path.basename(v))
+            os.system('cp -r {} {}'.format(v, v_new))
+            statwt(v_new)
+            vis_new.append(v_new)
+        vis = vis_new
     if os.path.isdir(concatvis):
         print("Skip concating, file exists....")
     else:
@@ -1453,7 +1461,8 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', update=False, **kwargs):
+def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', update=False, 
+        plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
@@ -1472,7 +1481,7 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
                 for band in os.listdir(os.path.join(imgs_dir, obj)):
                     obj_band_path = os.path.join(imgs_dir, obj, band)
                     good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj),
-                            plot=True, savefig=True, basename=obj+'_'+band, debug=debug, **kwargs)
+                            plot=plot, savefig=savefig, basename=obj+'_'+band, debug=debug, **kwargs)
                     if debug: 
                         print(good_imgs)
 

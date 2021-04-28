@@ -29,11 +29,11 @@ from cleanhelper import cleanhelper
     # from exportfits_cli import exportfits_cli as exportfits # used by makeSimulatedImage()
     # from rmtables_cli import rmtables_cli as rmtables # used by addGaussianToFITSImage()
     # # from tclean_cli import tclean
-# try: 
-    # import analysisUtils as au
-    # has_analysisUtils = True
-# except:
-    # has_analysisUtils = False
+try: 
+    import analysisUtils as au
+    has_analysisUtils = True
+except:
+    has_analysisUtils = False
 
 
 # from ms_utils import read_spw
