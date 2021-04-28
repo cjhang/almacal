@@ -138,7 +138,10 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calcuate the cell size
     if mycell is None:
         if myuvtaper:
-            myuvtaper_value = u.Unit(myuvtaper).to(u.arcsec)
+            if isinstance(myuvtaper, list):
+                myuvtaper_value = u.Unit(myuvtaper[0]).to(u.arcsec)
+            else:
+                myuvtaper_value = u.Unit(myuvtaper).to(u.arcsec)
             uvtaper = str(myuvtaper_value)+'arcsec'
             cellsize = np.sqrt((206265 / (baseline_typical / wavelength).decompose())**2 
                                + myuvtaper_value**2)/ 6.0

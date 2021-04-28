@@ -845,8 +845,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         print("Error in matching the obs name for filname: {}".format(item))
                         continue
 
-def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, only_fits=False,
-                    niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], **kwargs):
+def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
+                    only_fits=False, niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, 
+                    uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], **kwargs):
     """make the final good image with all the good observations
     """
     if len(vis) < 1:
@@ -860,7 +861,10 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         print(vis)
     if concatvis is None:
         concatvis = os.path.join(outdir, basename+'.ms')
-    concat(vis=vis, concatvis=concatvis)
+    if os.path.isdir(concatvis):
+        print("Skip concating, file exists....")
+    else:
+        concat(vis=vis, concatvis=concatvis)
     for uvtaper in uvtaper_list:
         if uvtaper == []:
             uvtaper_name = ''
@@ -1495,8 +1499,9 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
                     if debug: 
                         print(good_imgs)
 
-def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, make_image=False, outdir='./', 
-                           debug=False, only_fits=True, update=True, suffix='good_imgs.txt.updated', **kwargs):
+def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, 
+        make_image=False, outdir='./', debug=False, only_fits=True, update=True, 
+        suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./make_good_image', 
@@ -1527,8 +1532,8 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis, basedir=os.path.join(basedir, obj), 
-                                    only_fits=only_fits, **kwargs)
+                    make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
+                                    basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
