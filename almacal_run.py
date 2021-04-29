@@ -1511,10 +1511,10 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
             if debug:
                 print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis))
             if os.path.isfile(good_image_file):
-                good_image_fitsfile = concatvis+'.auto.cont.image.fits'
+                good_image_fitsfile = concatvis+'.*.fits'
                 # print('good_image_fitsfile: {}'.format(good_image_fitsfile))
-                if os.path.isfile(good_image_fitsfile):
-                    print("Skip {} of {}".format(band,obj))
+                if len(glob.glob(good_image_fitsfile)) > 0:
+                    print("Skip {} of {}, delete the fits file to continue...".format(band,obj))
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
