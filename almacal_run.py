@@ -865,9 +865,19 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         vis_new = []
         for v in vis:
             v_new = os.path.join(outdir, os.path.basename(v))
-            os.system('cp -r {} {}'.format(v, v_new))
-            statwt(v_new)
+            os.system('rm -rf {}*'.format(v_new))
+            print(v, v_new)
+            #os.system('cp -r {} {}'.format(v, v_new))
+            if not split(vis=v, outputvis=v_new, datacolumn='corrected'):
+                print("No corrected data existing, spliting the data column")
+                if not split(vis=v, outputvis=v_new, datacolumn='data'):
+                    print("Data may be corrupted: {}".format(v))
+                    os.system('rm -rf {}'.format(v_new))
+                    continue
+
+            statwt(v_new, datacolumn='data')
             vis_new.append(v_new)
+        print(vis_new)
         vis = vis_new
     if os.path.isdir(concatvis):
         print("Skip concating, file exists....")
@@ -887,6 +897,9 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         for i in glob.glob(concatvis+'.*.image'):
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
+    rmtables(os.path.join(outdir,'uid___*'))
+    os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
+
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 
@@ -1487,6 +1500,7 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, 
         make_image=False, outdir='./', debug=False, only_fits=True, update=True, 
+        computwt=False,
         suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
@@ -1518,8 +1532,8 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
-                                    basedir=os.path.join(basedir, obj), **kwargs)
+                    make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, outdir=os.path.join(outdir, obj),
+                                    computwt=computwt, basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
     """manually checking all the images
