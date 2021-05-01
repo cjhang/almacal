@@ -1558,23 +1558,17 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
+def run_find_source(basedir, objs=None, summary_file=None):
+    """finding sources
+    """
     obj_match = re.compile('^J\d*[+-]\d*$')
-    for obj in os.listdir(basedir):
-        if obj_match.match(obj):
-            for band in bands:
-                objfolder = os.path.join(basedir, obj)
-                vis_combined = os.path.join(objfolder, '{}_{}_combine.ms'.format(obj, band))
-                if os.path.isdir(vis_combined):
-                    gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj),
-                                    known_file=vis_combined+'.auto.cont.image.fits.source_found.txt')
+    if not objs:
+        objs = []
+        for item in os.listdir(basedir):
+            if obj_match.match(obj):
+                objs.append(item)
 
-def run_calculate_completeness():
-    pass
-
-def run_find_source(basedir, summary_file=None):
-    obj_match = re.compile('^J\d*[+-]\d*$')
-    for obj in os.listdir(basedir):
+    for obj in objs:
         if obj_match.match(obj):
             print('>>>>> {}'.format(obj))
             sources_nums = []
@@ -1589,5 +1583,20 @@ def run_find_source(basedir, summary_file=None):
         if summary_file:
             with open(summary_file, 'a+') as f:
                 f.write("{}, {}\n".format(obj, sources_nums))
+
+def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    for obj in os.listdir(basedir):
+        if obj_match.match(obj):
+            for band in bands:
+                objfolder = os.path.join(basedir, obj)
+                vis_combined = os.path.join(objfolder, '{}_{}_combine.ms'.format(obj, band))
+                if os.path.isdir(vis_combined):
+                    gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj),
+                                    known_file=vis_combined+'.auto.cont.image.fits.source_found.txt')
+
+def run_calculate_completeness():
+    pass
+
 
 
