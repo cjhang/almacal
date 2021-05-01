@@ -1566,7 +1566,8 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_find_source(basedir, objs=None, summary_file=None):
+def run_find_source(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
+                    resolutions=['3arcsec','8arcsec'], summary_file=None):
     """finding sources
     """
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -1576,21 +1577,33 @@ def run_find_source(basedir, objs=None, summary_file=None):
             if obj_match.match(obj):
                 objs.append(item)
 
+    if summary_file:
+        with open(summary_file, 'w+') as f:
+            f.write("obj B6_3arcsec B6_8arcsec B7_3arcsec B7_8arcsec\n") 
     for obj in objs:
         if obj_match.match(obj):
             print('>>>>> {}'.format(obj))
-            sources_nums = []
-            imgs = glob.glob(os.path.join(basedir, obj, '*.fits'))
-            for img in imgs:
-                print(img)
-                savefile = img+ '.source_found.txt'
-                sources_found = source_finder(img, savefile=savefile)
-                if sources_found != 0:
-                    sources_nums.append(len(sources_found),)
-            print('sources_nums', sources_nums)
+            obj_sourcefound = {'B6_3':0, 'B6_8':0, 'B7_3':0, 'B7_8':0}
+            obj_folder = os.path.join(basedir, obj)
+            #for img in imgs:
+            for band in bands:
+                for res in resolutions:
+                    image_name = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, res)
+                    image_fullpath = os.path.join(obj_folder, img)
+                    if not os.isfile(image_fullpath):
+                        continue
+                    print('Finding source in:', image_fullpath)
+                    savefile = image_name + '.source_found.txt'
+                    figname = image_name + '.png'
+                    sources_found = source_finder(img, outdir=obj_folder, savefile=savefile, 
+                                                  figname=figname)
+                    if len(sources_found) > 0:
+                        obj_sourcefound['{}[{}]'.format(band, res)] = len(sources_found)
         if summary_file:
             with open(summary_file, 'a+') as f:
-                f.write("{}, {}\n".format(obj, sources_nums))
+                f.write("{obj} {B6_3} {B6_8} {B7_3} {B7_8}\n".format(obj=obj, 
+                    B6_3=obj_sourcefound['B6_3'], B6_8=obj_sourcefound['B6_8'],
+                    B7_3=obj_sourcefound['B7_3'], B7_8=obj_sourcefound['B7_8']))
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
