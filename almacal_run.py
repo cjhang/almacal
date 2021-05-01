@@ -847,8 +847,12 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=False, niter=100, clean=True, pblimit=-0.01, fov_scale=3.0, 
-                    computwt=False, uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], **kwargs):
+                    computwt=False, uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], 
+                    uvtaper_scale=None, **kwargs):
     """make the final good image with all the good observations
+
+    uvtaper_list: [['0.3arcsec'], ['0.8arcsec']], outer taper width
+    uvtaper_scale: [1.0, 1.414], 2 times and three times worse
     """
     if len(vis) < 1:
         return False
@@ -883,23 +887,27 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         print("Skip concating, file exists....")
     else:
         concat(vis=vis, concatvis=concatvis)
-    for uvtaper in uvtaper_list:
-        if uvtaper == []:
-            uvtaper_name = ''
-        else:
-            uvtaper_name = '.'+uvtaper[0]
-        myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
-        make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
-                      pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
-                      **kwargs)
-
+    if uvtaper_list:
+        for uvtaper in uvtaper_list:
+            if uvtaper == []:
+                uvtaper_name = ''
+            else:
+                uvtaper_name = '.'+uvtaper[0]
+            myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
+            make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
+                          pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
+                          **kwargs)
+    if uvtaper_scale:
+            myimagename = concatvis+'.auto.cont'
+            make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
+                          pblimit=pblimit, fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, debug=debug, 
+                          **kwargs)
     if only_fits:
         for i in glob.glob(concatvis+'.*.image'):
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
     rmtables(os.path.join(outdir,'uid___*'))
     os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
-
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 

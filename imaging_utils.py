@@ -82,8 +82,6 @@ def get_baselines(vis=None,):
             lengths.append((x**2 + y**2 + z**2)**0.5)
     return lengths
 
-
-
 def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=90,
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
                   myuvtaper=None, uvtaper=[],
@@ -219,7 +217,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                 # set up the resolution and imsize
                 uvt_param = np.sqrt(uvt_scale**2+1.)
                 mycell = "{:.6f}arcsec".format(cellsize * uvt_param)
-                myimsize = efficient_imsize(int(imgsize_scale * fov / (cellsize*uvt_param)))
+                myimsize = cleanhelper.getOptimumSize(int(imgsize_scale * fov / (cellsize*uvt_param)))
                 # myimsize = efficient_imsize(int(myimsize / np.sqrt(uvt_scale**2+1.)))
                 if debug:
                     print("uvtaper parameters: \n")
@@ -254,9 +252,6 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     if only_fits:
         exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
         rmtables(tablenames=myimagename+'.*')
-
-
-
 
 def image_selfcal(vis=None, ncycle=3, ):
     # tclean and self-calibration
