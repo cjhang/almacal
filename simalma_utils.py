@@ -593,19 +593,25 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
-                  subtract_background=False, known_file=None, figname=None, ax=None):
+                  subtract_background=False, known_file=None, figname=None, ax=None, pbcor=False):
     """finding point source in the image
     """
-
-    hdu = fits.open(fitsimage)
-    header = hdu[0].header
-    wcs = WCS(header)
-    data = hdu[0].data
-    ny, nx = data.shape[-2:]
-    data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-    mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
-    #print(mean, median, std)
-
+    with fits.open(fitsimage) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+    if pbcor:
+        fitsimage_pbcor = fitsimage.replace('image', 'pbcor.image')
+        if not os.path.isfile(fitsimage_pbcor):
+            print("No primary beam corrected data found, the final flux can be wrong!")
+        # load the pbcorred data
+        with fits.open(fitsimage_pbcor) as hdu_pbcor:
+            data_pbcor = hdu_pbcor[0].data
+            data_pbcor_masked = np.ma.masked_invalid(data_pbcor.reshape(ny, nx))
+    
     # for DAOStarFinder, in pixel space
     pixel_scale = 1/np.abs(header['CDELT1'])
     fwhm = header['BMAJ']*3600*u.arcsec
@@ -738,6 +744,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 data_cutout = s.cutout(data_masked)
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods)
+            if pbcor:
+                data_pbcor_cutout = s.cutout(data_pbcor_masked)
+                flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
+                        beamsize=beamsize, theta=theta/180*np.pi, debug=False, methods=methods)
             #print("flux_list", flux_list)
             is_true = False
             if 'aperture' in methods:
@@ -753,7 +763,11 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
                 sources_found_y.append(sources_found_y_candidates[i])
-                flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
+                if pbcor:
+                    flux_auto.append(np.array(flux_pbcor_list) * 1000)
+                else:
+                    flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
+
         if len(flux_auto)>0:
             sources_found = True
         sources_found_center = list(zip(sources_found_x, sources_found_y))
@@ -846,8 +860,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                           height=3*a*scale, angle=theta, facecolor=None, fill=False, 
                                           edgecolor='red', alpha=0.8, linewidth=1)
                 ax.add_patch(ellipse)
-                if debug:
-                    ax.text(yy, xx, "{:.2f}mJy".format(flux_auto[i][0]))
+                ax.text(yy, xx, "{:.2f}mJy".format(flux_auto[i][0]), fontsize=10)
 
         if figname:
             ax.set_title(figname)
@@ -874,7 +887,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
     if sources_file:
         return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
-    #return flux_auto
-    return list(zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto))
-
+    if len(flux_auto)>0:
+        return list(zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto))
+    else:
+        return []
 

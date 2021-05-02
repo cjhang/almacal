@@ -84,7 +84,7 @@ def get_baselines(vis=None,):
 
 def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=90,
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
-                  myuvtaper=None, uvtaper=[],
+                  myuvtaper=None, uvtaper=[], pbcor=True,
                   cellsize_scale=1, datacolumn="corrected", specmode='mfs', outframe="LSRK", 
                   weighting='natural', niter=0, interactive=False, usemask='auto-multithresh', 
                   threshold=None, auto_threshold=5.0, only_fits=False, suffix='', 
@@ -197,6 +197,10 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                interactive=interactive, 
                usemask=usemask,
                **kwargs)
+        if pbcor:
+            impbcor(imagename=myimagename+'.image',
+                    pbimage=myimagename+'.pb',
+                    outfile=myimagename+'.pbcor.image')
 
         if uvtaper_scale:
             if isinstance(uvtaper_scale, (int, float)):
@@ -226,8 +230,9 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                     print("uvtaper image size:", myimsize)
 
                 os.system('rm -rf {}.uvtaper{}.fits'.format(myimagename, uvt_scale))
+                myimagename_uvtaper = myimagename+'.uvtaper{}'.format(uvt_scale)
                 tclean(vis=vis,
-                      imagename=myimagename+'.uvtaper{}'.format(uvt_scale),
+                      imagename=myimagename_uvtaper,
                       imsize=myimsize, 
                       cell=mycell, 
                       restfreq=myrestfreq, 
@@ -241,16 +246,17 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                       usemask=usemask,
                       uvtaper=[bmaj, bmin, bpa],
                       **kwargs)
-                if only_fits:
-                    exportfits(imagename=myimagename+'.uvtaper{}.image'.format(uvt_scale), 
-                               fitsimage=myimagename+'uvtaper{}.fits'.format(uvt_scale))
-                    #rmtables(tablenames=myimagename+'uvtaper{}.*')
+                if pbcor:
+                    impbcor(imagename=myimagename_uvtaper+'.image',
+                            pbimage=myimagename_uvtaper+'.pb',
+                            outfile=myimagename_uvtaper+'.pbcor.image')
 
     if isinstance(vis, list):
         os.system('rm -rf /tmp/vis_combined.ms')
     
     if only_fits:
-        exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
+        for image in glob.glob(myimagename+'*.image'):
+            exportfits(imagename=image, fitsimage=image+'.fits')
         rmtables(tablenames=myimagename+'.*')
 
 def image_selfcal(vis=None, ncycle=3, ):
