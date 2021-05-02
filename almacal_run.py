@@ -1587,9 +1587,19 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
             obj_sourcefound = {'B6_0.3arcsec':0, 'B6_0.8arcsec':0, 
                                'B7_0.3arcsec':0, 'B7_0.8arcsec':0}
             obj_folder = os.path.join(basedir, obj)
+            
+            # write into summary file
+            obj_summary_file = os.path.join(obj_folder, '.sources_found.txt')
+            obj_summary = open(obj_summary_file, 'w+')
+
+            # make a summary plot
+            summary_plot = os.path.join(obj_folder, '{}.summary.png'.format(obj))
+            fig, = plt.figure(figsize=(12,10))
+            ax = fig.subplots(len(bands),len(resolutions))
+
             #for img in imgs:
-            for band in bands:
-                for res in resolutions:
+            for i,band in enumerate(bands):
+                for j,res in enumerate(resolutions):
                     image_name = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, res)
                     image_fullpath = os.path.join(obj_folder, image_name)
                     #print('Finding source in:', image_fullpath)
@@ -1598,24 +1608,44 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
                     savefile = image_name + '.source_found.txt'
                     figname = image_name + '.png'
                     try:
-                        sources_found = source_finder(image_fullpath, outdir=obj_folder, savefile=savefile, 
-                                                      figname=figname)
+                        sources_found = source_finder(image_fullpath, outdir=obj_folder, 
+                                savefile=savefile, ax=ax[i,j])
                     except:
                         print("Error found for {}".format(image_name))
                         failed_files.append(image_name)
                         sources_found = []
 
                     if len(sources_found) > 0:
+                        obj_summary.write('# {} {}'.format(obj, band, res))
                         obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
+                        for ra, dec, flux in sources_found:
+                            obj_summary.write('{:.6f}  {:.6f} '.format(ra.to(u.arcsec).value,
+                                dec.to(u.arcsec).value))
+                            for f_m in flux:
+                                obj_summary.write(" {:.8f} ".format(f_m))
+                            obj_summary.write('\n')
 
-        # write into files
-        found_string = "{obj} {B6_3} {B6_8} {B7_3} {B7_8}".format(obj=obj, 
-                        B6_3=obj_sourcefound['B6_0.3arcsec'], B6_8=obj_sourcefound['B6_0.8arcsec'],
-                        B7_3=obj_sourcefound['B7_0.3arcsec'], B7_8=obj_sourcefound['B7_0.8arcsec'])
-        print(found_string)
-        if summary_file:
-            with open(summary_file, 'a+') as f:
-                f.write("{}\n".format(found_string)) 
+            # write into files
+            obj_summary.close()
+            found_string = "{obj} {B6_3} {B6_8} {B7_3} {B7_8}".format(obj=obj, 
+                            B6_3=obj_sourcefound['B6_0.3arcsec'], B6_8=obj_sourcefound['B6_0.8arcsec'],
+                            B7_3=obj_sourcefound['B7_0.3arcsec'], B7_8=obj_sourcefound['B7_0.8arcsec'])
+            print(found_string)
+            if summary_file:
+                with open(summary_file, 'a+') as f:
+                    f.write("{}\n".format(found_string)) 
+            # save figure
+            fig.savefig(summary_plot, bbox_inches='tight', dpi=200)
+
+def run_check_SMG(basedir, objs=None, detection_dir=None, nondetection_dir=None):
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    if objs is None:
+        objs = []
+        for item in os.listdir(basedir):
+            if obj_match.match(obj):
+                objs.append(item)
+
+
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')

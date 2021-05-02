@@ -593,7 +593,7 @@ def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10,
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
-                  subtract_background=False, known_file=None, figname=None):
+                  subtract_background=False, known_file=None, figname=None, ax=None):
     """finding point source in the image
     """
 
@@ -812,10 +812,11 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             print(flux_input)
             print(flux_input_auto)
 
-    if debug or figname:
+    if debug or figname or ax:
         # visualize the results
-        fig= plt.figure()
-        ax = fig.add_subplot(111)
+        if ax is None:
+            fig= plt.figure()
+            ax = fig.add_subplot(111)
         ny, nx = data_masked.shape[-2:]
         scale = np.abs(header['CDELT1'])*3600
         x_index = (np.arange(0, nx) - nx/2.0) * scale
@@ -874,6 +875,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
     if sources_file:
         return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
-    return flux_auto
+    #return flux_auto
+    return list(zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto))
 
 
