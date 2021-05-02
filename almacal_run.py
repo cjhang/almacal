@@ -1509,7 +1509,7 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, 
         outdir='./', debug=False, only_fits=True, update=True, 
-        computwt=False, suffix='good_imgs.txt.updated', **kwargs):
+        computwt=True, suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./make_good_image') 
