@@ -604,7 +604,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     ny, nx = data.shape[-2:]
     data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
     mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
-    print(mean, median, std)
+    #print(mean, median, std)
 
     # for DAOStarFinder, in pixel space
     pixel_scale = 1/np.abs(header['CDELT1'])
@@ -621,7 +621,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         try:
             known_data = np.loadtxt(known_file, skiprows=1)
         except:
-            print('cannot open {}'.format(known_file))
+            #print('cannot open {}'.format(known_file))
             known_data = None
         if known_data is not None:
             if len(known_data.shape) == 1:
@@ -738,7 +738,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 data_cutout = s.cutout(data_masked)
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods)
-            print("flux_list", flux_list)
+            #print("flux_list", flux_list)
             is_true = False
             if 'aperture' in methods:
                 if flux_list[methods.index('aperture')] > threshold*std:
@@ -853,6 +853,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             fig.savefig(os.path.join(outdir, figname+'.png'), dpi=200)
         else:
             plt.show()
+        plt.close()
 
 
     if savefile and sources_found:
