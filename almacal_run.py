@@ -846,13 +846,14 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         continue
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
-                    only_fits=True, niter=100, clean=True, pblimit=-0.01, fov_scale=2.0, 
-                    computwt=False, uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], 
-                    uvtaper_scale=None, **kwargs):
+                    only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, computwt=True, 
+                    uvtaper_list=None, #uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], 
+                    uvtaper_scale=[1.0, 1.7], 
+                    **kwargs):
     """make the final good image with all the good observations
 
     uvtaper_list: [['0.3arcsec'], ['0.8arcsec']], outer taper width
-    uvtaper_scale: [1.0, 1.414], 2 times and three times worse
+    uvtaper_scale: [1.0, 1.7], 1.5 and 2 times and three times worse
     """
     if len(vis) < 1:
         return False
@@ -1507,13 +1508,11 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
                         print(good_imgs)
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, 
-        make_image=False, outdir='./', debug=False, only_fits=True, update=True, 
-        computwt=False,
-        suffix='good_imgs.txt.updated', **kwargs):
+        outdir='./', debug=False, only_fits=True, update=True, 
+        computwt=False, suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
-    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', make_image=True, outdir='./make_good_image', 
-                                        only_fits=True, niter=5000) 
+    default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./make_good_image') 
     """
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objlist is None:
