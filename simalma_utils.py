@@ -847,14 +847,13 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                           edgecolor='red', alpha=0.8, linewidth=1)
                 ax.add_patch(ellipse)
                 if debug:
-                    ax.text(yy, xx, "{:.2f}".format(flux_auto[i][0]/std/1000))
+                    ax.text(yy, xx, "{:.2f}mJy".format(flux_auto[i][0]))
 
         if figname:
             ax.set_title(figname)
             fig.savefig(os.path.join(outdir, figname+'.png'), dpi=200)
-        else:
+        if debug:
             plt.show()
-        plt.close()
 
 
     if savefile and sources_found:

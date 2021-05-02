@@ -1609,7 +1609,7 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
                     figname = image_name + '.png'
                     try:
                         sources_found = source_finder(image_fullpath, outdir=obj_folder, 
-                                savefile=savefile, ax=ax[i,j])
+                                ax=ax[i,j])
                     except:
                         print("Error found for {}".format(image_name))
                         failed_files.append(image_name)
