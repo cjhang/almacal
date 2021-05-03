@@ -1266,6 +1266,34 @@ def plot_completeness(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
 
         plt.show()
 
+def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
+        images_pbcorr=None):
+    """calculate the effective area for given images
+    """
+    if len(images) != len(images_pbcorr):
+        raise ValueError('images and images_pbcorr should contain same sources!')
+    n_fields = len(images)
+    effarea_list = []
+    for i in range(n_fields):
+        for f in flux:
+        effarea = 0
+            hdu = fits.open(images[i])
+            hdu_pbcor = fits.open(images_pbcorr[i])
+            data = hdu[0].data
+            data_pbcor = hdu_pbcor[0].data
+            pix2area = (hdu[0].header['CDELT1']*3600)**2  # pixel to arcsec^2
+
+            ny, nx = data.shape[-2:]
+            data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+            mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+            pbcor = (data / data_pbcor).reshape(ny, nx)
+            
+            snr = f / (std * 1000) # from Jy to mJy
+            snr_map = snr * pbcor
+            effarea += np.sum(snr_map > snr_threshold) * pix2area
+        effarea_list.append(effarea)
+    return np.array([flux.tolist(), effarea_list])
+
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
@@ -1705,5 +1733,6 @@ def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
 def run_calculate_completeness():
     pass
 
-
+def run_calculate_effarea():
+    pass
 
