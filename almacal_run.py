@@ -56,7 +56,7 @@ def gen_filenames(dirname=None, listfile=None, basedir=None, debug=False):
     return file_list
 
 def savelist(l, filename=None, outdir='./'):
-    with open(os.path.join(outdir, filename)) as f:
+    with open(os.path.join(outdir, filename), 'w+') as f:
         for item in l:
             f.write(item+'\n')
 
@@ -1570,14 +1570,15 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                    resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
-                    summary_file=None, interative=False,
-                    outdir='./', ):
+def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
+                   resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
+                   interative=False, outdir='./', ):
     """finding sources
     Adding a dot in the string: 
         resolutions = ['0.3arcsec','0.8arcsec']
     """
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
@@ -1585,19 +1586,19 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
             if obj_match.match(obj):
                 objs.append(item)
 
-    if summary_file:
-        with open(summary_file, 'w+') as f:
-            f.write("obj")
-            for band in bands:
-                for res in resolutions:
-                    f.write(' ')
-                    f.write(band+'_'+res)
-            f.write('\n')
+    summary_file = os.path.join(outdir, 'summary.txt')
+    with open(summary_file, 'w+') as f:
+        f.write("obj")
+        for band in bands:
+            for res in resolutions:
+                f.write(' ')
+                f.write(band+'_'+res)
+        f.write('\n')
     
-    detection_list = []
-    goodband = {}
+    detections = []
+    goodfields = {}
     for band in bands:
-        goodband_list[band] = []
+        goodfields[band] = []
 
     for obj in objs:
         failed_files = []
@@ -1630,6 +1631,7 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
                         res_string = res+'.'
                     image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
                     image_fullpath = os.path.join(obj_dir, image_name)
+                    print(image_fullpath)
                     #print('Finding source in:', image_fullpath)
                     if not os.path.isfile(image_fullpath):
                         continue
@@ -1660,9 +1662,8 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
                 for res in resolutions:
                     found_string += ' '+str(obj_sourcefound[band+'_'+res])
             print(found_string)
-            if summary_file:
-                with open(summary_file, 'a+') as f:
-                    f.write("{}\n".format(found_string)) 
+            with open(summary_file, 'a+') as f:
+                f.write("{}\n".format(found_string)) 
             # save figure
             fig.subplots_adjust(wspace=0.2, hspace=0.2)
             fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
@@ -1670,34 +1671,25 @@ def run_find_sources(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
             if interative:
                 plt.show()
                 try:
-                    dection_input = str(raw_input("Is detection? [y/n]: " or 'y')
+                    dection_input = str(raw_input("Is detection? [y/n]: " or 'y'))
                     if dection_input == 'y':
-                        detection_list.append(obj)
+                        detections.append(obj)
                     elif detection_input == '-1':
                         return
                 except:
                     pass
                 for band in bands:
                     try:
-                        goodband_input=str(raw_input("Good for Band:{} [y/n]?: ".format(band) or 'y'))
-                        if goodband_input == 'y':
-                            goodband_list[band].append(obj)
+                        goodfield_input=str(raw_input("Good for Band:{} [y/n]?: ".format(band) or 'y'))
+                        if goodfield_input == 'y':
+                            goodfields[band].append(obj)
                     except:
                         pass
+                plt.close()
 
-        savelist(detection_list, filename='detection_list.txt', outdir=outdir)
+        savelist(detections, filename='detections.txt', outdir=outdir)
         for band in bands:
-            savelist(goodband_list[band], filename='goodfields4{}.txt'.format(band), outdir=outdir)
-
-def run_check_SMG(basedir, objs=None, detection_dir=None, nondetection_dir=None):
-    obj_match = re.compile('^J\d*[+-]\d*$')
-    if objs is None:
-        objs = []
-        for item in os.listdir(basedir):
-            if obj_match.match(obj):
-                objs.append(item)
-
-
+            savelist(goodfields[band], filename='goodfields4{}.txt'.format(band), outdir=outdir)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')

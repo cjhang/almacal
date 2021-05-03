@@ -607,6 +607,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         fitsimage_pbcor = fitsimage.replace('image', 'pbcor.image')
         if not os.path.isfile(fitsimage_pbcor):
             print("No primary beam corrected data found, the final flux can be wrong!")
+        pbcor = False
+    if pbcor:
         # load the pbcorred data
         with fits.open(fitsimage_pbcor) as hdu_pbcor:
             data_pbcor = hdu_pbcor[0].data
