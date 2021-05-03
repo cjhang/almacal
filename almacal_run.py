@@ -1734,6 +1734,39 @@ def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
 def run_calculate_completeness():
     pass
 
-def run_calculate_effarea():
-    pass
+def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, bands=['B6','B7'], 
+        suffix='combine.ms.auto.cont', resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
+        outdir='./', snr_threshold=5.0, savefile=None):
+    """calculate the effecitve area for all the usable fields
+    """
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    if objs is None:
+        objs = []
+        for item in os.listdir(basedir):
+            if obj_match.match(obj):
+                objs.append(item)
 
+    effarea = Table()
+    effarea['flux'] = flux
+    for band in bands:
+        for res in resolutions:
+            effarea[band+'_'+res] = np.zeros_like(flux)
+    for obj in objs:
+        obj_dir = os.path.join(basedir, obj)
+        for band in bands:
+            for res in resolutions:
+                if res == '':
+                    res_string = ''
+                else:
+                    res_string = res+'.'
+                image = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+                image_fullpath = os.path.join(obj_dir, image_name)
+                images_pbcorr = image.replace('image', 'pbcor.image')
+                images_pbcorr_fullpath = os.path.join(obj_dir, images_pbcorr)
+                _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
+                        images=[image_fullpath,], images_pbcorr=[images_pbcorr_fullpath])
+                effarea[band+'_'+res] += objarea
+    if savefile:
+        effarea.write(format='ascii')
