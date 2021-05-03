@@ -1273,26 +1273,27 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
     if len(images) != len(images_pbcorr):
         raise ValueError('images and images_pbcorr should contain same sources!')
     n_fields = len(images)
-    effarea_list = []
+    effarea = np.zeros_like(flux)
     for i in range(n_fields):
-        for f in flux:
-        effarea = 0
-            hdu = fits.open(images[i])
-            hdu_pbcor = fits.open(images_pbcorr[i])
+        with fits.open(images[i]) as hdu:
             data = hdu[0].data
+            header = hdu[0].header
+        with fits.open(images_pbcorr[i]) as hdu_pbcor:
             data_pbcor = hdu_pbcor[0].data
-            pix2area = (hdu[0].header['CDELT1']*3600)**2  # pixel to arcsec^2
+        pix2area = (hdu[0].header['CDELT1']*3600)**2  # pixel to arcsec^2
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+        pbcor = (data / data_pbcor).reshape(ny, nx)
 
-            ny, nx = data.shape[-2:]
-            data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-            mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
-            pbcor = (data / data_pbcor).reshape(ny, nx)
-            
+        effarea_list = []
+        for f in flux:
             snr = f / (std * 1000) # from Jy to mJy
             snr_map = snr * pbcor
-            effarea += np.sum(snr_map > snr_threshold) * pix2area
-        effarea_list.append(effarea)
-    return np.array([flux.tolist(), effarea_list])
+            area = np.sum(snr_map > snr_threshold) * pix2area
+            effarea_list.append(area)
+        effarea = effarea + np.array(effarea_list)
+    return np.array([flux, effarea])
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
