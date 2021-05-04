@@ -317,9 +317,6 @@ def subtract_sources(vis, complist=None, ):
     vis_new = vis+'.sourcessub'
     split(vis=vis, datacolumn='corrected', outputvis=vis_new)
 
-def read_source(sourcefile):
-    pass
-
 def make_gaussian_image(shape, fwhm=None, sigma=None, area=1., offset=(0,0), theta=0):
     """make a gaussian image for testing
 
@@ -449,147 +446,6 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
             flux_list.append(flux_apers_stable)
     return flux_list
 
-def gen_fake_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10, 
-                    snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
-                    uvtaper_scale=None, mode='image', inverse_image=False, 
-                    debug=False, **kwargs):
-    """generate the fake images with man-made sources
-
-    Args:
-     mode: image or uv
-    """
-    # make a copy of the original file
-    if basename is None:
-        basename = os.path.basename(vis)
-    if not os.path.isdir(outdir):
-        os.system('mkdir -p {}'.format(outdir))
-    vistmp = os.path.join(outdir, basename+'.tmp')
-    split(vis=vis, outputvis=vistmp, datacolumn='data')
-    # read information from vis 
-    spw_specrange = read_spw(vistmp)
-    freq_mean = np.mean(spw_specrange) # in GHz
-    tb.open(vistmp + '/ANTENNA')
-    antenna_diameter_list = tb.getcol('DISH_DIAMETER')
-    tb.close()
-    antenna_diameter = np.max(antenna_diameter_list) * u.m
-    wavelength = const.c / (freq_mean * u.GHz) # in um
-    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
-    if debug:
-        print('fov', fov)
-        print('radius', 0.5*fov)
-    # read information from image files
-    imagefile_base, imagefile_extension = os.path.splitext(imagefile)
-    print(imagefile_base, imagefile_extension)
-    if False:#imagefile_extension == 'fits':
-        fitsimage = imagefile
-        hdu = fits.open(fitsimage)
-        header = hdu[0].header
-        data = np.ma.masked_invalid(hdu[0].data)
-        pixel_scale = 1/np.abs(header['CDELT1'])
-        fwhm = header['BMAJ']*3600*u.arcsec
-        fwhm_pixel = header['BMAJ']*pixel_scale
-        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
-        ratio = header['BMIN'] / header['BMAJ']
-        theta = header['BPA']
-        beamsize = np.pi*a*b/(4*np.log(2))
-        gaussian_norm = 2*np.pi*a*b/2.35482**2
-        sensitivity = np.ma.std(data) * 1000 # in mJy/pixel
-        # flux_base = rms
-    else:
-        im_head = imhead(imagefile)
-        im_beam = im_head['restoringbeam']
-        im_incr = im_head['incr']
-        im_info = imstat(imagefile)
-        # beamsize = np.pi*a*b/(4*np.log(2))
-        beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
-        gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
-        sensitivity = im_info['rms'] * 1000 # in mJy/pixel
-        # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
-        if mode == 'image':
-            fitsimage = imagefile+'.fits'
-            exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
-    # print('sensitivity', sensitivity)
-    # print('gaussian_norm', gaussian_norm)
-    # print('beamsize', beamsize)
-
-    # if snr_mode == 'peak':
-    flux_base = sensitivity #* gaussian_norm
-    
-    if snr is None:
-        # Limitation from extragalactic background
-        EBL = 14 # 14-18Jy/deg2
-        radius = 0.5*fov
-        budget_mean = (np.pi*(radius*u.arcsec)**2 * 20*u.Jy/u.deg**2).to(u.mJy).value
-        print('budget_mean', budget_mean)
-        budget_sigma = 0.5
-        fluxrange = [1.0, 0.0001]
-        for i in range(repeat):
-            # generate the budget for each run
-            budget = budget_sigma * np.random.randn() + budget_mean
-
-            basename_new = basename+'.run{}'.format(i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
-
-
-    elif len(snr)>3:
-        # the old method, which will be deprecated in the near future
-        for s in snr:
-            # if s in snr_old:
-                # continue
-            print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
-            for i in range(repeat):
-                basename_new = basename+'.snr{}.run{}'.format(s, i)
-                if mode == 'uv':
-                    add_random_sources(vis=vistmp, n=20, radius=0.5*fov, outdir=outdir,
-                            uvtaper_scale=uvtaper_scale, basename=basename_new, 
-                            flux=s*flux_base, known_file=known_file, 
-                            inverse_image=inverse_image)
-                elif mode == 'image':
-                    add_random_sources(fitsimage=fitsimage, n=20, radius=0.5*fov, 
-                            outdir=outdir,uvtaper_scale=uvtaper_scale, 
-                            basename=basename_new, flux=s*flux_base, known_file=known_file, 
-                            inverse_image=inverse_image)
-    elif len(snr)==2:
-        flux = np.array(snr)*flux_base
-        for i in range(repeat):
-            basename_new = basename+'.run{}'.format(i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
-                                   basename=basename_new, flux=flux, known_file=known_file, 
-                                   inverse_image=inverse_image, debug=debug, **kwargs)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,uvtaper_scale=uvtaper_scale, 
-                                   basename=basename_new, flux=flux, known_file=known_file, inverse_image=inverse_image,
-                                   debug=debug, **kwargs)
-        # clear temperary files
-        rmtables(vistmp)
-    elif snr is None:
-        # Limitation from extragalactic background
-        EBL = 14 # 14-18Jy/deg2
-        radius = 0.5*fov
-        budget_mean = (np.pi*(radius*u.arcsec)**2 * 14*u.Jy/u.deg**2).to(u.mJy).value
-        budget_sigma = 0.5
-        for i in range(repeat):
-            # generate the budget for each run
-            budget = budget_sigma * np.random.randn() + budget_mean
-
-            basename_new = basename+'.run{}'.format(i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, **kwargs)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=None, known_file=known_file, 
-                        inverse_image=inverse_image, **kwargs)
-
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
@@ -604,10 +460,13 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
         mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
     if pbcor:
-        fitsimage_pbcor = fitsimage.replace('image', 'pbcor.image')
+        fitsimage_path = os.path.dirname(fitsimage)
+        fitsimage_basename = os.path.basename(fitsimage)
+        fitsimage_pbcor = os.path.join(fitsimage_path, fitsimage_basename.replace('image', 
+                                       'pbcor.image'))
         if not os.path.isfile(fitsimage_pbcor):
             print("No primary beam corrected data found, the final flux can be wrong!")
-        pbcor = False
+            pbcor = False
     if pbcor:
         # load the pbcorred data
         with fits.open(fitsimage_pbcor) as hdu_pbcor:
@@ -618,6 +477,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     pixel_scale = 1/np.abs(header['CDELT1'])
     fwhm = header['BMAJ']*3600*u.arcsec
     fwhm_pixel = header['BMAJ']*pixel_scale
+    bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
     a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
     ratio = header['BMIN'] / header['BMAJ']
     theta = header['BPA']
@@ -681,7 +541,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
         daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=0.5*threshold*std, ratio=ratio, 
-                                theta=theta+90, sigma_radius=1, sharphi=0.7, sharplo=0.2,)  
+                                theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
         data_masked[known_mask] = std
         sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
         if debug:
@@ -694,7 +554,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             sources_found_x_candidates = sources_found_candidates['xcentroid'] 
             sources_found_y_candidates = sources_found_candidates['ycentroid']
             sources_found_candidates_peak = sources_found_candidates['peak']
-            peak_select = sources_found_candidates_peak > 0.5*threshold*std #two stage source finding
+            peak_select = sources_found_candidates_peak > threshold*std #two stage source finding
+            sources_found_candidates = sources_found_candidates[peak_select]
             sources_found_x_candidates = sources_found_x_candidates[peak_select]
             sources_found_y_candidates = sources_found_y_candidates[peak_select]
             #source_found_peak = source_found_peak[peak_select]
@@ -719,7 +580,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
     flux_auto = []
     sources_found = False
-    if sources_found_candidates is not None:
+    if sources_found_candidates:
         # print('source_found_peak',source_found_peak)
         sources_found_center_candidates = list(zip(sources_found_x_candidates, 
                                                    sources_found_y_candidates))
@@ -751,16 +612,16 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
                         beamsize=beamsize, theta=theta/180*np.pi, debug=False, methods=methods)
             #print("flux_list", flux_list)
-            is_true = False
+            is_true = True
             if 'aperture' in methods:
-                if flux_list[methods.index('aperture')] > threshold*std:
-                    is_true = True
+                if flux_list[methods.index('aperture')] < threshold*std:
+                    is_true = False
             if 'gaussian' in methods:
-                if flux_list[methods.index('gaussian')] > threshold*std:
-                    is_true = True
+                if flux_list[methods.index('gaussian')] < threshold*std:
+                    is_true = False
             if 'peak' in methods:
-                if flux_list[methods.index('peak')] > threshold*std:
-                    is_true = True
+                if flux_list[methods.index('peak')] < threshold*std:
+                    is_true = False
             
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
@@ -840,15 +701,21 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #x_map, y_map = np.meshgrid(x_index, y_index)
         #ax.pcolormesh(x_map, y_map, data_masked)
         extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
-        ax.imshow(data_masked, origin='lower', extent=extent)
+        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none')
         
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
+                                  angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
+        ax.add_patch(ellipse)
+        ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
+                color='magenta', fontsize=10, horizontalalignment='center', verticalalignment='center')
         
         if sources_file:
             # show the input sources
             for i,e in enumerate(sources_input_center):
-                ellipse = patches.Ellipse(e, width=3*b, height=3*a, angle=theta, facecolor=None, fill=False, edgecolor='orange', alpha=0.8, linewidth=1)
+                ellipse = patches.Ellipse(e, width=3*b, height=3*a, angle=theta, facecolor=None, 
+                                          fill=False, edgecolor='orange', alpha=0.8, linewidth=1)
                 ax.add_patch(ellipse)
                 if debug:
                     ax.text(e[0], e[1], flux_input[i])
@@ -862,7 +729,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                           height=3*a*scale, angle=theta, facecolor=None, fill=False, 
                                           edgecolor='red', alpha=0.8, linewidth=1)
                 ax.add_patch(ellipse)
-                ax.text(yy, xx, "{:.2f}mJy".format(flux_auto[i][0]), fontsize=10)
+                ax.text(yy, xx, "{:.2f}mJy".format(flux_auto[i][0]), color='magenta', fontsize=10)
 
         if figname:
             ax.set_title(figname)
@@ -894,3 +761,365 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     else:
         return []
 
+def gen_sim_images(vis=None, imagefile=None, known_file=None, n=20, repeat=10, 
+                    snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
+                    uvtaper_scale=None, mode='image', inverse_image=False, 
+                    debug=False, **kwargs):
+    """generate the fake images with man-made sources
+
+    Args:
+     mode: image or uv
+    """
+    # make a copy of the original file
+    if basename is None:
+        basename = os.path.basename(vis)
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
+    vistmp = os.path.join(outdir, basename+'.tmp')
+    split(vis=vis, outputvis=vistmp, datacolumn='data')
+    # read information from vis 
+    spw_specrange = read_spw(vistmp)
+    freq_mean = np.mean(spw_specrange) # in GHz
+    tb.open(vistmp + '/ANTENNA')
+    antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+    tb.close()
+    antenna_diameter = np.max(antenna_diameter_list) * u.m
+    wavelength = const.c / (freq_mean * u.GHz) # in um
+    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+    if debug:
+        print('fov', fov)
+        print('radius', 0.5*fov)
+    # read information from image files
+    imagefile_base, imagefile_extension = os.path.splitext(imagefile)
+    print(imagefile_base, imagefile_extension)
+    if False:#imagefile_extension == 'fits':
+        fitsimage = imagefile
+        hdu = fits.open(fitsimage)
+        header = hdu[0].header
+        data = np.ma.masked_invalid(hdu[0].data)
+        pixel_scale = 1/np.abs(header['CDELT1'])
+        fwhm = header['BMAJ']*3600*u.arcsec
+        fwhm_pixel = header['BMAJ']*pixel_scale
+        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        ratio = header['BMIN'] / header['BMAJ']
+        theta = header['BPA']
+        beamsize = np.pi*a*b/(4*np.log(2))
+        gaussian_norm = 2*np.pi*a*b/2.35482**2
+        sensitivity = np.ma.std(data) * 1000 # in mJy/pixel
+        # flux_base = rms
+    else:
+        im_head = imhead(imagefile)
+        im_beam = im_head['restoringbeam']
+        im_incr = im_head['incr']
+        im_info = imstat(imagefile)
+        # beamsize = np.pi*a*b/(4*np.log(2))
+        beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+        gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
+        sensitivity = im_info['rms'] * 1000 # in mJy/pixel
+        # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+        if mode == 'image':
+            fitsimage = imagefile+'.fits'
+            exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
+    # print('sensitivity', sensitivity)
+    # print('gaussian_norm', gaussian_norm)
+    # print('beamsize', beamsize)
+
+    # if snr_mode == 'peak':
+    flux_base = sensitivity #* gaussian_norm
+    
+    if budget:
+    #if snr is None:
+    #TODO: better physical motivated
+        # Limitation from extragalactic background
+        EBL = 14 # 14-18Jy/deg2
+        radius = 0.5*fov
+        budget_mean = (np.pi*(radius*u.arcsec)**2 * 20*u.Jy/u.deg**2).to(u.mJy).value
+        print('budget_mean', budget_mean)
+        budget_sigma = 0.5
+        fluxrange = [1.0, 0.0001]
+        for i in range(repeat):
+            # generate the budget for each run
+            budget = budget_sigma * np.random.randn() + budget_mean
+
+            basename_new = basename+'.run{}'.format(i)
+            if mode == 'uv':
+                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
+            elif mode == 'image':
+                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
+
+
+    if len(snr)>3:
+        # the old method, which will be deprecated in the near future
+        for s in snr:
+            # if s in snr_old:
+                # continue
+            print(">>>>>>>\n>> snr={}\n>>>>>>>>".format(s))
+            for i in range(repeat):
+                basename_new = basename+'.snr{}.run{}'.format(s, i)
+                if mode == 'uv':
+                    add_random_sources(vis=vistmp, n=20, radius=0.5*fov, outdir=outdir,
+                            uvtaper_scale=uvtaper_scale, basename=basename_new, 
+                            flux=s*flux_base, known_file=known_file, 
+                            inverse_image=inverse_image)
+                elif mode == 'image':
+                    add_random_sources(fitsimage=fitsimage, n=20, radius=0.5*fov, 
+                            outdir=outdir,uvtaper_scale=uvtaper_scale, 
+                            basename=basename_new, flux=s*flux_base, known_file=known_file, 
+                            inverse_image=inverse_image)
+    elif len(snr)==2:
+        flux = np.array(snr)*flux_base
+        for i in range(repeat):
+            basename_new = basename+'.run{}'.format(i)
+            if mode == 'uv':
+                add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
+                        known_file=known_file, inverse_image=inverse_image, debug=debug, 
+                        **kwargs)
+            elif mode == 'image':
+                add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,
+                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
+                        known_file=known_file, inverse_image=inverse_image, debug=debug, 
+                        **kwargs)
+        # clear temperary files
+        rmtables(vistmp)
+
+def calculate_sim_images(objfolder, vis=None, baseimage=None, n=20, repeat=10, 
+        known_file=None, obj=None, band=None, basename=None, savefile=None, 
+        threshold=5.0, plot=False, snr_mode='integrated', **kwargs):
+    """simulation the completeness of source finding algorithm
+
+    mode:
+        peak: snr is the peak value
+        integrated: snr is the integrated value
+    """
+    # one time function
+    f_mean = lambda x: np.mean(x)
+    
+    # image statistics
+    im_head = imhead(baseimage)
+    im_beam = im_head['restoringbeam']
+    im_incr = im_head['incr']
+    im_info = imstat(baseimage)
+    # beamsize = np.pi*a*b/(4*np.log(2))
+    beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+    rms = im_info['rms']
+    rms_flux = rms * 1000 # convert to mJy/pixel
+    # sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
+    print('rms',rms)
+    print('beamsize',beamsize) 
+    print('rms_flux',rms_flux)
+    
+    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
+    if basename is None:
+        basename = os.path.join(objfolder, '{obj}_{band}_combine.ms'.format(obj=obj, band=band))
+        print('basename', basename)
+    # all_fake_images = glob.glob(basename+'*{}.fits'.format(suffix))
+
+    flux_input_list = []
+    flux_input_autolist = []
+    flux_input_foundlist = []
+    flux_found_autolist = []
+    snr_input_list = []
+    # snr_inputfound_comp = []
+    detection_input_array = np.array([[0., 0.]])
+    detection_found_array = np.array([[0., 0.]])
+    for run in np.arange(repeat):
+        n_input = 0
+        n_found = 0
+        # flux = s*sensitivity
+        # flux_input_list.append(flux)
+        #print('SNR: {}, RUN:{}'.format(s, run))
+        #print('flux:', flux)
+        img = "{basename}.run{run}.fits".format(basename=basename, run=run)
+        try:
+            sf_return = source_finder(img, sources_file=basename+'.run{}.txt'.format(run), known_file=known_file, **kwargs)
+        except:
+            continue
+        # if sf_return == 0:
+            # continue
+        flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
+        # print('flux_input', flux_input)
+        # print('flux_input_auto', flux_input_auto)
+        # print('flux_found_auto', flux_found_auto)
+        # print('idxs', idxs)
+        
+        if len(idxs[0])<1:
+            print("Skip run{}".format(run))
+            continue
+        flux_input_list.append(flux_input)
+        flux_input_autolist.append(flux_input_auto)
+        flux_found_autolist.append(flux_found_auto)
+
+
+        # print('peak', flux_input_auto[:,2] / rms_flux)
+        # print('integrated', flux_input / rms_flux)
+        #calculate the snr
+        if snr_mode == 'peak':
+            snr_input = flux_input_auto[:,2] / rms_flux
+            snr_input_list.append(snr_input)
+        elif snr_mode == 'integrated':
+            snr_input = flux_input / rms_flux
+            snr_input_list.append(snr_input)
+        # the snr of the detection
+        snr_input_found = flux_input_auto[:,2][idxs[0]] / rms_flux
+        snr_input_failed = flux_input_auto[:,2][idxs[2]] / rms_flux
+        snr_found_input = flux_found_auto[:,2][idxs[1]] / rms_flux
+        snr_found_fake = flux_found_auto[:,2][idxs[3]] / rms_flux
+        # snr_input_foundlist.append(snr_input_found)
+        # print('snr_inputfound',snr_inputfound)
+        # print('snr_inputfound_faild',snr_inputfound_failed)
+        # print('detection_array', detection_array)
+        if len(snr_input_found) > 0:
+            detection_input_array = np.vstack([detection_input_array, 
+                np.array(zip(snr_input_found, np.ones_like(snr_input_found)))])
+        if len(snr_input_failed) > 0:
+            detection_input_array = np.vstack([detection_input_array, 
+                np.array(zip(snr_input_failed, np.zeros_like(snr_input_failed)))])
+        if len(snr_found_input) > 0:
+            detection_found_array = np.vstack([detection_found_array, 
+                np.array(zip(snr_found_input, np.ones_like(snr_found_input)))])
+        if len(snr_found_fake) > 0:
+            detection_found_array = np.vstack([detection_found_array, 
+                np.array(zip(snr_found_fake, np.zeros_like(snr_found_fake)))])
+
+    # print(snr_input_list)
+    # save data into json
+    data_saved = {}
+    snr_flat = [item for sublist in snr_input_list for item in sublist]
+    flux_input_flat = [item for sublist in flux_input_list for item in sublist]
+    flux_input_aperture_flat = [item for sublist in flux_input_autolist for item in sublist[:,0]]
+    flux_input_gaussian_flat = [item for sublist in flux_input_autolist for item in sublist[:,1]]
+    flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
+    flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
+    data_saved['snr_input'] = snr_flat
+    data_saved['flux_input'] = flux_input_flat
+    data_saved['flux_input_aperture'] = flux_input_aperture_flat
+    data_saved['flux_input_gaussian'] = flux_input_gaussian_flat
+    data_saved['flux_gaussian'] = flux_gaussian_flat
+    data_saved['flux_aperture'] = flux_aperture_flat
+    data_saved['detection_snr'] = detection_input_array[:,0].tolist()
+    data_saved['detection_input_array'] = detection_input_array.tolist()
+    data_saved['detection_found_array'] = detection_found_array.tolist()
+    if savefile:
+        with open(savefile, 'w') as fp:
+           json.dump(data_saved, fp)
+    if plot:
+        plot_completeness(data_saved)
+    # return data_saved
+    #flux_list, flux_peak_list, flux_found_list, completeness_list
+
+def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
+    if jsonfile:
+        with open(jsonfile) as jf:
+            data = json.load(jf)
+    snr_input = np.array(data['snr_input'])
+    flux_input = np.array(data['flux_input'])
+    flux_input_aperture = np.array(data['flux_input_aperture'])
+    flux_input_gaussian = np.array(data['flux_input_gaussian'])
+    flux_aperture = np.array(data['flux_aperture'])
+    flux_gaussian = np.array(data['flux_gaussian'])
+    detection_snr = np.array(data['detection_snr'])
+    detection_input_array = np.array(data['detection_input_array'])
+    detection_found_array = np.array(data['detection_found_array'])
+
+    # print('detection_array', detection_array)
+    completeness_list = []
+    fake_rate_list = []
+    # print(detection_input_array)
+    # print(np.array(detection_input_array).shape)
+    for i in range(1, len(snr)):
+        s = snr[i]
+        s_b = snr[i-1]
+        # calculate the completeness
+        snr_select = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        n_input = np.sum(snr_select)
+        n_found = np.sum(np.array(detection_input_array[:,1][snr_select]))
+        completeness_list.append(1.0*n_found/n_input)
+        
+        # calculate the fake detaction rate
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        n_found2 = np.sum(snr_select2)
+        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
+        fake_rate_list.append(1.0*n_fake/n_found2)
+
+    # calculate flux boosting and completeness
+    snr_mid = 0.5*(snr[1:] + snr[:-1])
+    aperture_mean = []
+    gaussian_mean = []
+    completeness_list = []
+    fake_rate_list = []
+    for i in range(1, len(snr)):
+        s = snr[i]
+        s_b = snr[i-1]
+        # calculate mean flux boosting
+        snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
+        aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
+        gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
+        aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
+        gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
+
+
+        # calculate the completeness
+        snr_select1 = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        n_input = np.sum(snr_select1)
+        n_found = np.sum(np.array(detection_input_array[:,1][snr_select1]))
+        completeness_list.append(1.0*n_found/n_input)
+        
+        # calculate the fake detaction rate
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        n_found2 = np.sum(snr_select2)
+        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
+        fake_rate_list.append(1.0*n_fake/n_found2)
+
+
+    if True:
+        fig = plt.figure(figsize=(12, 3))
+        ax = fig.add_subplot(1,3,1)
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
+        ax.plot(snr_input, flux_input_aperture/flux_input, 'k.', label='aperture')
+        ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian')
+        aperture_mean = np.array(aperture_mean)
+        gaussian_mean = np.array(gaussian_mean)
+        ax.plot(snr_mid, aperture_mean[:,0], 'ko', label='aperture')
+        ax.errorbar(snr_mid, aperture_mean[:,0], yerr=aperture_mean[:,1], color='k', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
+        ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian')
+        ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
+        # for i in range(len(flux_input_list)):
+            # if len(snr_input_list[i]>0):
+                # # print(snr_inputfound_list[i])
+                # # print(flux_input_list[i])
+                # # print(flux_inputfound_list[i])
+                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.', label='aperture')
+                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.', label='gaussian')
+        
+        ax = fig.add_subplot(1,3,2)
+        # print('snr', snr)
+        # print('completeness_list', completeness_list)
+        ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
+        # ax.plot(np.array(flux_peak_list)/rms, completeness_list, 'o')
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'Completeness')
+        # ax.set_xlim((0., 8))
+        ax.set_ylim((-0.1, 1.2))
+
+        ax = fig.add_subplot(1,3,3)
+        ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'Fake percentage')
+        # ax.set_xlim((0., 8))
+        # ax.set_ylim((-0.1, 1.2))
+
+        plt.show()
+
+def image_sim(fitsimage, outdir='./',):
+    """calculate the completeness for given fitsfile
+    """
+    gen_sim_images()
+    calculate_sim_images()
+    save(fluxbooting)
+    save(completeness)

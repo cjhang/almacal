@@ -851,7 +851,8 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         continue
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
-                    only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, computwt=True, 
+                    only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
+                    computwt=True, 
                     uvtaper_list=None, #uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], 
                     uvtaper_scale=[1.0, 1.7], 
                     **kwargs):
@@ -1036,235 +1037,6 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
         plot_completeness(data_saved)
     # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
-
-def calculate_completeness2(objfolder, vis=None, baseimage=None, n=20, repeat=10, 
-        known_file=None, obj=None, band=None, basename=None, savefile=None, 
-        threshold=5.0, plot=False, snr_mode='integrated', **kwargs):
-    """simulation the completeness of source finding algorithm
-
-    mode:
-        peak: snr is the peak value
-        integrated: snr is the integrated value
-    """
-    # one time function
-    f_mean = lambda x: np.mean(x)
-    
-    # image statistics
-    im_head = imhead(baseimage)
-    im_beam = im_head['restoringbeam']
-    im_incr = im_head['incr']
-    im_info = imstat(baseimage)
-    # beamsize = np.pi*a*b/(4*np.log(2))
-    beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
-    rms = im_info['rms']
-    rms_flux = rms * 1000 # convert to mJy/pixel
-    # sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
-    print('rms',rms)
-    print('beamsize',beamsize) 
-    print('rms_flux',rms_flux)
-    
-    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
-    if basename is None:
-        basename = os.path.join(objfolder, '{obj}_{band}_combine.ms'.format(obj=obj, band=band))
-        print('basename', basename)
-    # all_fake_images = glob.glob(basename+'*{}.fits'.format(suffix))
-
-    flux_input_list = []
-    flux_input_autolist = []
-    flux_input_foundlist = []
-    flux_found_autolist = []
-    snr_input_list = []
-    # snr_inputfound_comp = []
-    detection_input_array = np.array([[0., 0.]])
-    detection_found_array = np.array([[0., 0.]])
-    for run in np.arange(repeat):
-        n_input = 0
-        n_found = 0
-        # flux = s*sensitivity
-        # flux_input_list.append(flux)
-        #print('SNR: {}, RUN:{}'.format(s, run))
-        #print('flux:', flux)
-        img = "{basename}.run{run}.fits".format(basename=basename, run=run)
-        try:
-            sf_return = source_finder(img, sources_file=basename+'.run{}.txt'.format(run), known_file=known_file, **kwargs)
-        except:
-            continue
-        # if sf_return == 0:
-            # continue
-        flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
-        # print('flux_input', flux_input)
-        # print('flux_input_auto', flux_input_auto)
-        # print('flux_found_auto', flux_found_auto)
-        # print('idxs', idxs)
-        
-        if len(idxs[0])<1:
-            print("Skip run{}".format(run))
-            continue
-        flux_input_list.append(flux_input)
-        flux_input_autolist.append(flux_input_auto)
-        flux_found_autolist.append(flux_found_auto)
-
-
-        # print('peak', flux_input_auto[:,2] / rms_flux)
-        # print('integrated', flux_input / rms_flux)
-        #calculate the snr
-        if snr_mode == 'peak':
-            snr_input = flux_input_auto[:,2] / rms_flux
-            snr_input_list.append(snr_input)
-        elif snr_mode == 'integrated':
-            snr_input = flux_input / rms_flux
-            snr_input_list.append(snr_input)
-        # the snr of the detection
-        snr_input_found = flux_input_auto[:,2][idxs[0]] / rms_flux
-        snr_input_failed = flux_input_auto[:,2][idxs[2]] / rms_flux
-        snr_found_input = flux_found_auto[:,2][idxs[1]] / rms_flux
-        snr_found_fake = flux_found_auto[:,2][idxs[3]] / rms_flux
-        # snr_input_foundlist.append(snr_input_found)
-        # print('snr_inputfound',snr_inputfound)
-        # print('snr_inputfound_faild',snr_inputfound_failed)
-        # print('detection_array', detection_array)
-        if len(snr_input_found) > 0:
-            detection_input_array = np.vstack([detection_input_array, 
-                np.array(zip(snr_input_found, np.ones_like(snr_input_found)))])
-        if len(snr_input_failed) > 0:
-            detection_input_array = np.vstack([detection_input_array, 
-                np.array(zip(snr_input_failed, np.zeros_like(snr_input_failed)))])
-        if len(snr_found_input) > 0:
-            detection_found_array = np.vstack([detection_found_array, 
-                np.array(zip(snr_found_input, np.ones_like(snr_found_input)))])
-        if len(snr_found_fake) > 0:
-            detection_found_array = np.vstack([detection_found_array, 
-                np.array(zip(snr_found_fake, np.zeros_like(snr_found_fake)))])
-
-    # print(snr_input_list)
-    # save data into json
-    data_saved = {}
-    snr_flat = [item for sublist in snr_input_list for item in sublist]
-    flux_input_flat = [item for sublist in flux_input_list for item in sublist]
-    flux_input_aperture_flat = [item for sublist in flux_input_autolist for item in sublist[:,0]]
-    flux_input_gaussian_flat = [item for sublist in flux_input_autolist for item in sublist[:,1]]
-    flux_aperture_flat = [item for sublist in flux_found_autolist for item in sublist[:,0]]
-    flux_gaussian_flat = [item for sublist in flux_found_autolist for item in sublist[:,1]]
-    data_saved['snr_input'] = snr_flat
-    data_saved['flux_input'] = flux_input_flat
-    data_saved['flux_input_aperture'] = flux_input_aperture_flat
-    data_saved['flux_input_gaussian'] = flux_input_gaussian_flat
-    data_saved['flux_gaussian'] = flux_gaussian_flat
-    data_saved['flux_aperture'] = flux_aperture_flat
-    data_saved['detection_snr'] = detection_input_array[:,0].tolist()
-    data_saved['detection_input_array'] = detection_input_array.tolist()
-    data_saved['detection_found_array'] = detection_found_array.tolist()
-    if savefile:
-        with open(savefile, 'w') as fp:
-           json.dump(data_saved, fp)
-    if plot:
-        plot_completeness(data_saved)
-    # return data_saved
-    #flux_list, flux_peak_list, flux_found_list, completeness_list
-
-def plot_completeness(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
-    if jsonfile:
-        with open(jsonfile) as jf:
-            data = json.load(jf)
-    snr_input = np.array(data['snr_input'])
-    flux_input = np.array(data['flux_input'])
-    flux_input_aperture = np.array(data['flux_input_aperture'])
-    flux_input_gaussian = np.array(data['flux_input_gaussian'])
-    flux_aperture = np.array(data['flux_aperture'])
-    flux_gaussian = np.array(data['flux_gaussian'])
-    detection_snr = np.array(data['detection_snr'])
-    detection_input_array = np.array(data['detection_input_array'])
-    detection_found_array = np.array(data['detection_found_array'])
-
-    # print('detection_array', detection_array)
-    completeness_list = []
-    fake_rate_list = []
-    # print(detection_input_array)
-    # print(np.array(detection_input_array).shape)
-    for i in range(1, len(snr)):
-        s = snr[i]
-        s_b = snr[i-1]
-        # calculate the completeness
-        snr_select = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
-        n_input = np.sum(snr_select)
-        n_found = np.sum(np.array(detection_input_array[:,1][snr_select]))
-        completeness_list.append(1.0*n_found/n_input)
-        
-        # calculate the fake detaction rate
-        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
-        n_found2 = np.sum(snr_select2)
-        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
-        fake_rate_list.append(1.0*n_fake/n_found2)
-
-    # calculate flux boosting and completeness
-    snr_mid = 0.5*(snr[1:] + snr[:-1])
-    aperture_mean = []
-    gaussian_mean = []
-    completeness_list = []
-    fake_rate_list = []
-    for i in range(1, len(snr)):
-        s = snr[i]
-        s_b = snr[i-1]
-        # calculate mean flux boosting
-        snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
-        aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
-        gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
-        aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
-        gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
-
-
-        # calculate the completeness
-        snr_select1 = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
-        n_input = np.sum(snr_select1)
-        n_found = np.sum(np.array(detection_input_array[:,1][snr_select1]))
-        completeness_list.append(1.0*n_found/n_input)
-        
-        # calculate the fake detaction rate
-        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
-        n_found2 = np.sum(snr_select2)
-        n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
-        fake_rate_list.append(1.0*n_fake/n_found2)
-
-
-    if True:
-        fig = plt.figure(figsize=(12, 3))
-        ax = fig.add_subplot(1,3,1)
-        ax.set_xlabel('SNR')
-        ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
-        ax.plot(snr_input, flux_input_aperture/flux_input, 'k.', label='aperture')
-        ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian')
-        aperture_mean = np.array(aperture_mean)
-        gaussian_mean = np.array(gaussian_mean)
-        ax.plot(snr_mid, aperture_mean[:,0], 'ko', label='aperture')
-        ax.errorbar(snr_mid, aperture_mean[:,0], yerr=aperture_mean[:,1], color='k', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
-        ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian')
-        ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
-        # for i in range(len(flux_input_list)):
-            # if len(snr_input_list[i]>0):
-                # # print(snr_inputfound_list[i])
-                # # print(flux_input_list[i])
-                # # print(flux_inputfound_list[i])
-                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.', label='aperture')
-                # ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.', label='gaussian')
-        
-        ax = fig.add_subplot(1,3,2)
-        # print('snr', snr)
-        # print('completeness_list', completeness_list)
-        ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
-        # ax.plot(np.array(flux_peak_list)/rms, completeness_list, 'o')
-        ax.set_xlabel('SNR')
-        ax.set_ylabel(r'Completeness')
-        # ax.set_xlim((0., 8))
-        ax.set_ylim((-0.1, 1.2))
-
-        ax = fig.add_subplot(1,3,3)
-        ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
-        ax.set_xlabel('SNR')
-        ax.set_ylabel(r'Fake percentage')
-        # ax.set_xlim((0., 8))
-        # ax.set_ylim((-0.1, 1.2))
-
-        plt.show()
 
 def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
         images_pbcorr=None):
@@ -1601,7 +1373,7 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
-                   interative=False, outdir='./', ):
+                   interative=False, outdir='./', continue_mode=False):
     """finding sources
     Adding a dot in the string: 
         resolutions = ['0.3arcsec','0.8arcsec']
@@ -1616,7 +1388,11 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 objs.append(item)
 
     summary_file = os.path.join(outdir, 'summary.txt')
-    with open(summary_file, 'w+') as f:
+    if continue_mode:
+        file_mode = 'a+'
+    else:
+        file_mode = 'w+'
+    with open(summary_file, file_mode) as f:
         f.write("obj")
         for band in bands:
             for res in resolutions:
@@ -1629,23 +1405,27 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     for band in bands:
         goodfields[band] = []
 
+    failed_files = []
     for obj in objs:
-        failed_files = []
         if obj_match.match(obj):
             print('>>>>> {}'.format(obj))
+            obj_dir = os.path.join(basedir, obj)
+            obj_outdir = os.path.join(outdir, obj)
+            # write into summary file
+            obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
+            if continue_mode:
+                if os.path.isfile(obj_summary_file):
+                    print("{} already done!".format(obj))
+                    continue
+            
             obj_sourcefound = {}
             for band in bands:
                 for res in resolutions:
                     obj_sourcefound[band+'_'+res] = 0
-            obj_dir = os.path.join(basedir, obj)
-            obj_outdir = os.path.join(outdir, obj)
             if not os.path.isdir(obj_outdir):
                 os.system('mkdir -p {}'.format(obj_outdir))
-            
-            # write into summary file
-            obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
+            # open the summary file
             obj_summary = open(obj_summary_file, 'w+')
-
             # make a summary plot
             summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
             fig, ax = plt.subplots(len(bands), len(resolutions), 
@@ -1666,14 +1446,15 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         continue
                     savefile = image_name + '.source_found.txt'
                     figname = image_name + '.png'
-                    try:
-                        sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                                ax=ax[i,j], pbcor=True)
-                        ax[i,j].set_title('{} {}'.format(band, res))
-                    except:
-                        print("Error found for {}".format(image_name))
-                        failed_files.append(image_name)
-                        sources_found = []
+                    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
+                            ax=ax[i,j], pbcor=True)
+                    ax[i,j].set_title('{} {}'.format(band, res))
+                    #try:
+                    #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
+                    #            ax=ax[i,j], pbcor=True)
+                    #except:
+                    #    print("Error found for {}".format(image_name))
+                    #    failed_files.append(image_name)
 
                     if len(sources_found) > 0:
                         obj_summary.write('# {} {} {}\n'.format(obj, band, res))
@@ -1691,34 +1472,32 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 for res in resolutions:
                     found_string += ' '+str(obj_sourcefound[band+'_'+res])
             print(found_string)
-            with open(summary_file, 'a+') as f:
-                f.write("{}\n".format(found_string)) 
             # save figure
             fig.subplots_adjust(wspace=0.2, hspace=0.2)
             fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
 
             if interative:
                 plt.show()
-                try:
-                    dection_input = str(raw_input("Is detection? [y/n]: " or 'y'))
-                    if dection_input == 'y':
-                        detections.append(obj)
-                    elif detection_input == '-1':
-                        return
-                except:
+                dection_input = str(raw_input("Is detection? [y/n]: ") or 'y')
+                if dection_input == 'y':
+                    detections.append(obj)
+                elif dection_input == 'n':
                     pass
+                else:
+                    # os.system('rm -rf {}'.format(obj_outdir))
+                    break
+                    
                 for band in bands:
-                    try:
-                        goodfield_input=str(raw_input("Good for Band:{} [y/n]?: ".format(band) or 'y'))
-                        if goodfield_input == 'y':
-                            goodfields[band].append(obj)
-                    except:
-                        pass
+                    goodfield_input=str(raw_input("Good for Band:{} [y/n]?: ".format(band)) or 'y')
+                    if goodfield_input == 'y':
+                        goodfields[band].append(obj)
                 plt.close()
-
-        savelist(detections, filename='detections.txt', outdir=outdir)
-        for band in bands:
-            savelist(goodfields[band], filename='goodfields4{}.txt'.format(band), outdir=outdir)
+            with open(summary_file, 'a+') as f:
+                f.write("{}\n".format(found_string)) 
+    plt.close()
+    savelist(detections, filename='detections.txt', outdir=outdir)
+    for band in bands:
+        savelist(goodfields[band], filename='goodfields4{}.txt'.format(band), outdir=outdir)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -1762,11 +1541,11 @@ def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, ban
                 else:
                     res_string = res+'.'
                 image = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
-                image_fullpath = os.path.join(obj_dir, image_name)
-                images_pbcorr = image.replace('image', 'pbcor.image')
-                images_pbcorr_fullpath = os.path.join(obj_dir, images_pbcorr)
+                image_fullpath = os.path.join(obj_dir, image)
+                image_pbcorr = image.replace('image', 'pbcor.image')
+                image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
                 _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
-                        images=[image_fullpath,], images_pbcorr=[images_pbcorr_fullpath])
+                        images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath])
                 effarea[band+'_'+res] += objarea
     if savefile:
         effarea.write(format='ascii')

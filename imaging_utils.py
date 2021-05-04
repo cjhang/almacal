@@ -141,9 +141,9 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                 myuvtaper_value = u.Unit(myuvtaper).to(u.arcsec)
             uvtaper = str(myuvtaper_value)+'arcsec'
             cellsize = np.sqrt((206265 / (baseline_typical / wavelength).decompose())**2 
-                               + myuvtaper_value**2)/ 6.0
+                               + myuvtaper_value**2)/ 7.0
         else:
-            cellsize = 206265 / (baseline_typical / wavelength).decompose()/ 6.0
+            cellsize = 206265 / (baseline_typical / wavelength).decompose()/ 7.0
         mycell = "{:.4f}arcsec".format(cellsize)
     # calculate image size 
     if myimsize is None:
@@ -205,8 +205,8 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
         if uvtaper_scale:
             if isinstance(uvtaper_scale, (int, float)):
                 uvtaper_scale = [uvtaper_scale,]
-            for uvt_scale in uvtaper_scale:
-                uvt_scale = uvt_scale*1.
+            for uvt_param in uvtaper_scale:
+                uvt_scale = np.sqrt(1.0*uvt_param**2 - 1.0)
                 img_header = imhead(myimagename+'.image')
                 print(img_header)
                 restoringbeam = img_header['restoringbeam']
@@ -219,7 +219,6 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                 bmin = "{:.6f}{}".format(beam_minor['value']*uvt_scale, beam_minor['unit'])
                 bpa = "{:.6f}{}".format(beam_pa['value'], beam_pa['unit'])
                 # set up the resolution and imsize
-                uvt_param = np.sqrt(uvt_scale**2+1.)
                 mycell = "{:.6f}arcsec".format(cellsize * uvt_param)
                 myimsize = cleanhelper.getOptimumSize(int(imgsize_scale * fov / (cellsize*uvt_param)))
                 # myimsize = efficient_imsize(int(myimsize / np.sqrt(uvt_scale**2+1.)))
@@ -229,8 +228,8 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                     print("uvtaper cell size:", mycell)
                     print("uvtaper image size:", myimsize)
 
-                os.system('rm -rf {}.uvtaper{}.fits'.format(myimagename, uvt_scale))
-                myimagename_uvtaper = myimagename+'.uvtaper{}'.format(uvt_scale)
+                os.system('rm -rf {}.uvscale{}.fits'.format(myimagename, uvt_param))
+                myimagename_uvtaper = myimagename+'.uvscale{}'.format(uvt_param)
                 tclean(vis=vis,
                       imagename=myimagename_uvtaper,
                       imsize=myimsize, 
