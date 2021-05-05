@@ -59,7 +59,7 @@ def aspect_sampler(n, niter=100, fluxrange=[0.02, 10], radius=15):
 def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
         prune_threshold=3, debug=False, savefile=None, clname=None,
         fluxrange=1, fluxunit='mJy', known_file=None, known_data=None,
-        sampler=np.random.power, scaler=1, budget=None):
+        sampler=np.random.power, sampler_params={}, budget=None):
     """This function used to add random source around a given direction
         
     This is a proximate solution, which treat the field of view as a plane.
@@ -84,7 +84,7 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
     if n:
         theta = 2*np.pi*np.random.uniform(0, 1, n)
         rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-        flux_sampling = sampler(scaler, n)
+        flux_sampling = sampler(**sampler_params)
         flux_input = flux_sampling * np.diff(fluxrange) + fluxrange[0]
         if debug:
             print('flux range {} [{}]'.format(fluxrange, fluxunit))
@@ -97,8 +97,11 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
             theta_one = 2*np.pi*np.random.uniform(0, 1)
             rho_one = radius * np.sqrt(np.random.uniform(0, 1))
             # flux_sampling = sampler(scaler, 1)
-            flux_sampling = aspect_sampler(1, radius=radius)
-            flux_input_one = flux_sampling #* np.diff(fluxrange) + fluxrange[0]
+            flux_sampling = sampler(**sampler_params)
+            if len(flux_sampling) == 1:
+                flux_input_one = flux_sampling
+            else:
+                flux_input_one = np.random.choice(flux_sampling)
             
             total_input += flux_input_one
             if total_input < budget:
@@ -115,10 +118,10 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
             print('flux input {}, budget: {}'.format(total_input, budget))
             print(flux_input)
     else:
-        raise ValueError("You need to specify n or budget!")
-    plt.hist(flux_input)
-    plt.show()
-    return
+        raise ValueError("You need to specify number of points or the total budget!")
+    # plt.hist(flux_input)
+    # plt.show()
+    # return
 
     delta_ra = np.array(rho) * np.cos(theta)/(np.cos(skycoord.dec).value)
     delta_dec = np.array(rho) * np.sin(theta)
@@ -140,27 +143,30 @@ def make_random_source(direction, freq=None, n=None, radius=1, prune=False,
     ra_random = delta_ra*u.arcsec + skycoord.ra
     dec_random = delta_dec*u.arcsec+ skycoord.dec
    
-    if known_file:
+    if isinstance(known_sources, str):
+        # try to open the known sources file, the first two columns should be the ra and dec
         try:
-            known_data = np.loadtxt(known_file, skiprows=1)
+            known_sources = np.loadtxt(known_sources, skiprows=1)
         except:
-            print('No known file can be open.')
-            known_data = None
-    if known_data is not None:
+            print('Failed to read {}'.format(known_sources))
+            known_sources = None
+    if known_sources is not None:
         distance = prune_threshold*u.arcsec
         print('distance', distance)
         selected_after_known_ra = []
         selected_after_known_dec = []
-        if len(known_data.shape) == 1:
-            known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
-        elif len(known_data.shape) > 1:
-            known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
+        if len(known_sources.shape) == 1:
+            known_sources_coords = SkyCoord(ra=known_sources[0], dec=known_sources[1], unit='arcsec')
+        elif len(known_sources.shape) > 1:
+            known_sources_coords = SkyCoord(ra=known_sources[:,0], dec=known_sources[:,1], 
+                                            unit='arcsec')
         else:
-            raise ValueError('Unsupported file: {}'.format(known_file))
+            raise ValueError('Unsupported file: {}'.format(known_sources))
         # print('known_sources ra:', known_sources.ra.value)
         # print('known_sources dec:', known_sources.dec.value)
         for ra,dec in zip(ra_random, dec_random):
-            if np.sum(np.abs(ra - known_sources.ra) < distance)>0 and np.sum(np.abs(dec - known_sources.dec) < distance)>0:
+            if (np.sum(np.abs(ra - known_sources_coords.ra) < distance) > 0 and 
+                np.sum(np.abs(dec - known_sources_coords.dec) < distance) > 0):
                 print('skipping one source')
                 continue
             selected_after_known_ra.append(ra)
