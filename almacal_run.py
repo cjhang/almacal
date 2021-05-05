@@ -55,8 +55,8 @@ def gen_filenames(dirname=None, listfile=None, basedir=None, debug=False):
             file_list.append(line)
     return file_list
 
-def savelist(l, filename=None, outdir='./'):
-    with open(os.path.join(outdir, filename), 'w+') as f:
+def savelist(l, filename=None, outdir='./', file_mode='a+'):
+    with open(os.path.join(outdir, filename), file_mode) as f:
         for item in l:
             f.write(item+'\n')
 
@@ -1392,14 +1392,14 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
         file_mode = 'a+'
     else:
         file_mode = 'w+'
-    with open(summary_file, file_mode) as f:
-        f.write("obj")
-        for band in bands:
-            for res in resolutions:
-                f.write(' ')
-                f.write(band+'_'+res)
-        f.write('\n')
-    
+        with open(summary_file, file_mode) as f:
+            f.write("obj")
+            for band in bands:
+                for res in resolutions:
+                    f.write(' ')
+                    f.write(band+'_'+res)
+            f.write('\n')
+        
     detections = []
     goodfields = {}
     for band in bands:
@@ -1495,9 +1495,10 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             with open(summary_file, 'a+') as f:
                 f.write("{}\n".format(found_string)) 
     plt.close()
-    savelist(detections, filename='detections.txt', outdir=outdir)
+    savelist(detections, filename='detections.txt', outdir=outdir, file_mode=file_mode)
     for band in bands:
-        savelist(goodfields[band], filename='goodfields4{}.txt'.format(band), outdir=outdir)
+        savelist(goodfields[band], filename='goodfields4{}.txt'.format(band), outdir=outdir,
+                 file_mode=file_mode)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     obj_match = re.compile('^J\d*[+-]\d*$')
