@@ -1039,8 +1039,10 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
-        images_pbcorr=None):
+        images_pbcorr=None, fovscale=1.0):
     """calculate the effective area for given images
+
+    rlimit: in arcsec
     """
     if len(images) != len(images_pbcorr):
         raise ValueError('images and images_pbcorr should contain same sources!')
@@ -1052,20 +1054,62 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
             header = hdu[0].header
         with fits.open(images_pbcorr[i]) as hdu_pbcor:
             data_pbcor = hdu_pbcor[0].data
-        pix2area = (hdu[0].header['CDELT1']*3600)**2  # pixel to arcsec^2
+        pixel_scale = header['CDELT1']*3600
+        pix2area = pixel_scale**2  # pixel to arcsec^2
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
         mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
         pbcor = (data / data_pbcor).reshape(ny, nx)
-
+        if fovscale:
+            rlimit = fovscale * fov.value
+            # print('rlimit', rlimit)
+            x = (np.arange(0, nx) - nx/2.0) * pixel_scale
+            y = (np.arange(0, ny) - ny/2.0) * pixel_scale
+            r = np.sqrt(x**2 + y**2)
+            # print('max r:', np.max(r))
+            pbcor[r > rlimit] = 0.0
         effarea_list = []
         for f in flux:
             snr = f / (std * 1000) # from Jy to mJy
             snr_map = snr * pbcor
             area = np.sum(snr_map > snr_threshold) * pix2area
             effarea_list.append(area)
-        effarea = effarea + np.array(effarea_list)
+        effarea = effarea + np.array(effarea_list) / 3600. # convert to deg^2
     return np.array([flux, effarea])
+
+def read_flux(basedir, obj, band, resolution,):
+    """read flux from the obj summary file
+    """
+    summary_file = os.path.join(basedir, obj, obj+'.sources_found.txt')
+    with open(summary_file) as sf:
+        lines = sf.readlines()
+        entry = '# {} {} {}\n'.format(obj, band, resolution)
+        if entry in lines:
+            idx = lines.index(entry)
+            flux = (np.array(map(np.float, lines[idx+1].split()))[2:])
+            flux = flux.reshape((len(flux)/2, 2))
+        else:
+            flux = None
+    return flux
+
+def read_flux2(basedir, obj, bands=['B6','B7'], resolutions=['', 'uvtaper1.0', 'uvtaper1.7'],):
+    """read flux from the obj summary file
+    """
+    flux = {}
+    summary_file = os.path.join(basedir, obj, obj+'.sources_found.txt')
+    with open(summary_file) as sf:
+        lines = sf.readlines()
+
+        for band in bands:
+            for res in resolutions:
+                idx = lines.index('# {} {} {}\n'.format(obj, band, res))
+                print(lines[idx+1].split())
+                flux[band+'_'+res] = np.array(map(np.float, lines[idx+1].split()))
+    return flux
+
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -1387,11 +1431,13 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             if obj_match.match(obj):
                 objs.append(item)
 
-    summary_file = os.path.join(outdir, 'summary.txt')
     if continue_mode:
         file_mode = 'a+'
     else:
         file_mode = 'w+'
+
+    summary_file = os.path.join(outdir, 'summary.txt')
+    if not os.path.isfile(summary_file):
         with open(summary_file, file_mode) as f:
             f.write("obj")
             for band in bands:
@@ -1459,11 +1505,11 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     if len(sources_found) > 0:
                         obj_summary.write('# {} {} {}\n'.format(obj, band, res))
                         obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
-                        for ra, dec, flux in sources_found:
+                        for ra, dec, flux, snr in sources_found:
                             obj_summary.write('{:.6f}  {:.6f} '.format(ra.to(u.arcsec).value,
                                 dec.to(u.arcsec).value))
-                            for f_m in flux:
-                                obj_summary.write(" {:.8f} ".format(f_m))
+                            for f_m, f_snr in zip(flux, snr):
+                                obj_summary.write(" {:.4f, :.2f} ".format(f_m, f_snr))
                             obj_summary.write('\n')
             # write into files
             obj_summary.close()
@@ -1484,7 +1530,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 elif dection_input == 'n':
                     pass
                 else:
-                    # os.system('rm -rf {}'.format(obj_outdir))
+                    os.system('rm -rf {}'.format(obj_outdir))
                     break
                     
                 for band in bands:
@@ -1545,8 +1591,9 @@ def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, ban
                 image_fullpath = os.path.join(obj_dir, image)
                 image_pbcorr = image.replace('image', 'pbcor.image')
                 image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
-                _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
-                        images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath])
-                effarea[band+'_'+res] += objarea
+                if os.path.isfile(image_fullpath):
+                    _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
+                                    images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath])
+                    effarea[band+'_'+res] += objarea
     if savefile:
-        effarea.write(format='ascii')
+        effarea.write(savefile, format='ascii')
