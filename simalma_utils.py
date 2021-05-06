@@ -57,9 +57,9 @@ def aspect_sampler(n, niter=100, fluxrange=[0.02, 10], radius=15):
     return np.random.choice(x, n, p=y_pdf)
 
 def make_random_source(direction, direction_units='deg',freq=None, n=None, radius=1, 
-        prune=False, prune_threshold=3, debug=False, savefile=None, clname=None,
-        fluxrange=1, fluxunit='mJy', known_file=None, known_data=None,
-        sampler=np.random.power, sampler_params={}, budget=None):
+        prune=False, prune_threshold=3., debug=False, savefile=None, clname=None,
+        fluxrange=[0, 1], fluxunit='mJy', known_sources=None,
+        sampler=np.random.uniform, sampler_params={}, budget=None):
     """This function used to add random source around a given direction
         
     This is a proximate solution, which treat the field of view as a plane.
@@ -78,21 +78,23 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
         direction = 'J2000 13h03m49.215900s -55d40m31.60870s'
    """
     # generate a random radius
-    if isinstance(direction, str):
-        try:
-            skycoord = SkyCoord(direction[5:])
-        except:
-            skycoord = SkyCoord(direction)
-    elif isinstance(direction, list):
-        skycoord = SkyCoord(*direction, units=direction_units)
-    else:
-        print("{} as a direction is not support!".format(direction))
+    # print(direction)
+    skycoord = SkyCoord(direction[5:])
+    #if isinstance(direction, str):
+    #    try:
+    #        skycoord = SkyCoord(direction[5:])
+    #    except:
+    #        skycoord = SkyCoord(direction)
+    #elif isinstance(direction, list):
+    #    skycoord = SkyCoord(*direction, units=direction_units)
+    #else:
+    #    print("{} as a direction is not support!".format(direction))
     if isinstance(fluxrange, (int, float)):
         fluxrange = [fluxrange, fluxrange]
     if n:
         theta = 2*np.pi*np.random.uniform(0, 1, n)
         rho = radius * np.sqrt(np.random.uniform(0, 1, n))
-        flux_sampling = sampler(**sampler_params)
+        flux_sampling = np.array([sampler(**sampler_params) for i in range(n)])
         flux_input = flux_sampling * np.diff(fluxrange) + fluxrange[0]
         if debug:
             print('flux range {} [{}]'.format(fluxrange, fluxunit))
@@ -151,27 +153,19 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
     ra_random = delta_ra*u.arcsec + skycoord.ra
     dec_random = delta_dec*u.arcsec+ skycoord.dec
    
-    if isinstance(known_sources, str):
-        # try to open the known sources file, the first two columns should be the ra and dec
-        try:
-            known_sources = np.loadtxt(known_sources, skiprows=1)
-        except:
-            print('Failed to read {}'.format(known_sources))
-            known_sources = None
-    if known_sources is not None:
+    if (known_sources is not None) and (len(known_sources) > 0):
+        known_sources_coords_ra = []
+        known_sources_coords_dec = []
         distance = prune_threshold*u.arcsec
-        print('distance', distance)
+        # print('distance', distance)
+        for source in known_sources:
+            known_sources_coords_ra.append(source[0])
+            known_sources_coords_dec.append(source[1])
+        known_sources_coords = SkyCoord(ra=known_sources_coords_ra, dec=known_sources_coords_dec, 
+                                        unit='arcsec')
+
         selected_after_known_ra = []
         selected_after_known_dec = []
-        if len(known_sources.shape) == 1:
-            known_sources_coords = SkyCoord(ra=known_sources[0], dec=known_sources[1], unit='arcsec')
-        elif len(known_sources.shape) > 1:
-            known_sources_coords = SkyCoord(ra=known_sources[:,0], dec=known_sources[:,1], 
-                                            unit='arcsec')
-        else:
-            raise ValueError('Unsupported file: {}'.format(known_sources))
-        # print('known_sources ra:', known_sources.ra.value)
-        # print('known_sources dec:', known_sources.dec.value)
         for ra,dec in zip(ra_random, dec_random):
             if (np.sum(np.abs(ra - known_sources_coords.ra) < distance) > 0 and 
                 np.sum(np.abs(dec - known_sources_coords.dec) < distance) > 0):
@@ -206,9 +200,9 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
     else:
         return [ra_random, dec_random, flux_input]
 
-def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', make_image=True, 
-        basename=None, debug=False, flux=None, known_file=None, uvtaper_scale=None,
-        inverse_image=False, budget=None, **kwargs):
+def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./', 
+        make_image=True, outname=None, debug=False, uvtaper_scale=None,
+        **kwargs):
     """
     The sources will be injected to the original file, so only pass in the copied data!
     Args:
@@ -223,8 +217,6 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
     
     if not os.path.isdir(outdir):
         os.system('mkdir -p {}'.format(outdir))
-    if inverse_image:
-        flux = -1.0 * flux
    
     if vis:
         md = msmdtool()
@@ -241,11 +233,11 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
         savefile_fullpath = os.path.join(outdir, basename+'.txt')
         # overwrite old files
         rmtables(clname_fullpath)
-        os.system('rm -rf {}'.format(savefile_fullpath))
+        # os.system('rm -rf {}'.format(savefile_fullpath))
         # generate random sources
-        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, 
-                                        fluxrange=fluxrange, clname=clname_fullpath, 
-                                        savefile=savefile_fullpath, known_file=known_file, **kwargs)
+        # mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, 
+                                        # fluxrange=fluxrange, clname=clname_fullpath, 
+                                        # savefile=savefile_fullpath, known_file=known_file, **kwargs)
         ft(vis=vis, complist=mycomplist)
         uvsub(vis=vis, reverse=True)
         
@@ -298,34 +290,24 @@ def add_random_sources(vis=None, fitsimage=None, n=5, radius=10, outdir='./', ma
 
         # kernel = Gaussian2DKernel(stddev=0.25*(a+b))
         kernel = gkern(bmaj=a, bmin=b, theta=theta)
-        refer = 'J'+str(int(header['EQUINOX']))
-        mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], unit="deg").to_string('hmsdms')
-        myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
-
-        if debug:
-            print('mydirection', mydirection)
-            print('myfreq', myfreq)
-        savefile_fullpath = os.path.join(outdir, basename+'.txt')
-        mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, 
-                                        fluxrange=fluxrange, savefile=savefile_fullpath, 
-                                        known_file=known_file, budget=budget, **kwargs)
         # print('mycomplist', mycomplist)
-        hdr = wcs.to_header()
-        hdr['OBSERVER'] = 'Your name'
-        hdr['COMMENT'] = "Here's some comments about this FITS file."
+        # hdr = wcs.to_header()
+        # hdr['OBSERVER'] = 'Your name'
+        # hdr['COMMENT'] = "Here's some comments about this FITS file."
         mycomplist_pixels = []
         blank_image = np.zeros((ny, nx))
+        # mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, 
+                                        # fluxrange=fluxrange, savefile=savefile_fullpath, 
+                                        # known_sources=known_sources, budget=budget, **kwargs) 
         for ra, dec, flux in zip(*mycomplist):
-            ra_pix, dec_pix = map(np.around, skycoord_to_pixel(SkyCoord(ra, dec), wcs))
+            ra_pix, dec_pix = map(np.around, skycoord_to_pixel(SkyCoord(ra, dec, unit='arcsec'), wcs))
             # print(ra_pix, dec_pix, flux)
             mycomplist_pixels.append([int(ra_pix), int(dec_pix), flux])
             blank_image[int(dec_pix), int(ra_pix)] = flux
         fake_image = convolve(blank_image, kernel)/1000*beamsize + data_masked # convert mJy into Jy before added into image
         fake_image = fake_image.filled(np.nan)
-        if inverse_image:
-            fake_image = -1.0*fake_image
-        hdu = fits.PrimaryHDU(header=hdr, data=fake_image)
-        hdu.writeto(os.path.join(outdir ,basename+'.fits'), overwrite=True)
+        hdu = fits.PrimaryHDU(header=header, data=fake_image)
+        hdu.writeto(os.path.join(outdir , outname+'.fits'), overwrite=True)
         return 
 
 def subtract_sources(vis, complist=None, ):
@@ -472,9 +454,11 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
-                  subtract_background=False, known_file=None, figname=None, ax=None, pbcor=False,
-                  fov_scale=1.0):
+                  subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
+                  fov_scale=1.5, mask_threshold=3.):
     """finding point source in the image
+
+    mask_threshold: the mask size of known_sources
     """
     with fits.open(fitsimage) as hdu:
         header = hdu[0].header
@@ -515,7 +499,27 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
     # read known_sources
     known_mask = np.full((ny, nx), 0, dtype=bool)
-    if known_file:
+    if (known_sources is not None) and (len(known_sources) > 0):
+        known_sources_coords_ra = []
+        known_sources_coords_dec = []
+        distance = mask_threshold*u.arcsec
+        # print('distance', distance)
+        for source in known_sources:
+            known_sources_coords_ra.append(source[0])
+            known_sources_coords_dec.append(source[1])
+        known_sources_coords = SkyCoord(ra=known_sources_coords_ra, dec=known_sources_coords_dec, 
+                                        unit='arcsec')
+        known_sources_pixel = skycoord_to_pixel(known_sources_coords, wcs)
+        known_aper = RectangularAperture(known_sources_pixel, 2.*a, 2.*a, theta=0)
+        known_aper_mask = known_aper.to_mask(method='center')
+        for m in known_aper_mask:
+            known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
+        if False:
+            plt.figure()
+            plt.imshow(known_mask,origin='lower')
+            plt.show()
+
+    if False:
         try:
             known_data = np.loadtxt(known_file, skiprows=1)
         except:
@@ -746,7 +750,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         ax.add_patch(ellipse)
         if debug:
             ellipse = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
-                                      angle=0, facecolor=None, edgecolor='grey', alpha=0.5)
+                                      angle=0, fill=False, facecolor=None, edgecolor='grey', 
+                                      alpha=0.8)
             ax.add_patch(ellipse)
         ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
                 color='magenta', fontsize=10, horizontalalignment='center', verticalalignment='center')
@@ -797,13 +802,14 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     if sources_file:
         return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
     if len(flux_auto)>0:
-        return list(zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto, flux_snr_list))
+        return list(zip(sources_found_coords.ra.to(u.arcsec).value, 
+                        sources_found_coords.dec.to(u.arcsec).value, flux_auto, flux_snr_list))
     else:
         return []
 
-def gen_sim_images(mode='image', vis=None, imagefile=None, known_file=None, n=20, repeat=10, 
-                    snr=np.arange(1,20,0.1), fov_scale=1.5, outdir='./', basename=None,
-                    uvtaper_scale=None, inverse_image=False, 
+def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10, 
+                    snr=(1,20), fov_scale=1.5, outdir='./', basename=None,
+                    uvtaper_scale=None, budget=None,
                     debug=False, **kwargs):
     """generate the fake images with man-made sources
 
@@ -811,116 +817,142 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, known_file=None, n=20
      mode: image or uv
     """
     # make a copy of the original file
-    if basename is None:
-        basename = os.path.basename(vis)
     if not os.path.isdir(outdir):
         os.system('mkdir -p {}'.format(outdir))
 
     if mode == 'image':
+        if basename is None:
+            basename = os.path.basename(imagefile)
         if not imagefile:
             raise ValueError("The image file must be given!")
-
-    if mode == 'uv':
-        if not vis:
-            raise ValueError("The visibility must be given!")
-        vistmp = os.path.join(outdir, basename+'.tmp')
-        split(vis=vis, outputvis=vistmp, datacolumn='data')
-        # read information from vis 
-        spw_specrange = read_spw(vistmp)
-        freq_mean = np.mean(spw_specrange) # in GHz
-        tb.open(vistmp + '/ANTENNA')
-        antenna_diameter_list = tb.getcol('DISH_DIAMETER')
-        tb.close()
-        antenna_diameter = np.max(antenna_diameter_list) * u.m
-        wavelength = const.c / (freq_mean * u.GHz) # in um
-        fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
-
-        if debug:
-            print('fov', fov)
-            print('radius', 0.5*fov)
-        # read information from image files
-        imagefile_base, imagefile_extension = os.path.splitext(imagefile)
-        print(imagefile_base, imagefile_extension)
-        if False:#imagefile_extension == 'fits':
-            fitsimage = imagefile
-            hdu = fits.open(fitsimage)
+        with fits.open(imagefile) as hdu:
+            data = hdu[0].data
             header = hdu[0].header
-            data = np.ma.masked_invalid(hdu[0].data)
-            pixel_scale = 1/np.abs(header['CDELT1'])
-            fwhm = header['BMAJ']*3600*u.arcsec
-            fwhm_pixel = header['BMAJ']*pixel_scale
-            a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
-            ratio = header['BMIN'] / header['BMAJ']
-            theta = header['BPA']
-            beamsize = np.pi*a*b/(4*np.log(2))
-            gaussian_norm = 2*np.pi*a*b/2.35482**2
-            sensitivity = np.ma.std(data) * 1000 # in mJy/pixel
-            # flux_base = rms
-    else:
-        im_head = imhead(imagefile)
-        im_beam = im_head['restoringbeam']
-        im_incr = im_head['incr']
-        im_info = imstat(imagefile)
-        # beamsize = np.pi*a*b/(4*np.log(2))
-        beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
-        gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
-        sensitivity = im_info['rms'] * 1000 # in mJy/pixel
-        # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
-        if mode == 'image':
-            fitsimage = imagefile+'.fits'
-            exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
-    # print('sensitivity', sensitivity)
-    # print('gaussian_norm', gaussian_norm)
-    # print('beamsize', beamsize)
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
 
-    # if snr_mode == 'peak':
-    flux_base = sensitivity #* gaussian_norm
+        pixel_scale = 1/np.abs(header['CDELT1'])
+        fwhm = header['BMAJ']*3600*u.arcsec
+        fwhm_pixel = header['BMAJ']*pixel_scale
+        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        ratio = header['BMIN'] / header['BMAJ']
+        theta = header['BPA']
+        beamsize = np.pi*a*b/(4*np.log(2))
+        #gaussian_norm = 2*np.pi*a*b/2.35482**2
+        refer = 'J'+str(int(header['EQUINOX']))
+        mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], 
+                                          unit="deg").to_string('hmsdms')
+        myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
+
+        sensitivity = std * 1000 # in mJy/pixel
+        fluxrange = np.array(snr) * sensitivity
+        known_sources = source_finder(imagefile, fov_scale=fov_scale)
+        for i in range(repeat):
+            print('run {}'.format(i))
+            basename_repeat = basename + '.run{}'.format(i)
+            complist_file = os.path.join(outdir, basename_repeat+'.txt')
+            mycomplist = make_random_source(mydirection, freq=myfreq, radius=0.5*fov_scale*fov, 
+                    debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
+                    sampler=np.random.uniform, sampler_params={},
+                    known_sources=known_sources, budget=budget, **kwargs) 
+            add_random_sources(fitsimage=imagefile, mycomplist=mycomplist,
+                    outdir=outdir, outname=basename_repeat, debug=debug, **kwargs)
+    # adding source in uv has not been test for new scheme
+    # if mode == 'uv':
+        # if not vis:
+            # raise ValueError("The visibility must be given!")
+        # vistmp = os.path.join(outdir, basename+'.tmp')
+        # split(vis=vis, outputvis=vistmp, datacolumn='data')
+        # # read information from vis 
+        # spw_specrange = read_spw(vistmp)
+        # freq_mean = np.mean(spw_specrange) # in GHz
+        # tb.open(vistmp + '/ANTENNA')
+        # antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+        # tb.close()
+        # antenna_diameter = np.max(antenna_diameter_list) * u.m
+        # wavelength = const.c / (freq_mean * u.GHz) # in um
+        # fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+
+        # if debug:
+            # print('fov', fov)
+            # print('radius', 0.5*fov)
+        # # read information from image files
+        # imagefile_base, imagefile_extension = os.path.splitext(imagefile)
+        # print(imagefile_base, imagefile_extension)
+        # if False:#imagefile_extension == 'fits':
+            # fitsimage = imagefile
+            # hdu = fits.open(fitsimage)
+            # header = hdu[0].header
+            # data = np.ma.masked_invalid(hdu[0].data)
+    # else:
+        # im_head = imhead(imagefile)
+        # im_beam = im_head['restoringbeam']
+        # im_incr = im_head['incr']
+        # im_info = imstat(imagefile)
+        # # beamsize = np.pi*a*b/(4*np.log(2))
+        # beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+        # gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
+        # sensitivity = im_info['rms'] * 1000 # in mJy/pixel
+        # # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+        # if mode == 'image':
+            # fitsimage = imagefile+'.fits'
+            # exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
+    # # print('sensitivity', sensitivity)
+    # # print('gaussian_norm', gaussian_norm)
+    # # print('beamsize', beamsize)
+
+    # # if snr_mode == 'peak':
+    # flux_base = sensitivity #* gaussian_norm
     
-    if budget:
-    #if snr is None:
-    #TODO: better physical motivated
-        # Limitation from extragalactic background
-        EBL = 14 # 14-18Jy/deg2
-        radius = 0.5*fov
-        budget_mean = (np.pi*(radius*u.arcsec)**2 * 20*u.Jy/u.deg**2).to(u.mJy).value
-        print('budget_mean', budget_mean)
-        budget_sigma = 0.5
-        fluxrange = [1.0, 0.0001]
-        for i in range(repeat):
-            # generate the budget for each run
-            budget = budget_sigma * np.random.randn() + budget_mean
+    # if budget:
+    # #if snr is None:
+    # #TODO: better physical motivated
+        # # Limitation from extragalactic background
+        # EBL = 14 # 14-18Jy/deg2
+        # radius = 0.5*fov
+        # budget_mean = (np.pi*(radius*u.arcsec)**2 * 20*u.Jy/u.deg**2).to(u.mJy).value
+        # print('budget_mean', budget_mean)
+        # budget_sigma = 0.5
+        # fluxrange = [1.0, 0.0001]
+        # for i in range(repeat):
+            # # generate the budget for each run
+            # budget = budget_sigma * np.random.randn() + budget_mean
 
-            basename_new = basename+'.run{}'.format(i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
-                        inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
+            # basename_new = basename+'.run{}'.format(i)
+            # if mode == 'uv':
+                # add_random_sources(vis=vistmp, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        # uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        # inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
+            # elif mode == 'image':
+                # add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
+                        # uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
+                        # inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
 
 
-    elif len(snr)==2:
-        flux = np.array(snr)*flux_base
-        for i in range(repeat):
-            basename_new = basename+'.run{}'.format(i)
-            if mode == 'uv':
-                add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
-                        known_file=known_file, inverse_image=inverse_image, debug=debug, 
-                        **kwargs)
-            elif mode == 'image':
-                add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,
-                        uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
-                        known_file=known_file, inverse_image=inverse_image, debug=debug, 
-                        **kwargs)
-        # clear temperary files
-        rmtables(vistmp)
+    # elif len(snr)==2:
+        # flux = np.array(snr)*flux_base
+        # for i in range(repeat):
+            # basename_new = basename+'.run{}'.format(i)
+            # if mode == 'uv':
+                # add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,
+                        # uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
+                        # known_file=known_file, inverse_image=inverse_image, debug=debug, 
+                        # **kwargs)
+            # elif mode == 'image':
+                # add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,
+                        # uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
+                        # known_file=known_file, inverse_image=inverse_image, debug=debug, 
+                        # **kwargs)
+        # # clear temperary files
+        # rmtables(vistmp)
 
-def calculate_sim_images(objfolder, vis=None, baseimage=None, n=20, repeat=10, 
-        known_file=None, obj=None, band=None, basename=None, savefile=None, 
-        threshold=5.0, plot=False, snr_mode='integrated', **kwargs):
+def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
+        basename=None, savefile=None, fov_scale=1.5,
+        threshold=5.0, plot=False, snr_mode='peak', **kwargs):
     """simulation the completeness of source finding algorithm
 
     mode:
@@ -943,10 +975,12 @@ def calculate_sim_images(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     print('rms',rms)
     print('beamsize',beamsize) 
     print('rms_flux',rms_flux)
+
+    known_sources = source_finder(baseimage, fov_scale=fov_scale)
     
     flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
     if basename is None:
-        basename = os.path.join(objfolder, '{obj}_{band}_combine.ms'.format(obj=obj, band=band))
+        basename = os.path.basename(baseimage)
         print('basename', basename)
     # all_fake_images = glob.glob(basename+'*{}.fits'.format(suffix))
 
@@ -965,11 +999,15 @@ def calculate_sim_images(objfolder, vis=None, baseimage=None, n=20, repeat=10,
         # flux_input_list.append(flux)
         #print('SNR: {}, RUN:{}'.format(s, run))
         #print('flux:', flux)
-        img = "{basename}.run{run}.fits".format(basename=basename, run=run)
-        try:
-            sf_return = source_finder(img, sources_file=basename+'.run{}.txt'.format(run), known_file=known_file, **kwargs)
-        except:
-            continue
+        simimage = "{basename}.run{run}.fits".format(basename=basename, run=run)
+        simimage_sourcefile = "{basename}.run{run}.txt".format(basename=basename, run=run)
+        simimage_fullpath = os.path.join(simfolder, simimage)
+        simimage_sourcefile_fullpath = os.path.join(simfolder, simimage_sourcefile)
+        # try:
+        sf_return = source_finder(simimage_fullpath, sources_file=simimage_sourcefile_fullpath, 
+                known_sources=known_sources, **kwargs)
+        # except:
+            # continue
         # if sf_return == 0:
             # continue
         flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
@@ -1036,10 +1074,10 @@ def calculate_sim_images(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     data_saved['detection_input_array'] = detection_input_array.tolist()
     data_saved['detection_found_array'] = detection_found_array.tolist()
     if savefile:
-        with open(savefile, 'w') as fp:
+        with open(savefile, 'w+') as fp:
            json.dump(data_saved, fp)
     if plot:
-        plot_completeness(data_saved)
+        plot_sim_results(data_saved)
     # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
@@ -1152,7 +1190,7 @@ def image_sim(image, outdir='./',):
     
     image: fits image
     """
-    
+
     gen_sim_images()
     calculate_sim_images()
     save(fluxbooting)

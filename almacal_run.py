@@ -1506,8 +1506,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         obj_summary.write('# {} {} {}\n'.format(obj, band, res))
                         obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
                         for ra, dec, flux, snr in sources_found:
-                            obj_summary.write('{:.6f}  {:.6f} '.format(ra.to(u.arcsec).value,
-                                dec.to(u.arcsec).value))
+                            obj_summary.write('{:.6f}  {:.6f} '.format(ra, dec))
                             for f_m, f_snr in zip(flux, snr):
                                 obj_summary.write(" {:.4f, :.2f} ".format(f_m, f_snr))
                             obj_summary.write('\n')
