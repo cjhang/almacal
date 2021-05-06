@@ -1269,16 +1269,18 @@ def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None,
             np.sum(obj_stat['B10']['time']),
             ))
 
-def run_gen_oteo2016_data(basedir, outdir, select_band=['B6', 'B7'], debug=False):
+def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], debug=False):
     """copy the data used in oteo2016
 
     default run: run_gen_oteo2016_data('/science_ALMACAL/data', outdir='./')
     """
     p_obj = re.compile('J\d+[+-]\d+')
-    for obj in os.listdir(basedir):
-        if not p_obj.match(obj):
-            print('Error load obj:', obj)
-            continue
+    if objs is None:
+        objs = []
+        for item in os.listdir(basedir):
+            if obj_match.match(obj):
+                objs.append(item)
+    for obj in objs:
         obj_input_folder = os.path.join(basedir, obj)
         obj_output_folder = os.path.join(outdir, obj)
         print("Copying {}".format(obj))
