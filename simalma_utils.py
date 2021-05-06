@@ -455,7 +455,8 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
-                  subtract_background=False, known_file=None, figname=None, ax=None, pbcor=False):
+                  subtract_background=False, known_file=None, figname=None, ax=None, pbcor=False,
+                  fov_scale=1.0):
     """finding point source in the image
     """
     with fits.open(fitsimage) as hdu:
@@ -465,6 +466,11 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
         mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fcenter = [header['CRVAL1'], header['CRVAL2']] # in degrees
+        pixel_center = [nx/2., ny/2.]
     if pbcor:
         fitsimage_path = os.path.dirname(fitsimage)
         fitsimage_basename = os.path.basename(fitsimage)
@@ -481,6 +487,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     
     # for DAOStarFinder, in pixel space
     pixel_scale = 1/np.abs(header['CDELT1'])
+    fov_pixel = fov / 3600. * pixel_scale
     fwhm = header['BMAJ']*3600*u.arcsec
     fwhm_pixel = header['BMAJ']*pixel_scale
     bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
@@ -585,6 +592,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
    
 
     flux_auto = []
+    flux_snr_list = []
     sources_found = False
     if sources_found_candidates:
         # print('source_found_peak',source_found_peak)
@@ -628,14 +636,19 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             if 'peak' in methods:
                 if flux_list[methods.index('peak')] < threshold*std:
                     is_true = False
-            
+            # checking whether within the designed fov
+            if ((sources_found_x_candidates[i]-pixel_center[0])**2 
+                    + (sources_found_y_candidates[i]-pixel_center[1])**2) > (fov_scale*fov_pixel/2.)**2:
+                is_true = False
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
                 sources_found_y.append(sources_found_y_candidates[i])
+                flux_snr = np.array(flux_list) / std
                 if pbcor:
                     flux_auto.append(np.array(flux_pbcor_list) * 1000)
                 else:
-                    flux_auto.append(np.array(flux_list) * 1000) #from Jy to mJy
+                    flux_auto.append(np.array(flux_list) * 1000)
+                flux_snr_list.append(flux_snr)
 
         if len(flux_auto)>0:
             sources_found = True
@@ -714,6 +727,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
                                   angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
         ax.add_patch(ellipse)
+        if debug:
+            ellipse = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
+                                      angle=0, facecolor=None, edgecolor='grey', alpha=0.5)
+            ax.add_patch(ellipse)
         ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
                 color='magenta', fontsize=10, horizontalalignment='center', verticalalignment='center')
         
@@ -763,7 +780,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     if sources_file:
         return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
     if len(flux_auto)>0:
-        return list(zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto))
+        return list(zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto, flux_snr_list))
     else:
         return []
 
