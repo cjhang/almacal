@@ -320,7 +320,7 @@ def make_combine_obs(obj, basedir=None, band=None, badfiles=None):
     # print(valid_files)
     return valid_files
     
-def read_flux(obs, allflux_file=None, strick_mode=False):
+def search_flux(obs, allflux_file=None, strick_mode=False):
     obs_filename = os.path.basename(obs)
     if allflux_file is None:
         allflux_file = os.path.join(os.path.expanduser('~'), 'Documents/projects/almacal/data/allcal.fluxval')
@@ -645,7 +645,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
     if check_flux:
         # check the flux value of the subtracted point source
         if uidname:
-            fluxval = read_flux(uidname)
+            fluxval = search_flux(uidname)
             if debug:
                 print(uidname)
                 print("fluxval: {}".format(fluxval))
@@ -863,6 +863,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     """
     if len(vis) < 1:
         return False
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
     if basedir:
         vis_fullpath = []
         for v in vis:
@@ -1039,7 +1041,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
-        images_pbcorr=None, fovscale=1.0):
+        images_pbcorr=None, fovscale=2.0):
     """calculate the effective area for given images
 
     rlimit: in arcsec
@@ -1064,7 +1066,7 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
         pbcor = (data / data_pbcor).reshape(ny, nx)
         if fovscale:
-            rlimit = fovscale * fov.value
+            rlimit = 0.5 * fovscale * fov.value
             # print('rlimit', rlimit)
             x = (np.arange(0, nx) - nx/2.0) * pixel_scale
             y = (np.arange(0, ny) - ny/2.0) * pixel_scale
@@ -1278,8 +1280,10 @@ def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], 
     if objs is None:
         objs = []
         for item in os.listdir(basedir):
-            if obj_match.match(obj):
+            if p_obj.match(item):
                 objs.append(item)
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
     for obj in objs:
         obj_input_folder = os.path.join(basedir, obj)
         obj_output_folder = os.path.join(outdir, obj)
@@ -1480,6 +1484,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                                    figsize=(4.2*len(resolutions),4*len(bands))) 
             fig.suptitle(obj)
             #for img in imgs:
+            # sources_number = {}
             for i,band in enumerate(bands):
                 for j,res in enumerate(resolutions):
                     if res == '':
@@ -1507,11 +1512,13 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     if len(sources_found) > 0:
                         obj_summary.write('# {} {} {}\n'.format(obj, band, res))
                         obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
+                        source_idx = 0
                         for ra, dec, flux, snr in sources_found:
-                            obj_summary.write('{:.6f}  {:.6f} '.format(ra, dec))
+                            obj_summary.write('{} {:.6f} {:.6f} '.format(source_idx, ra, dec))
                             for f_m, f_snr in zip(flux, snr):
-                                obj_summary.write(" {:.4f, :.2f} ".format(f_m, f_snr))
+                                obj_summary.write(" {:.4f} {:.2f} ".format(f_m, f_snr))
                             obj_summary.write('\n')
+                            source_idx += 1
             # write into files
             obj_summary.close()
             found_string = obj
@@ -1525,7 +1532,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
 
             if interative:
                 plt.show()
-                dection_input = str(raw_input("Is detection? [y/n]: ") or 'y')
+                dection_input = str(raw_input("Is detection? [n/y]: ") or 'n')
                 if dection_input == 'y':
                     detections.append(obj)
                 elif dection_input == 'n':
@@ -1535,7 +1542,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     break
                     
                 for band in bands:
-                    goodfield_input=str(raw_input("Good for Band:{} [y/n]?: ".format(band)) or 'y')
+                    goodfield_input=str(raw_input("Good for Band:{} [n/y]?: ".format(band)) or 'n')
                     if goodfield_input == 'y':
                         goodfields[band].append(obj)
                 plt.close()

@@ -455,7 +455,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
-                  fov_scale=1.5, mask_threshold=3.):
+                  fov_scale=2.0, mask_threshold=3.):
     """finding point source in the image
 
     mask_threshold: the mask size of known_sources
@@ -774,7 +774,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                           height=3*a*scale, angle=theta, facecolor=None, fill=False, 
                                           edgecolor='red', alpha=0.8, linewidth=1)
                 ax.add_patch(ellipse)
-                ax.text(yy, xx, "{:.2f}mJy".format(flux_auto[i][0]), color='magenta', fontsize=10)
+                ax.text(1.1*yy, 1.0*xx, "({})\n{:.2f}mJy".format(i, flux_auto[i][0]), 
+                        color='magenta', fontsize=12,)
+                        #bbox=dict(boxstyle="round", ec=(1,0.5,0.5), fc=(1,0.8,0.8), alpha=0.3))
 
         if figname:
             ax.set_title(figname)
@@ -1184,6 +1186,7 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         # ax.set_ylim((-0.1, 1.2))
 
         plt.show()
+    return snr_mid, aperture_boosting, completeness_list, fake_rate_list
 
 def image_sim(image, outdir='./',):
     """calculate the completeness for given fitsfile
