@@ -168,11 +168,11 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
         myimagename = os.path.join(outdir, basename + suffix)
     # else:
         # myimagename = o.path.join(outdir, myimagename)
-
-    print("mean frequecy:", freq_mean)
-    print("maximum baseline:", baseline_typical)
-    print("cell size:", mycell)
-    print("image size:", myimsize)
+    if debug:
+        print("mean frequecy:", freq_mean)
+        print("maximum baseline:", baseline_typical)
+        print("cell size:", mycell)
+        print("image size:", myimsize)
 
     if isinstance(vis, list):
         if len(vis) > 4:
@@ -208,9 +208,9 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
             for uvt_param in uvtaper_scale:
                 uvt_scale = np.sqrt(1.0*uvt_param**2 - 1.0)
                 img_header = imhead(myimagename+'.image')
-                print(img_header)
+                #print(img_header)
                 restoringbeam = img_header['restoringbeam']
-                print(restoringbeam)
+                #print(restoringbeam)
                 beam_major = restoringbeam['major']
                 beam_minor = restoringbeam['minor']
                 beam_pa = restoringbeam['positionangle']

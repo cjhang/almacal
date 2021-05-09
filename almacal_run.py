@@ -60,7 +60,7 @@ def savelist(l, filename=None, outdir='./', file_mode='a+'):
         for item in l:
             f.write(item+'\n')
 
-def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, **kwargs):
+def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, overwrite=False, **kwargs):
     """make images for one calibrator on all or specific band
 
     Params:
@@ -85,6 +85,9 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
 
     basename = os.path.basename(vis)
     myimagename = os.path.join(outdir, basename + '.cont.auto')
+    if os.path.isfile(myimagename+'.fits') and not overwrite:
+        print('image already existing, return without making new.')
+        return 0
 
     if exclude_aca:
         try:
@@ -129,7 +132,7 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
     rmtables(tablenames=myimagename+'.*')
     return 0
 
-def gen_images(allcal_dir=None, vis=None, outdir='./', bands=None, exclude_aca=True, 
+def gen_images(vis=None, dirname=None, outdir='./', bands=None, exclude_aca=True, 
                   debug=False, **kwargs):
     """generate the images of all calibrators
 
@@ -147,27 +150,27 @@ def gen_images(allcal_dir=None, vis=None, outdir='./', bands=None, exclude_aca=T
 
         2. get all the images just for one folder
     """
-    filelist = []
-    if allcal_dir:
-        for obj in os.listdir(allcal_dir):
-            if debug:
-                print(obj)
-            obj_match = re.compile('^J\d*[+-]\d*$')
-            if obj_match.match(obj):
-                filelist.append(os.path.join(allcal_dir, obj))
-                continue
-    elif vis:
+    if vis:
         if isinstance(vis, str):
             filelist = [vis,]
         elif isinstance(vis, list):
             filelist = vis
-
+    if dirname:
+        filelist = []
+        obs_match = re.compile('^uid___')
+        for obs in os.listdir(dirname):
+            if debug:
+                print(obs)
+            if obs_match.match(obs):
+                filelist.append(os.path.join(dirname, obs))
+    if debug:
+        print('filelist:', filelist)
     for infile in filelist:
         if bands is not None:
             for band in bands:
-                outdir = os.path.join(outdir, band)
-                os.system('mkdir -p {}'.format(outdir))
-                gen_image(infile, band=band, outdir=outdir, exclude_aca=exclude_aca, **kwargs)
+                outdir_band = os.path.join(outdir, band)
+                os.system('mkdir -p {}'.format(outdir_band))
+                gen_image(infile, band=band, outdir=outdir_band, exclude_aca=exclude_aca, **kwargs)
         else:
             gen_image(infile, outdir=outdir, exclude_aca=exclude_aca, **kwargs)
 
@@ -419,7 +422,7 @@ def ms_restore(obs_list, allflux_file=None, basedir=None, outdir='./output', tmp
 
 def copy_ms(basedir=None, outdir=None, selectfile=None, debug=False, time_select=False, 
             start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
-            select_band=None):
+            select_band=None, overwrite=False):
     p_obs = re.compile('uid___')
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     selectfiles_list = []
@@ -479,7 +482,10 @@ def copy_ms(basedir=None, outdir=None, selectfile=None, debug=False, time_select
             print("Copying {}".format(obs))
             if not os.path.isdir(outdir):
                 os.system('mkdir -p {}'.format(outdir))
-            os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir))
+            if os.path.isdir(os.path.join(outdir, obs)) and not overwrite:
+                print("File existing: {}".format(obs))
+            else:
+                os.system('cp -r {} {}'.format(os.path.join(basedir, obs), outdir))
 
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
@@ -1097,20 +1103,27 @@ def read_flux(basedir, obj, band, resolution,):
             flux = None
     return flux
 
-def read_flux2(basedir, obj, bands=['B6','B7'], resolutions=['', 'uvtaper1.0', 'uvtaper1.7'],):
-    """read flux from the obj summary file
-    """
-    flux = {}
-    summary_file = os.path.join(basedir, obj, obj+'.sources_found.txt')
-    with open(summary_file) as sf:
-        lines = sf.readlines()
+def search_band_detection(basedir=None, band='B3', outdir='./', debug=False):
+    """This function used to search source detections in other bands
 
-        for band in bands:
-            for res in resolutions:
-                idx = lines.index('# {} {} {}\n'.format(obj, band, res))
-                print(lines[idx+1].split())
-                flux[band+'_'+res] = np.array(map(np.float, lines[idx+1].split()))
-    return flux
+    basedir: the obj directory contains the data of all the bands
+    band: the target band
+    """
+    copy_ms(basedir=basedir, outdir=outdir, select_band=band, debug=debug)
+    image_dir = os.path.join(outdir, 'images')
+    gen_images(dirname=outdir, debug=debug, outdir=image_dir)
+    
+    is_visual_checking = str(raw_input("Checking the images now? [n/y]: ") or 'n')
+    if is_visual_checking == 'y':
+        selected_files = os.path.join(image_dir, 'seleted.txt')
+        show_images(fileglob=image_dir+'/*.fits', savefile=selected_files)
+    else:
+        print("See you next time...")
+        return
+    if os.path.isfile(selected_files):
+        vis_list = gen_filenames(listfile=selected_files, basedir=outdir)
+        make_good_image(vis=vis_list, basename=os.path.basename(basedir)+'_combined', outdir=image_dir)
+
 
 
 
