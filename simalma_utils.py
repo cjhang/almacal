@@ -455,8 +455,12 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
-                  fov_scale=2.0, mask_threshold=3.):
+                  fov_scale=2.0, mask_threshold=3., second_check=True):
     """finding point source in the image
+
+    This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
+    the sources. Then, additional total and peak SNR checking is used to confirm the detection. The 
+    second stage can be configured by 
 
     mask_threshold: the mask size of known_sources
     """
@@ -648,19 +652,20 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                         beamsize=beamsize, theta=theta/180*np.pi, debug=False, methods=methods)
             #print("flux_list", flux_list)
             is_true = True
-            if 'aperture' in methods:
-                if flux_list[methods.index('aperture')] < threshold*std:
+            if second_check:
+                if 'aperture' in methods:
+                    if flux_list[methods.index('aperture')] < threshold*std:
+                        is_true = False
+                if 'gaussian' in methods:
+                    if flux_list[methods.index('gaussian')] < threshold*std:
+                        is_true = False
+                if 'peak' in methods:
+                    if flux_list[methods.index('peak')] < threshold*std:
+                        is_true = False
+                # checking whether within the designed fov
+                if ((sources_found_x_candidates[i]-pixel_center[0])**2 
+                        + (sources_found_y_candidates[i]-pixel_center[1])**2) > (fov_scale*fov_pixel/2.)**2:
                     is_true = False
-            if 'gaussian' in methods:
-                if flux_list[methods.index('gaussian')] < threshold*std:
-                    is_true = False
-            if 'peak' in methods:
-                if flux_list[methods.index('peak')] < threshold*std:
-                    is_true = False
-            # checking whether within the designed fov
-            if ((sources_found_x_candidates[i]-pixel_center[0])**2 
-                    + (sources_found_y_candidates[i]-pixel_center[1])**2) > (fov_scale*fov_pixel/2.)**2:
-                is_true = False
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
                 sources_found_y.append(sources_found_y_candidates[i])
