@@ -69,6 +69,7 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
         direction: the pointing direction
         n: the number of points
         radius: the largest radius that the points can be put, in arcsec
+                it can be a list whose format is [r_min, r_max] both in arcsec
         prune: remove close pairs, make it easier for pointsource testing
         savefile: save the coordination files
         clname: the component list filename
@@ -93,7 +94,10 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
         fluxrange = [fluxrange, fluxrange]
     if n:
         theta = 2*np.pi*np.random.uniform(0, 1, n)
-        rho = radius * np.sqrt(np.random.uniform(0, 1, n))
+        if isinstance(radius, (float, int)):
+            rho = radius * np.sqrt(np.random.uniform(0, 1, n))
+        elif isinstance(radius, (list, np.ndarray)):
+            rho = np.diff(radius)*np.sqrt(np.random.uniform(0, 1, n)) + radius[0]
         flux_sampling = np.array([sampler(**sampler_params) for i in range(n)])
         flux_input = flux_sampling * np.diff(fluxrange) + fluxrange[0]
         if debug:
@@ -229,11 +233,11 @@ def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./',
         if debug:
             print(mydirection)
             print(myfreq)
-        clname_fullpath = os.path.join(outdir, basename+'.cl')
-        savefile_fullpath = os.path.join(outdir, basename+'.txt')
+        # clname_fullpath = os.path.join(outdir, basename+'.cl')
+        # savefile_fullpath = os.path.join(outdir, basename+'.txt')
         # overwrite old files
         rmtables(clname_fullpath)
-        # os.system('rm -rf {}'.format(savefile_fullpath))
+        os.system('rm -rf {}'.format(savefile_fullpath))
         # generate random sources
         # mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, 
                                         # fluxrange=fluxrange, clname=clname_fullpath, 
@@ -247,24 +251,24 @@ def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./',
                           only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
                           fov_scale=2.0, datacolumn='corrected', usemask='user',
                           basename=basename, suffix=suffix)
-            if inverse_image:
-                # tb = tbtool()
-                # tb.open(os.path.join(outdir, basename+suffix+'.fits'), nomodify=False)
-                # tb.put('map', -1.*tb.getcol('map'))
-                # tb.flush()
-                # tb.close()
-                with fits.open(os.path.join(outdir, basename+suffix+'.fits')) as hdu:
-                    hdu[0].data = -1.0 * hdu[0].data
-                    hdu.writeto(os.path.join(outdir ,basename+suffix+'.fits'), overwrite=True)
+            # if inverse_image:
+                # # tb = tbtool()
+                # # tb.open(os.path.join(outdir, basename+suffix+'.fits'), nomodify=False)
+                # # tb.put('map', -1.*tb.getcol('map'))
+                # # tb.flush()
+                # # tb.close()
+                # with fits.open(os.path.join(outdir, basename+suffix+'.fits')) as hdu:
+                    # hdu[0].data = -1.0 * hdu[0].data
+                    # hdu.writeto(os.path.join(outdir ,basename+suffix+'.fits'), overwrite=True)
 
-            if uvtaper_scale:
-                tb = tbtool()
-                for taper in uvtaper_scale:
-                    tb.open(os.path.join(outdir, basename+suffix+'uvtaper{}.fits'.format(taper)), 
-                            nomodify=False)
-                    tb.put('map', -1.*tb.getcol('map'))
-                    tb.flush()
-                    tb.close()
+                # if uvtaper_scale:
+                    # tb = tbtool()
+                    # for taper in uvtaper_scale:
+                        # tb.open(os.path.join(outdir, basename+suffix+'uvtaper{}.fits'.format(taper)), 
+                                # nomodify=False)
+                        # tb.put('map', -1.*tb.getcol('map'))
+                        # tb.flush()
+                        # tb.close()
         # clean up temperary files
         rmtables(clname_fullpath)
         delmod(vis=vis)
@@ -578,7 +582,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
-        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=0.5*threshold*std, ratio=ratio, 
+        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
                                 theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
         data_masked[known_mask] = std
         sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
@@ -591,12 +595,11 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         else:
             sources_found_x_candidates = sources_found_candidates['xcentroid'] 
             sources_found_y_candidates = sources_found_candidates['ycentroid']
-            sources_found_candidates_peak = sources_found_candidates['peak']
-            peak_select = sources_found_candidates_peak > threshold*std #two stage source finding
-            sources_found_candidates = sources_found_candidates[peak_select]
-            sources_found_x_candidates = sources_found_x_candidates[peak_select]
-            sources_found_y_candidates = sources_found_y_candidates[peak_select]
-            #source_found_peak = source_found_peak[peak_select]
+            # sources_found_candidates_peak = sources_found_candidates['peak']
+            # peak_select = sources_found_candidates_peak > 0.5*threshold*std #two stage source finding
+            # sources_found_candidates = sources_found_candidates[peak_select]
+            # sources_found_x_candidates = sources_found_x_candidates[peak_select]
+            # sources_found_y_candidates = sources_found_y_candidates[peak_select]
         
     elif algorithm == 'find_peak': # find_peak
         sources_found_candidates = find_peaks(data_masked_sub, threshold=threshold*std, 
@@ -694,7 +697,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             sources_input_coords = SkyCoord(ra=sources_input[0], dec=sources_input[1], unit='arcsec')
             flux_input = sources_input[-1]
         elif len(sources_input.shape) > 1:
-            sources_input_coords = SkyCoord(ra=sources_input[:,0], dec=sources_input[:,1], unit='arcsec')
+            sources_input_coords = SkyCoord(ra=sources_input[:,0], dec=sources_input[:,1], 
+                                            unit='arcsec')
             flux_input = sources_input[:,-1]
         else:
             raise ValueError('Unsupported file: {}'.format(sources_file))
@@ -869,9 +873,11 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
             add_random_sources(fitsimage=imagefile, mycomplist=mycomplist,
                     outdir=outdir, outname=basename_repeat, debug=debug, **kwargs)
     # adding source in uv has not been test for new scheme
-    # if mode == 'uv':
-        # if not vis:
-            # raise ValueError("The visibility must be given!")
+    if mode == 'uv':
+        if basename is None:
+            basename = os.path.basename(vs)
+        if not vis:
+            raise ValueError("The visibility must be given!")
         # vistmp = os.path.join(outdir, basename+'.tmp')
         # split(vis=vis, outputvis=vistmp, datacolumn='data')
         # # read information from vis 
@@ -958,7 +964,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
         # rmtables(vistmp)
 
 def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
-        basename=None, savefile=None, fov_scale=1.5,
+        basename=None, savefile=None, fov_scale=1.5, second_check=True,
         threshold=5.0, plot=False, snr_mode='peak', **kwargs):
     """simulation the completeness of source finding algorithm
 
@@ -1012,7 +1018,8 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         simimage_sourcefile_fullpath = os.path.join(simfolder, simimage_sourcefile)
         # try:
         sf_return = source_finder(simimage_fullpath, sources_file=simimage_sourcefile_fullpath, 
-                known_sources=known_sources, **kwargs)
+                known_sources=known_sources, threshold=threshold, second_check=second_check, 
+                **kwargs)
         # except:
             # continue
         # if sf_return == 0:
@@ -1128,6 +1135,8 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
     gaussian_mean = []
     completeness_list = []
     fake_rate_list = []
+    # total_found_list = []
+    # total_fake_list = []
     for i in range(1, len(snr)):
         s = snr[i]
         s_b = snr[i-1]
@@ -1150,6 +1159,8 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         n_found2 = np.sum(snr_select2)
         n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
         fake_rate_list.append(1.0*n_fake/n_found2)
+        # total_found_list.append(n_found2)
+        # total_fake_list.append(n_fake)
 
 
     if True:
@@ -1185,6 +1196,8 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
 
         ax = fig.add_subplot(1,3,3)
         ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
+        # ax.plot(0.5*(snr[1:]+snr[:-1]), total_found_list, 'ro')
+        # ax.plot(0.5*(snr[1:]+snr[:-1]), total_fake_list, 'bo')
         ax.set_xlabel('SNR')
         ax.set_ylabel(r'Fake percentage')
         # ax.set_xlim((0., 8))
