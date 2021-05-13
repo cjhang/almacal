@@ -878,6 +878,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
             basename = os.path.basename(vs)
         if not vis:
             raise ValueError("The visibility must be given!")
+
         # vistmp = os.path.join(outdir, basename+'.tmp')
         # split(vis=vis, outputvis=vistmp, datacolumn='data')
         # # read information from vis 
