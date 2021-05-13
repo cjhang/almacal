@@ -57,7 +57,7 @@ def aspect_sampler(n, niter=100, fluxrange=[0.02, 10], radius=15):
     return np.random.choice(x, n, p=y_pdf)
 
 def make_random_source(direction, direction_units='deg',freq=None, n=None, radius=1, 
-        prune=False, prune_threshold=3., debug=False, savefile=None, clname=None,
+        prune=True, prune_threshold=3., debug=False, savefile=None, clname=None,
         fluxrange=[0, 1], fluxunit='mJy', known_sources=None,
         sampler=np.random.uniform, sampler_params={}, budget=None):
     """This function used to add random source around a given direction
@@ -90,6 +90,9 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
     #    skycoord = SkyCoord(*direction, units=direction_units)
     #else:
     #    print("{} as a direction is not support!".format(direction))
+    if debug:
+        print('fluxrange', fluxrange)
+        print('radius', radius)
     if isinstance(fluxrange, (int, float)):
         fluxrange = [fluxrange, fluxrange]
     if n:
@@ -141,6 +144,7 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
     delta_dec = np.array(rho) * np.sin(theta)
 
     if prune:
+        n_prune = 0
         selected_ra = [delta_ra[0],] 
         selected_dec = [delta_dec[0],]
         for i in range(1, n):
@@ -148,12 +152,15 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
             coords_selected = SkyCoord(ra=np.array(selected_ra)*u.arcsec, dec=np.array(selected_dec)*u.arcsec)
             separation_with_select = coord_i.separation(coords_selected)
             if np.sum(separation_with_select<prune_threshold*u.arcsec)>=1:
-                print("pruning one point...")
+                if debug:
+                    print("pruning one point...")
+                n_prune += 1
                 continue
             selected_ra.append(delta_ra[i]) 
             selected_dec.append(delta_dec[i])
         delta_ra = np.array(selected_ra)
         delta_dec = np.array(selected_dec)
+        print("Pruned {} sources.".format(n_prune))
     ra_random = delta_ra*u.arcsec + skycoord.ra
     dec_random = delta_dec*u.arcsec+ skycoord.dec
    
@@ -190,7 +197,7 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
 
     if clname:
         # generate component list
-        skycoord_list = SkyCoord(ra=ra_random, dec=dec_random)
+        skycoord_list = SkyCoord(ra=ra_random, dec=dec_random, unit='arcsec')
         f = lambda x: ('J2000 '+x.to_string('hmsdms')).encode('utf-8')
         direction_list = list(map(f, skycoord_list))
         os.system('rm -rf {}'.format(clname))
@@ -223,54 +230,12 @@ def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./',
         os.system('mkdir -p {}'.format(outdir))
    
     if vis:
-        md = msmdtool()
-        if not md.open(vis):
-            raise ValueError("Failed to open {}".format(vis))
-        phasecenter = md.phasecenter()
-        mydirection = phasecenter['refer'] +' '+ SkyCoord(phasecenter['m0']['value'], 
-                        phasecenter['m1']['value'], unit="rad").to_string('hmsdms')
-        myfreq = "{:.2f}GHz".format(np.mean(read_spw(vis)))
-        if debug:
-            print(mydirection)
-            print(myfreq)
-        # clname_fullpath = os.path.join(outdir, basename+'.cl')
-        # savefile_fullpath = os.path.join(outdir, basename+'.txt')
-        # overwrite old files
-        rmtables(clname_fullpath)
-        os.system('rm -rf {}'.format(savefile_fullpath))
-        # generate random sources
-        # mycomplist = make_random_source(mydirection, freq=myfreq, n=n, radius=radius, debug=debug, 
-                                        # fluxrange=fluxrange, clname=clname_fullpath, 
-                                        # savefile=savefile_fullpath, known_file=known_file, **kwargs)
         ft(vis=vis, complist=mycomplist)
         uvsub(vis=vis, reverse=True)
-        
-        if make_image:
-            suffix = '.cont.auto'
-            make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
-                          only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
-                          fov_scale=2.0, datacolumn='corrected', usemask='user',
-                          basename=basename, suffix=suffix)
-            # if inverse_image:
-                # # tb = tbtool()
-                # # tb.open(os.path.join(outdir, basename+suffix+'.fits'), nomodify=False)
-                # # tb.put('map', -1.*tb.getcol('map'))
-                # # tb.flush()
-                # # tb.close()
-                # with fits.open(os.path.join(outdir, basename+suffix+'.fits')) as hdu:
-                    # hdu[0].data = -1.0 * hdu[0].data
-                    # hdu.writeto(os.path.join(outdir ,basename+suffix+'.fits'), overwrite=True)
-
-                # if uvtaper_scale:
-                    # tb = tbtool()
-                    # for taper in uvtaper_scale:
-                        # tb.open(os.path.join(outdir, basename+suffix+'uvtaper{}.fits'.format(taper)), 
-                                # nomodify=False)
-                        # tb.put('map', -1.*tb.getcol('map'))
-                        # tb.flush()
-                        # tb.close()
-        # clean up temperary files
-        rmtables(clname_fullpath)
+        suffix = '.cont.auto'
+        make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
+                      only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
+                      fov_scale=2.0, basename=outname, suffix='')
         delmod(vis=vis)
         clearcal(vis=vis)
     if fitsimage:
@@ -281,7 +246,7 @@ def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./',
         data = hdu[0].data
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+        # mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
 
         # for DAOStarFinder, in pixel space
         pixel_scale = 1/np.abs(header['CDELT1'])
@@ -818,7 +783,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     else:
         return []
 
-def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10, 
+def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 
                     snr=(1,20), fov_scale=1.5, outdir='./', basename=None,
                     uvtaper_scale=None, budget=None,
                     debug=False, **kwargs):
@@ -841,18 +806,18 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
             header = hdu[0].header
         freq = header['CRVAL3']
         lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
-        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fov = 1.02 * (lam / (12*u.m)).decompose().value * 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
         mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
 
-        pixel_scale = 1/np.abs(header['CDELT1'])
-        fwhm = header['BMAJ']*3600*u.arcsec
-        fwhm_pixel = header['BMAJ']*pixel_scale
-        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
-        ratio = header['BMIN'] / header['BMAJ']
-        theta = header['BPA']
-        beamsize = np.pi*a*b/(4*np.log(2))
+        # pixel_scale = 1/np.abs(header['CDELT1'])
+        # fwhm = header['BMAJ']*3600*u.arcsec
+        # fwhm_pixel = header['BMAJ']*pixel_scale
+        # a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        # ratio = header['BMIN'] / header['BMAJ']
+        # theta = header['BPA']
+        # beamsize = np.pi*a*b/(4*np.log(2))
         #gaussian_norm = 2*np.pi*a*b/2.35482**2
         refer = 'J'+str(int(header['EQUINOX']))
         mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], 
@@ -866,7 +831,8 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
             print('run {}'.format(i))
             basename_repeat = basename + '.run{}'.format(i)
             complist_file = os.path.join(outdir, basename_repeat+'.txt')
-            mycomplist = make_random_source(mydirection, freq=myfreq, radius=0.5*fov_scale*fov, 
+            mycomplist = make_random_source(mydirection, freq=myfreq, 
+                    radius=0.9*0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
                     debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
                     sampler=np.random.uniform, sampler_params={},
                     known_sources=known_sources, budget=budget, **kwargs) 
@@ -875,53 +841,79 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
     # adding source in uv has not been test for new scheme
     if mode == 'uv':
         if basename is None:
-            basename = os.path.basename(vs)
+            basename = os.path.basename(vis)
         if not vis:
             raise ValueError("The visibility must be given!")
-
+        if debug:
+            print('basename', basename)
         # vistmp = os.path.join(outdir, basename+'.tmp')
         # split(vis=vis, outputvis=vistmp, datacolumn='data')
         # # read information from vis 
-        # spw_specrange = read_spw(vistmp)
-        # freq_mean = np.mean(spw_specrange) # in GHz
-        # tb.open(vistmp + '/ANTENNA')
-        # antenna_diameter_list = tb.getcol('DISH_DIAMETER')
-        # tb.close()
-        # antenna_diameter = np.max(antenna_diameter_list) * u.m
-        # wavelength = const.c / (freq_mean * u.GHz) # in um
-        # fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+        md = msmdtool()
+        if not md.open(vis):
+            raise ValueError("Failed to open {}".format(vis))
+        phasecenter = md.phasecenter()
+        mydirection = phasecenter['refer'] +' '+ SkyCoord(phasecenter['m0']['value'], 
+                        phasecenter['m1']['value'], unit="rad").to_string('hmsdms')
+        freq_mean = np.mean(read_spw(vis))
+        myfreq = "{:.2f}GHz".format(freq_mean)
+        if debug:
+            print(mydirection)
+            print(myfreq)
+        tb.open(vis + '/ANTENNA')
+        antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+        tb.close()
+        antenna_diameter = np.max(antenna_diameter_list) * u.m
+        wavelength = const.c / (freq_mean * u.GHz) # in um
+        fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose().value
+        if debug:
+            print('fov', fov)
+            print('radius', 0.5*fov)
+        if imagefile is None:
+            imagefile = os.path.join(outdir, basename+'.image.fits')
+            if os.path.isfile(imagefile):
+                print("Finding the default imagefile: {}".format(imagefile))
+            else:
+                if debug:
+                    print('imagefile', imagefile)
+                    print("No image file founded, trying to produce image instead!")
+                make_cont_img(vis, outdir=outdir, clean=True, niter=1000, suffix='',
+                              only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
+                              fov_scale=fov_scale, basename=basename)
 
-        # if debug:
-            # print('fov', fov)
-            # print('radius', 0.5*fov)
-        # # read information from image files
-        # imagefile_base, imagefile_extension = os.path.splitext(imagefile)
-        # print(imagefile_base, imagefile_extension)
-        # if False:#imagefile_extension == 'fits':
-            # fitsimage = imagefile
-            # hdu = fits.open(fitsimage)
-            # header = hdu[0].header
-            # data = np.ma.masked_invalid(hdu[0].data)
-    # else:
         # im_head = imhead(imagefile)
         # im_beam = im_head['restoringbeam']
         # im_incr = im_head['incr']
-        # im_info = imstat(imagefile)
-        # # beamsize = np.pi*a*b/(4*np.log(2))
+        im_info = imstat(imagefile)
+        # beamsize = np.pi*a*b/(4*np.log(2))
         # beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
         # gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
-        # sensitivity = im_info['rms'] * 1000 # in mJy/pixel
-        # # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
-        # if mode == 'image':
-            # fitsimage = imagefile+'.fits'
-            # exportfits(imagename=imagefile, fitsimage=imagefile+'.fits', overwrite=True)
-    # # print('sensitivity', sensitivity)
-    # # print('gaussian_norm', gaussian_norm)
-    # # print('beamsize', beamsize)
+        sensitivity = im_info['rms'] * 1000 # in mJy/pixel
+        # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+        if debug:
+            print('sensitivity', sensitivity)
+            # print('gaussian_norm', gaussian_norm)
+            # print('beamsize', beamsize)
 
-    # # if snr_mode == 'peak':
-    # flux_base = sensitivity #* gaussian_norm
-    
+        fluxrange = np.array(snr) * sensitivity
+        known_sources = source_finder(imagefile, fov_scale=fov_scale)
+        clname_fullpath = os.path.join(outdir, basename+'.cl')
+        for i in range(repeat):
+            print('run {}'.format(i))
+            basename_repeat = basename + '.run{}'.format(i)
+            complist_file = os.path.join(outdir, basename_repeat+'.txt')
+            if debug:
+                print('basename_repeat', basename_repeat)
+                print('complist_file', complist_file)
+            mycomplist = make_random_source(mydirection, freq=myfreq, 
+                    radius=[0.45*fov_scale*fov, 0.45*fov*fov_scale], 
+                    # radius=0.9*0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
+                    debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
+                    sampler=np.random.uniform, sampler_params={}, clname=clname_fullpath,
+                    known_sources=known_sources, budget=budget, **kwargs) 
+            add_random_sources(vis=vis, mycomplist=mycomplist,
+                    outdir=outdir, outname=basename_repeat, debug=debug, **kwargs)
+            rmtables(clname_fullpath)
     # if budget:
     # #if snr is None:
     # #TODO: better physical motivated
@@ -946,23 +938,6 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=10,
                         # uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
                         # inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
 
-
-    # elif len(snr)==2:
-        # flux = np.array(snr)*flux_base
-        # for i in range(repeat):
-            # basename_new = basename+'.run{}'.format(i)
-            # if mode == 'uv':
-                # add_random_sources(vis=vistmp, n=n, radius=0.5*fov, outdir=outdir,
-                        # uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
-                        # known_file=known_file, inverse_image=inverse_image, debug=debug, 
-                        # **kwargs)
-            # elif mode == 'image':
-                # add_random_sources(fitsimage=fitsimage, n=n, radius=0.5*fov, outdir=outdir,
-                        # uvtaper_scale=uvtaper_scale, basename=basename_new, flux=flux, 
-                        # known_file=known_file, inverse_image=inverse_image, debug=debug, 
-                        # **kwargs)
-        # # clear temperary files
-        # rmtables(vistmp)
 
 def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
         basename=None, savefile=None, fov_scale=1.5, second_check=True,
