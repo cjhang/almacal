@@ -9,7 +9,7 @@ from astropy.io import fits
 from astropy.stats import sigma_clipped_stats, sigma_clip, SigmaClip
 from astropy.wcs import WCS
 from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
-from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry, 
+from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry, CircularAperture,
         RectangularAperture, find_peaks, Background2D, MedianBackground, SExtractorBackground)
 import matplotlib.pyplot as plt
 from matplotlib import patches
@@ -424,7 +424,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
-                  fov_scale=2.0, mask_threshold=3., second_check=True):
+                  fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None):
     """finding point source in the image
 
     This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
@@ -472,6 +472,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
     # read known_sources
     known_mask = np.full((ny, nx), 0, dtype=bool)
+    if baseimage:
+        known_sources = source_finder(baseimage)
     if (known_sources is not None) and (len(known_sources) > 0):
         known_sources_coords_ra = []
         known_sources_coords_dec = []
@@ -487,37 +489,19 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         known_aper_mask = known_aper.to_mask(method='center')
         for m in known_aper_mask:
             known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
+
+        print('known_sources_pixel', known_sources_pixel)
+        print(list(zip(*known_sources_pixel)))
+        print('known_mask', known_mask.shape)
+        print('number of known sources', len(known_sources))
         if False:
             plt.figure()
             plt.imshow(known_mask,origin='lower')
+            # for p in known_sources_pixel:
+                # aperture = CircularAperture(p, r=2.*a)
+                # aperture.plot(color='white', lw=2)
             plt.show()
 
-    if False:
-        try:
-            known_data = np.loadtxt(known_file, skiprows=1)
-        except:
-            #print('cannot open {}'.format(known_file))
-            known_data = None
-        if known_data is not None:
-            if len(known_data.shape) == 1:
-                known_sources = SkyCoord(ra=known_data[0], dec=known_data[1], unit='arcsec')
-                known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-                known_aper = RectangularAperture(known_sources_pixel, 2.*a, 2.*a, theta=0)
-            elif len(known_data.shape) > 1:
-                known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
-                known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-                known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
-            # known_sources = SkyCoord(ra=known_data[:,0], dec=known_data[:,1], unit='arcsec')
-            # known_sources_pixel = skycoord_to_pixel(known_sources, wcs)
-            # known_aper = RectangularAperture(list(zip(*known_sources_pixel)), 2.*a, 2.*a, theta=0)
-            known_aper_mask = known_aper.to_mask(method='center')
-            for m in known_aper_mask:
-                known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
-            if False:
-                plt.figure()
-                plt.imshow(known_mask,origin='lower')
-                plt.show()
-    
     if debug:
         print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
@@ -544,12 +528,12 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     else:
         background = median
     data_masked_sub = data_masked - background
+    data_masked_sub[known_mask] = std
     
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
         daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
                                 theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
-        data_masked[known_mask] = std
         sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
         if debug:
             print("candidates:", sources_found_candidates)
@@ -632,7 +616,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                         is_true = False
                 # checking whether within the designed fov
                 if ((sources_found_x_candidates[i]-pixel_center[0])**2 
-                        + (sources_found_y_candidates[i]-pixel_center[1])**2) > (fov_scale*fov_pixel/2.)**2:
+                    + (sources_found_y_candidates[i]-pixel_center[1])**2) >\
+                            (fov_scale*fov_pixel/2.)**2:
                     is_true = False
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
@@ -715,7 +700,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #x_map, y_map = np.meshgrid(x_index, y_index)
         #ax.pcolormesh(x_map, y_map, data_masked)
         extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
-        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none')
+        ax.imshow(data_masked_sub, origin='lower', extent=extent, interpolation='none')
         
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
@@ -740,6 +725,14 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                     ax.text(e[0], e[1], flux_input[i])
 
         # show the sources found
+        if known_sources:
+            for i,e in enumerate(zip(*known_sources_pixel)):
+                yy = scale*(e[0]-ny/2.)
+                xx = scale*(e[1]-ny/2.)
+                ellipse = patches.Ellipse((yy, xx), width=3*b*scale, 
+                                          height=3*a*scale, angle=theta, facecolor=None, fill=False, 
+                                          edgecolor='white', alpha=0.8, linewidth=2)
+            ax.add_patch(ellipse)
         if sources_found:
             for i,e in enumerate(sources_found_center):
                 yy = scale*(e[0]-ny/2.)
@@ -751,6 +744,11 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 ax.text(1.1*yy, 1.0*xx, "({})\n{:.2f}mJy".format(i, flux_auto[i][0]), 
                         color='magenta', fontsize=12,)
                         #bbox=dict(boxstyle="round", ec=(1,0.5,0.5), fc=(1,0.8,0.8), alpha=0.3))
+                # plt.figure()
+                # plt.imshow(data_masked_sub)
+                # ellipse_aper = EllipticalAperture(e, 2.*a, 2.*a, theta=0)
+                # ap_patch = ellipse_aper.plot(color='white', lw=2)
+
 
         if figname:
             ax.set_title(figname)
@@ -937,7 +935,6 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
                 # add_random_sources(fitsimage=fitsimage, n=None, budget=budget, radius=0.5*fov, outdir=outdir,
                         # uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
                         # inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
-
 
 def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
         basename=None, savefile=None, fov_scale=1.5, second_check=True,
