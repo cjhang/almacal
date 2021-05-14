@@ -486,14 +486,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                         unit='arcsec')
         known_sources_pixel = skycoord_to_pixel(known_sources_coords, wcs)
         for p in list(zip(*known_sources_pixel)):
-            aper = CircularAperture(p, a)
+            aper = CircularAperture(p, 2.0*a)
             aper_mask = aper.to_mask(method='center')
             known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
 
-        print('known_sources_pixel', known_sources_pixel)
-        print(list(zip(*known_sources_pixel)))
-        print('known_mask', known_mask.shape)
-        print('number of known sources', len(known_sources))
         if False:
             plt.figure()
             plt.imshow(known_mask,origin='lower')
@@ -700,7 +696,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #x_map, y_map = np.meshgrid(x_index, y_index)
         #ax.pcolormesh(x_map, y_map, data_masked)
         extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
-        ax.imshow(data_masked_sub, origin='lower', extent=extent, interpolation='none')
+        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none')
         
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
@@ -729,10 +725,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             for i,e in enumerate(zip(*known_sources_pixel)):
                 yy = scale*(e[0]-ny/2.)
                 xx = scale*(e[1]-ny/2.)
-                ellipse = patches.Ellipse((yy, xx), width=3*b*scale, 
-                                          height=3*a*scale, angle=theta, facecolor=None, fill=False, 
+                ellipse = patches.Ellipse((yy, xx), width=2*b*scale, 
+                                          height=2*a*scale, angle=theta, facecolor=None, fill=False, 
                                           edgecolor='white', alpha=0.8, linewidth=2)
-            ax.add_patch(ellipse)
+                ax.add_patch(ellipse)
         if sources_found:
             for i,e in enumerate(sources_found_center):
                 yy = scale*(e[0]-ny/2.)
