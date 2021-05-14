@@ -485,10 +485,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         known_sources_coords = SkyCoord(ra=known_sources_coords_ra, dec=known_sources_coords_dec, 
                                         unit='arcsec')
         known_sources_pixel = skycoord_to_pixel(known_sources_coords, wcs)
-        known_aper = RectangularAperture(known_sources_pixel, 2.*a, 2.*a, theta=0)
-        known_aper_mask = known_aper.to_mask(method='center')
-        for m in known_aper_mask:
-            known_mask = np.bitwise_or(known_mask, m.to_image((ny,nx)).astype(bool))
+        for p in list(zip(*known_sources_pixel)):
+            aper = CircularAperture(p, a)
+            aper_mask = aper.to_mask(method='center')
+            known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
 
         print('known_sources_pixel', known_sources_pixel)
         print(list(zip(*known_sources_pixel)))
