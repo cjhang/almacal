@@ -344,7 +344,8 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
         if debug:
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.imshow(image, origin='lower', interpolation='none')
+            im = ax.imshow(image, origin='lower', interpolation='none')
+            plt.colorbar(im, fraction=0.046, pad=0.04)
             aperture.plot(color='gray', lw=2)
         if beamsize:
             flux_list.append(1.0*flux_in_aper/beamsize)
@@ -355,11 +356,13 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
         yrad, xrad = yidx-ysize/2., xidx-xsize/2.
 
         image_norm = image / np.max(image)
-        p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, theta=theta, 
+        p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, 
+                theta=theta,
                                    bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
                                            "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
         fit_p = fitting.LevMarLSQFitter()
-        p = fit_p(p_init, xrad, yrad, image_norm)
+        p = fit_p(p_init, xrad, yrad, image_norm,) 
+                  #weights=1/(yrad**2+xrad**2+(0.25*bmaj)**2+(0.25*bmin)**2))
         flux_fitted = 2*np.max(image)*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
 
         if debug:
@@ -367,15 +370,18 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
             print("Fitting:", p)
             print("Flux:", flux_fitted)
             fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
-            ax[0].imshow(image, origin='lower', interpolation='none')
+            im0 = ax[0].imshow(image_norm, origin='lower', interpolation='none')
+            plt.colorbar(im0, ax=ax[0], fraction=0.046, pad=0.04)
             gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
                     width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
                     linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
             ax[0].add_patch(gaussian_init)
             ax[0].set_title("Data")
-            ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
+            im1 = ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
+            plt.colorbar(im1, ax=ax[1], fraction=0.046, pad=0.04)
             ax[1].set_title("Model")
-            ax[2].imshow(image - p(xrad, yrad), origin='lower', interpolation='none')
+            im2 = ax[2].imshow(image_norm - p(xrad, yrad), origin='lower', interpolation='none')
+            plt.colorbar(im2, ax=ax[2], fraction=0.046, pad=0.04)
             ax[2].set_title("Residual")
         if beamsize:
             flux_list.append(1.0*flux_fitted/beamsize)
@@ -411,9 +417,10 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
         if debug:
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.imshow(image, origin='lower', interpolation='none')
+            im = ax.imshow(image, origin='lower', interpolation='none')
+            plt.colorbar(im, pad=0.05)
             for ap in apertures:
-                ap.plot(color='gray', lw=2)
+                im = ap.plot(color='gray', lw=2)
         if beamsize:
             flux_list.append(1.0*flux_apers_stable/beamsize)
         else:
@@ -424,7 +431,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
-                  fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None):
+                  fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
+                  return_image_cuts=False):
     """finding point source in the image
 
     This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
@@ -502,7 +510,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
         print('fwhm_pixel:', fwhm_pixel)
-        print('a, b', a, b)
+        print('a, b, theta', a, b, theta)
         print('beamsize', beamsize)
 
     if model_background:
@@ -531,8 +539,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
                                 theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
         sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
-        if debug:
-            print("candidates:", sources_found_candidates)
+        # if debug:
+            # print("candidates:", sources_found_candidates)
         if len(sources_found_candidates) < 1:
             print("No point source!")
             # return 0
@@ -549,8 +557,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     elif algorithm == 'find_peak': # find_peak
         sources_found_candidates = find_peaks(data_masked_sub, threshold=threshold*std, 
                 box_size=fwhm_pixel, mask=known_mask)
-        if debug:
-            print("candidates:", sources_found_candidates)
+        # if debug:
+            # print("candidates:", sources_found_candidates)
         if len(sources_found_candidates) < 1:
             print("No point source!")
             # return 0
@@ -709,7 +717,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                       alpha=0.8)
             ax.add_patch(ellipse)
         ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
-                color='magenta', fontsize=10, horizontalalignment='center', verticalalignment='center')
+                color='white', fontsize=10, horizontalalignment='center', verticalalignment='center')
         
         if sources_file:
             # show the input sources
@@ -768,6 +776,18 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 sfile.write('\n')
     if return_image:
         return data_masked.data, background
+    if return_image_cuts:
+        data_cutout_list = []
+        segments_true = RectangularAperture(sources_found_center, 2.*a, 2.*a, theta=0)
+        segments_true_mask = segments_true.to_mask(method='center')
+        for i,s in enumerate(segments_true_mask):
+            if subtract_background:
+                data_cutout = s.cutout(data_masked_sub)
+            else:
+                data_cutout = s.cutout(data_masked)
+            data_cutout_list.append(data_cutout)    
+        return data_cutout_list
+
 
     if sources_file:
         return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
