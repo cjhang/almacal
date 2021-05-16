@@ -613,7 +613,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 # checking whether within the designed fov
                 if ((sources_found_x_candidates[i]-pixel_center[0])**2 
                     + (sources_found_y_candidates[i]-pixel_center[1])**2) >\
-                            (fov_scale*fov_pixel/2.)**2:
+                            (fov_scale*fov_pixel*0.5)**2:
                     is_true = False
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
@@ -727,7 +727,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 xx = scale*(e[1]-ny/2.)
                 ellipse = patches.Ellipse((yy, xx), width=2*b*scale, 
                                           height=2*a*scale, angle=theta, facecolor=None, fill=False, 
-                                          edgecolor='white', alpha=0.8, linewidth=2)
+                                          edgecolor='black', alpha=0.8, linewidth=2)
                 ax.add_patch(ellipse)
         if sources_found:
             for i,e in enumerate(sources_found_center):
@@ -735,10 +735,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 xx = scale*(e[1]-ny/2.)
                 ellipse = patches.Ellipse((yy, xx), width=3*b*scale, 
                                           height=3*a*scale, angle=theta, facecolor=None, fill=False, 
-                                          edgecolor='red', alpha=0.8, linewidth=1)
+                                          edgecolor='white', alpha=0.8, linewidth=2)
                 ax.add_patch(ellipse)
                 ax.text(1.1*yy, 1.0*xx, "({})\n{:.2f}mJy".format(i, flux_auto[i][0]), 
-                        color='magenta', fontsize=12,)
+                        color='white', fontsize=12,)
                         #bbox=dict(boxstyle="round", ec=(1,0.5,0.5), fc=(1,0.8,0.8), alpha=0.3))
                 # plt.figure()
                 # plt.imshow(data_masked_sub)
