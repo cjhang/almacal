@@ -1096,7 +1096,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
-def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
+def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), plot=True):
     if jsonfile:
         with open(jsonfile) as jf:
             data = json.load(jf)
@@ -1145,8 +1145,8 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
         aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
         gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
-        aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
-        gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
+        aperture_mean.append([np.median(aperture_boosting), np.std(aperture_boosting)])
+        gaussian_mean.append([np.median(gaussian_boosting), np.std(gaussian_boosting)])
 
 
         # calculate the completeness
@@ -1164,7 +1164,7 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         # total_fake_list.append(n_fake)
 
 
-    if True:
+    if plot:
         fig = plt.figure(figsize=(12, 3))
         ax = fig.add_subplot(1,3,1)
         ax.set_xlabel('SNR')

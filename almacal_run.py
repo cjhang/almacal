@@ -1126,7 +1126,6 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False):
 
 
 
-
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -1618,3 +1617,36 @@ def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, ban
                     effarea[band+'_'+res] += objarea
     if savefile:
         effarea.write(savefile, format='ascii')
+
+def run_differential_number_counts(flist, detections_file=None, band='B6', effective_area_file=None, 
+        simulation_folder=None, ax=None):
+    Ni_list = []
+    tab = Table.read(detections_file)
+    effarea = np.loadtxt(effective_area_file)
+    cs_effarea = CubicSpline(effarea[:, 0], effarea[:,1])
+    for obj in tab:
+        flux = obj[band]
+        snr = obj[band+'_SNR']
+        snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
+                jsonfile=os.path.join(simulation_folder, obj, obj+'_simualtion.txt'), 
+                snr=np.arange(1,10, 0.2), plot=False)
+        cs_comp = scipy.interpolate.interp1d(snr_list, comp_list) 
+        def cs_comp2(snr):
+            if snr<8:
+                return cs_comp(snr)
+            else:
+                return 1.0
+        Ni = 1 / (cs_effarea(flux)/3600.) / cs_comp2(snr)
+        #print(Si, Ni)
+        Ni_list.append([flux, Ni])
+
+
+        NN = []
+        dNN = np.array(dN)
+        for f in flist:
+            NN.append(np.sum(dNN[B6_flux >= f]))
+
+    if ax is None:
+        fig = plt.figure(figsize=(6, 8))
+        ax = fig.add_subplot(111)
+    ax.plot(flist, NN, 'ro')
