@@ -490,8 +490,9 @@ def copy_ms(basedir=None, outdir=None, selectfile=None, debug=False, time_select
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, minimal_fluxval=0.001, outlier_frac=0.02, 
-                gaussian_deviation=0.25, central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, figname=None):
+def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, 
+                minimal_fluxval=0.001, outlier_frac=0.02, gaussian_deviation=0.25, 
+                central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, figname=None):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -521,13 +522,18 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
     # hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=100)
     hist, bins = np.histogram(data4hist, bins=100)
     bins_mid = (bins[:-1] + bins[1:])*0.5
-    p0 = (0, 1, 1e-4) # mean, max and std
+    
+    # sigmaclip based statistics
+    mean0, median0, std0 = sigma_clipped_stats(masked_data, sigma=5.0)
+    p0 = (mean0, 1.0, std0)
+    #p0 = (0, 1, 1e-4) # mean, max and std
     amp_scale = 1.0*np.max(hist) # change to int into float
     try:
         popt, pcov = curve_fit(gaussian, bins_mid, hist/amp_scale, p0=p0)
     except:
         print("`Fitting failed!")
         popt = p0
+        
     hist_fit = gaussian(bins_mid, *popt)*amp_scale
     mean, amp, sigma = popt
     lower_1sigma = mean - 1.0*sigma
@@ -598,7 +604,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         x_index = (np.arange(0, nx) - nx/2.0) * scale
         y_index = (np.arange(0, ny) - ny/2.0) * scale
         x_map, y_map = np.meshgrid(x_index, y_index)
-        ax.pcolormesh(x_map, y_map, masked_data)
+        ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_1sigma, vmax=upper_5sigma)
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
         circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, edgecolor='red', linewidth=2, alpha=0.5)
@@ -1567,15 +1573,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                  file_mode=file_mode)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
-    obj_match = re.compile('^J\d*[+-]\d*$')
-    for obj in os.listdir(basedir):
-        if obj_match.match(obj):
-            for band in bands:
-                objfolder = os.path.join(basedir, obj)
-                vis_combined = os.path.join(objfolder, '{}_{}_combine.ms'.format(obj, band))
-                if os.path.isdir(vis_combined):
-                    gen_fake_images(vis=vis_combined, outdir=os.path.join(outdir, obj),
-                                    known_file=vis_combined+'.auto.cont.image.fits.source_found.txt')
+    pass
 
 def run_calculate_completeness():
     pass
