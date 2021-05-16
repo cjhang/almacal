@@ -1621,14 +1621,20 @@ def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, ban
 def run_differential_number_counts(flist, detections_file=None, band='B6', effective_area_file=None, 
         simulation_folder=None, ax=None):
     Ni_list = []
-    tab = Table.read(detections_file)
-    effarea = np.loadtxt(effective_area_file)
+    tab = Table.read(detections_file, format='ascii')
+    effarea = np.loadtxt(effective_area_file, skiprows=1)
     cs_effarea = CubicSpline(effarea[:, 0], effarea[:,1])
-    for obj in tab:
-        flux = obj[band]
-        snr = obj[band+'_SNR']
+    for item in tab:
+        flux = item[band]
+        if flux < 0:
+            continue
+        obj = item['obj']
+        if obj == 'J1744-3116':
+            continue
+        snr = item[band+'_SNR']
+        print(obj, flux, snr)
         snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
-                jsonfile=os.path.join(simulation_folder, obj, obj+'_simualtion.txt'), 
+                jsonfile=os.path.join(simulation_folder, obj, obj+'_simulation.txt'), 
                 snr=np.arange(1,10, 0.2), plot=False)
         cs_comp = scipy.interpolate.interp1d(snr_list, comp_list) 
         def cs_comp2(snr):
@@ -1636,17 +1642,22 @@ def run_differential_number_counts(flist, detections_file=None, band='B6', effec
                 return cs_comp(snr)
             else:
                 return 1.0
+        print('effarea:', cs_effarea(flux)/3600.)
+        print('completeness', cs_comp2(snr))
         Ni = 1 / (cs_effarea(flux)/3600.) / cs_comp2(snr)
         #print(Si, Ni)
         Ni_list.append([flux, Ni])
+    Ni_array = np.array(Ni_list)
+    print(Ni_array)
 
-
-        NN = []
-        dNN = np.array(dN)
-        for f in flist:
-            NN.append(np.sum(dNN[B6_flux >= f]))
-
+    NN = []
+    for f in flist:
+        print('flux:', f)
+        print(flux)
+        NN.append(np.sum(Ni_array[:,1][Ni_array[:,0] >= f]))
+    print(flist, NN)
     if ax is None:
         fig = plt.figure(figsize=(6, 8))
         ax = fig.add_subplot(111)
-    ax.plot(flist, NN, 'ro')
+    ax.loglog(flist, NN, 'ro')
+    ax.loglog(flist, NN, 'r--')
