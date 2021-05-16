@@ -1145,8 +1145,8 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1)):
         snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
         aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
         gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
-        aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
-        gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
+        aperture_mean.append([np.median(aperture_boosting), np.std(aperture_boosting)])
+        gaussian_mean.append([np.median(gaussian_boosting), np.std(gaussian_boosting)])
 
 
         # calculate the completeness
