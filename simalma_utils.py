@@ -316,7 +316,8 @@ def make_gaussian_image(shape, fwhm=None, sigma=None, area=1., offset=(0,0), the
 
     return flux
 
-def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, methods=['aperture','gaussian', 'peak']):
+def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
+                    methods=['aperture','gaussian', 'peak'], aperture_correction=1.068):
     """automatically measure the flux with different methods
     
     aperture_size = 1.0 # in units of beam size
@@ -331,7 +332,6 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
     # Aperture Photometry
     if 'aperture' in methods:
         aperture_size=1.0
-        aperture_correction = 1.068
         aperture = EllipticalAperture((x_center, y_center), aperture_size*bmaj, aperture_size*bmin, theta)
         extract_area = lambda x: x.area()
         # area_apers = np.array(list(map(extract_area, apertures)))
@@ -357,12 +357,11 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
 
         image_norm = image / np.max(image)
         p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, 
-                theta=theta,
-                                   bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
-                                           "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
+                theta=theta, bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
+                                     "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
         fit_p = fitting.LevMarLSQFitter()
-        p = fit_p(p_init, xrad, yrad, image_norm,) 
-                  #weights=1/(yrad**2+xrad**2+(0.25*bmaj)**2+(0.25*bmin)**2))
+        p = fit_p(p_init, xrad, yrad, image_norm, 
+                  weights=1/(yrad**2+xrad**2+(0.25*bmaj)**2+(0.25*bmin)**2))
         flux_fitted = 2*np.max(image)*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
 
         if debug:
@@ -418,7 +417,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
             fig = plt.figure()
             ax = fig.add_subplot(111)
             im = ax.imshow(image, origin='lower', interpolation='none')
-            plt.colorbar(im, pad=0.05)
+            plt.colorbar(im, fraction=0.046, pad=0.04)
             for ap in apertures:
                 im = ap.plot(color='gray', lw=2)
         if beamsize:
@@ -571,7 +570,18 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     else:
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
    
+    # numerical aperture correction
+    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], offset=[0.5, 0.5], 
+                             theta=theta/180.*np.pi) 
+                             # 0.5 offset comes from central offset of photutils of version 0.5
+    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+                             methods='aperture', debug=False, aperture_correction=1.0,
+                             beamsize=1.0)
+    aperture_correction = 1/flux_g[0]
+    if debug:
+        print('aperture correction', aperture_correction)
 
+    # flux measurements
     flux_auto = []
     flux_snr_list = []
     sources_found = False
@@ -601,7 +611,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             else:
                 data_cutout = s.cutout(data_masked)
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
-                                        theta=theta/180*np.pi, debug=False, methods=methods)
+                                        theta=theta/180*np.pi, debug=False, methods=methods,
+                                        aperture_correction=aperture_correction)
             if pbcor:
                 data_pbcor_cutout = s.cutout(data_pbcor_masked)
                 flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
@@ -672,7 +683,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             else:
                 data_cutout = s.cutout(data_masked)
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
-                                        theta=theta/180*np.pi, debug=False, methods=methods)
+                                        theta=theta/180*np.pi, debug=False, methods=methods,
+                                        aperture_correction=aperture_correction)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
 
         if sources_found:
