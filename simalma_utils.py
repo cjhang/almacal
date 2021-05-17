@@ -1096,7 +1096,8 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
-def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), plot=True):
+def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), plot=True,
+                     mode='median'):
     if jsonfile:
         with open(jsonfile) as jf:
             data = json.load(jf)
@@ -1145,8 +1146,13 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
         snr_select = np.bitwise_and((snr_input<s), (snr_input>s_b))
         aperture_boosting = flux_input_aperture[snr_select] / flux_input[snr_select]
         gaussian_boosting = flux_input_gaussian[snr_select] / flux_input[snr_select]
-        aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
-        gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
+        if mode == 'mean':
+            aperture_mean.append([np.mean(aperture_boosting), np.std(aperture_boosting)])
+            gaussian_mean.append([np.mean(gaussian_boosting), np.std(gaussian_boosting)])
+        elif mode == 'median':
+            aperture_mean.append([np.median(aperture_boosting), np.std(aperture_boosting)])
+            gaussian_mean.append([np.median(gaussian_boosting), np.std(gaussian_boosting)])
+
 
 
         # calculate the completeness
@@ -1205,7 +1211,7 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
         # ax.set_ylim((-0.1, 1.2))
 
         plt.show()
-    return snr_mid, aperture_boosting, completeness_list, fake_rate_list
+    return snr_mid, [aperture_mean, gaussian_mean], completeness_list, fake_rate_list
 
 def image_sim(image, outdir='./',):
     """calculate the completeness for given fitsfile
