@@ -606,7 +606,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         x_index = (np.arange(0, nx) - nx/2.0) * scale
         y_index = (np.arange(0, ny) - ny/2.0) * scale
         x_map, y_map = np.meshgrid(x_index, y_index)
-        ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_1sigma, vmax=upper_5sigma)
+        ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_2sigma, vmax=2*upper_5sigma)
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
         circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, 
