@@ -606,7 +606,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         x_index = (np.arange(0, nx) - nx/2.0) * scale
         y_index = (np.arange(0, ny) - ny/2.0) * scale
         x_map, y_map = np.meshgrid(x_index, y_index)
-        ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_2sigma, vmax=2*upper_5sigma)
+        ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_2sigma, vmax=upper_5sigma)
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
         circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, 
@@ -701,7 +701,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
             print("\n")
     return True
 
-def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
+def check_images(imgs, outdir=None, basename='', band=None, debug=False, **kwargs):
     """wraps up check_image to handle multiple images
     """
     if isinstance(imgs, str):
@@ -713,6 +713,10 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
 
     good_imgs = []
     bad_imgs = []
+    if band:
+        image_outdir = os.path.join(outdir, band)
+    else:
+        image_outdir = outdir
     for img in all_files:
         print("img: {}".format(img))
         # continue
@@ -721,7 +725,7 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
         else:
             uidname = None
         # 
-        if check_image(img, debug=debug, outdir=outdir, **kwargs):
+        if check_image(img, debug=debug, outdir=image_outdir, **kwargs):
             if uidname is not None:
                 good_imgs.append(uidname)
             else:
@@ -1364,8 +1368,8 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_auto_classify_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, 
-        suffix='_good_imgs.txt', update=False, plot=True, savefig=True, **kwargs):
+def run_auto_classify_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', 
+        debug=False, suffix='_good_imgs.txt', update=False, plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
@@ -1385,8 +1389,8 @@ def run_auto_classify_goodimags(imgs_dir=None, objlist=None, basedir=None, outdi
                     obj_band_path = os.path.join(imgs_dir, obj, band)
                     good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', 
                             outdir=os.path.join(outdir, obj), plot=plot, savefig=savefig, 
-                            basename=obj+'_'+band, debug=debug, **kwargs)
-                    if debug: 
+                            band=band, basename=obj+'_'+band, debug=debug, **kwargs)
+                    if debug:
                         print(good_imgs)
 
 def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
