@@ -492,7 +492,8 @@ def gaussian(x, u0, amp, std):
 
 def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, 
                 minimal_fluxval=0.001, outlier_frac=0.02, gaussian_deviation=0.25, 
-                central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, figname=None):
+                central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, 
+                figname=None, outdir=None):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -509,7 +510,8 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
     with fits.open(img) as hdu:
         header = hdu[0].header
         data = hdu[0].data
-
+    if outdir is None:
+        outdir = os.path.basedir(img)
     ny, nx = data.shape[-2:]
     masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
     mask_invalid = masked_data.mask
@@ -644,7 +646,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
             plt.close()
         if savefig:
             if not figname:
-                figname = img + '.png'
+                figname = os.path.join(outdir, img + '.png')
             fig.savefig(figname, dpi=2*fig.dpi)
     
     # return the checking results
@@ -714,7 +716,7 @@ def check_images(imgs, outdir=None, basename='', debug=False, **kwargs):
         else:
             uidname = None
         # 
-        if check_image(img, debug=debug, **kwargs):
+        if check_image(img, debug=debug, outdir=outdir, **kwargs):
             if uidname is not None:
                 good_imgs.append(uidname)
             else:
@@ -1357,8 +1359,8 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, suffix='_good_imgs.txt', update=False, 
-        plot=True, savefig=True, **kwargs):
+def run_auto_classify_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', debug=False, 
+        suffix='_good_imgs.txt', update=False, plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
@@ -1376,10 +1378,34 @@ def run_get_all_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./'
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
                 for band in os.listdir(os.path.join(imgs_dir, obj)):
                     obj_band_path = os.path.join(imgs_dir, obj, band)
-                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', outdir=os.path.join(outdir, obj),
-                            plot=plot, savefig=savefig, basename=obj+'_'+band, debug=debug, **kwargs)
+                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', 
+                            outdir=os.path.join(outdir, obj), plot=plot, savefig=savefig, 
+                            basename=obj+'_'+band, debug=debug, **kwargs)
                     if debug: 
                         print(good_imgs)
+
+def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
+    """manually checking all the images
+    """
+    if isinstance(objlist, str):
+        if os.path.isfile(objlist):
+            objlist = gen_filenames(listfile=objlist)
+    if not isinstance(objlist, (list, np.ndarray)):
+        raise ValueError("Unsupported objlist!")
+    for obj in objlist:
+        obj_imagedir = os.path.join(imagedir, obj)
+        for band in bands:
+            obj_band_imagedir = os.path.join(obj_imagedir, band)
+            obj_outdir = os.path.join(outdir, obj)
+            goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
+            badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
+            if os.path.isfile(goodfile+'.updated'):
+                print('{} of {} already done'.format(band, obj))
+                continue
+            else:
+                print(obj_band_imagedir)
+                print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
+                check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, 
         outdir='./', debug=False, only_fits=True, update=True, 
@@ -1415,29 +1441,6 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                     combined_vis = gen_filenames(listfile=good_image_file)
                     make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, outdir=os.path.join(outdir, obj),
                                     computwt=computwt, basedir=os.path.join(basedir, obj), **kwargs)
-
-def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
-    """manually checking all the images
-    """
-    if isinstance(objlist, str):
-        if os.path.isfile(objlist):
-            objlist = gen_filenames(listfile=objlist)
-    if not isinstance(objlist, (list, np.ndarray)):
-        raise ValueError("Unsupported objlist!")
-    for obj in objlist:
-        obj_imagedir = os.path.join(imagedir, obj)
-        for band in bands:
-            obj_band_imagedir = os.path.join(obj_imagedir, band)
-            obj_outdir = os.path.join(outdir, obj)
-            goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
-            badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
-            if os.path.isfile(goodfile+'.updated'):
-                print('{} of {} already done'.format(band, obj))
-                continue
-            else:
-                print(obj_band_imagedir)
-                print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
-                check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
