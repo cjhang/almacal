@@ -446,7 +446,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         data = hdu[0].data
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, maxiters=5)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
         freq = header['CRVAL3']
         lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
         fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
@@ -839,7 +839,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         fov = 1.02 * (lam / (12*u.m)).decompose().value * 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
 
         # pixel_scale = 1/np.abs(header['CDELT1'])
         # fwhm = header['BMAJ']*3600*u.arcsec
@@ -927,7 +927,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
             data = hdu[0].data
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, maxiters=5)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
         sensitivity = std * 1000 # convert to mJy/pixel
      
 
@@ -981,7 +981,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
 
 def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
         basename=None, savefile=None, fov_scale=1.5, second_check=True,
-        threshold=5.0, plot=False, snr_mode='peak', **kwargs):
+        threshold=5.0, plot=False, snr_mode='peak', debug=False, **kwargs):
     """simulation the completeness of source finding algorithm
 
     mode:
@@ -1003,11 +1003,11 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     
     with fits.open(baseimage) as hdu:
         header = hdu[0].header
-        # wcs = WCS(header)
         data = hdu[0].data
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, maxiters=5)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+        pixel_scale = 1/np.abs(header['CDELT1'])
         bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
         a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
         theta = header['BPA']
