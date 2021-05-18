@@ -465,6 +465,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         with fits.open(fitsimage_pbcor) as hdu_pbcor:
             data_pbcor = hdu_pbcor[0].data
             data_pbcor_masked = np.ma.masked_invalid(data_pbcor.reshape(ny, nx))
+            pbcor_map = (data_masked.filled(0.0) / data_pbcor_masked.filled(np.inf)).reshape(ny, nx)
     
     # for DAOStarFinder, in pixel space
     pixel_scale = 1/np.abs(header['CDELT1'])
@@ -571,9 +572,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
    
     # numerical aperture correction
-    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], offset=[0.5, 0.5], 
-                             theta=theta/180.*np.pi) 
-                             # 0.5 offset comes from central offset of photutils of version 0.5
+    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
+                offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
+                theta=theta/180.*np.pi) 
     flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
                              methods='aperture', debug=False, aperture_correction=1.0,
                              beamsize=1.0)
@@ -613,10 +614,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods,
                                         aperture_correction=aperture_correction)
-            if pbcor:
-                data_pbcor_cutout = s.cutout(data_pbcor_masked)
-                flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
-                        beamsize=beamsize, theta=theta/180*np.pi, debug=False, methods=methods)
+            # if pbcor:
+                # data_pbcor_cutout = s.cutout(data_pbcor_masked)
+                # flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
+                        # beamsize=beamsize, theta=theta/180*np.pi, debug=False, methods=methods)
             #print("flux_list", flux_list)
             is_true = True
             if second_check:
@@ -639,9 +640,12 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 sources_found_y.append(sources_found_y_candidates[i])
                 flux_snr = np.array(flux_list) / std
                 if pbcor:
-                    flux_auto.append(np.array(flux_pbcor_list) * 1000)
+                    pbcor_pixel = pbcor_map[sources_found_y_candidates[i], 
+                                            sources_found_x_candidates[i]]
+                    flux_auto.append(np.array(flux_list) * 1000. / pbcor_pixel)
+
                 else:
-                    flux_auto.append(np.array(flux_list) * 1000)
+                    flux_auto.append(np.array(flux_list) * 1000.)
                 flux_snr_list.append(flux_snr)
 
         if len(flux_auto)>0:
