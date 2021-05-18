@@ -717,6 +717,7 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, **kwarg
         image_outdir = os.path.join(outdir, band)
     else:
         image_outdir = outdir
+    os.system('mkdir -p {}'.format(image_outdir))
     for img in all_files:
         print("img: {}".format(img))
         # continue
