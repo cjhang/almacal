@@ -609,8 +609,11 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_1sigma, vmax=upper_5sigma)
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
-        circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, edgecolor='red', linewidth=2, alpha=0.5)
-        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin*3600, height=bmaj*3600, angle=bpa, facecolor='orange', edgecolor=None, alpha=0.8)
+        circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, 
+                                edgecolor='red', linewidth=2, alpha=0.5)
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin*3600, 
+                                  height=bmaj*3600, angle=bpa, facecolor='orange', edgecolor=None, 
+                                  alpha=0.8)
         ax.add_patch(circle)
         ax.add_patch(ellipse)
         ax.set_xlabel('RA [arcsec]')
@@ -621,7 +624,8 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         xlim, ylim = 40*scale, 40*scale
         ax.set_xlim(-xlim, xlim)
         ax.set_ylim(-ylim, ylim)
-        ellipse = patches.Ellipse((0, 0), width=bmin*3600, height=bmaj*3600, angle=bpa, fill=None, facecolor=None, edgecolor='red', alpha=0.5)
+        ellipse = patches.Ellipse((0, 0), width=bmin*3600, height=bmaj*3600, angle=bpa, fill=None, 
+                                  facecolor=None, edgecolor='red', alpha=0.5)
         ax.add_patch(ellipse)
         ax.set_xlabel('RA [arcsec]')
         ax.set_ylabel('Dec [arcsec]')
@@ -629,7 +633,8 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         # niose statistics
         ax = fig.add_subplot(133)
         ax.step(bins_mid, hist/amp_scale, where='mid', color='b', label='Noise Distribution')
-        ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', label='Central Noise Distribution')
+        ax.step(bins_mid, hist_center/amp_scale_center, where='mid', color='orange', 
+                label='Central Noise Distribution')
         ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
         ax.vlines(upper_3sigma, 0, 2.0, color='k', label=r'3$\sigma$ boundary')
         ax.vlines(lower_3sigma, 0, 2.0, color='k')
@@ -646,7 +651,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
             plt.close()
         if savefig:
             if not figname:
-                figname = os.path.join(outdir, img + '.png')
+                figname = os.path.join(outdir, os.path.basename(img) + '.png')
             fig.savefig(figname, dpi=2*fig.dpi)
     
     # return the checking results
