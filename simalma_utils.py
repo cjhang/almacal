@@ -446,7 +446,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         data = hdu[0].data
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, maxiters=5)  
         freq = header['CRVAL3']
         lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
         fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
@@ -862,7 +862,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
             basename_repeat = basename + '.run{}'.format(i)
             complist_file = os.path.join(outdir, basename_repeat+'.txt')
             mycomplist = make_random_source(mydirection, freq=myfreq, 
-                    radius=0.9*0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
+                    radius=0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
                     debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
                     sampler=np.random.uniform, sampler_params={},
                     known_sources=known_sources, budget=budget, **kwargs) 
@@ -914,12 +914,23 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         # im_head = imhead(imagefile)
         # im_beam = im_head['restoringbeam']
         # im_incr = im_head['incr']
-        im_info = imstat(imagefile)
+        # im_info = imstat(imagefile, algorithm='chauvenet', zscore=5)
         # beamsize = np.pi*a*b/(4*np.log(2))
         # beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
         # gaussian_norm = 2.0*np.pi*im_beam['major']['value'] * im_beam['minor']['value'] / 2.35482**2
-        sensitivity = im_info['rms'] * 1000 # in mJy/pixel
+        # sensitivity = im_info['rms'] * 1000 # in mJy/pixel
         # flux_base = rms[0] #* 2*np.pi # convert the peak flux density into brightness
+
+        with fits.open(imagefile) as hdu:
+            header = hdu[0].header
+            # wcs = WCS(header)
+            data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, maxiters=5)  
+        sensitivity = std * 1000 # convert to mJy/pixel
+     
+
         if debug:
             print('sensitivity', sensitivity)
             # print('gaussian_norm', gaussian_norm)
@@ -981,22 +992,36 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     f_mean = lambda x: np.mean(x)
     
     # image statistics
-    im_head = imhead(baseimage)
-    im_beam = im_head['restoringbeam']
-    im_incr = im_head['incr']
-    im_info = imstat(baseimage)
-    # beamsize = np.pi*a*b/(4*np.log(2))
-    beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
-    rms = im_info['rms']
-    rms_flux = rms * 1000 # convert to mJy/pixel
+    # # calculate from casa imstat
+    # im_head = imhead(baseimage)
+    # im_beam = im_head['restoringbeam']
+    # im_incr = im_head['incr']
+    # im_info = imstat(baseimage, algorithm='chauvenet', zscore=5)
+    # # beamsize = np.pi*a*b/(4*np.log(2))
+    # beamsize = np.pi/(4*np.log(2))* im_beam['major']['value'] * im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600)**2
+    # rms = im_info['rms']
+    
+    with fits.open(baseimage) as hdu:
+        header = hdu[0].header
+        # wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, maxiters=5)  
+        bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        theta = header['BPA']
+        beamsize = np.pi*a*b/(4*np.log(2))
+
+    rms_flux = std * 1000 # convert to mJy/pixel
     # sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
-    print('rms',rms)
-    print('beamsize',beamsize) 
-    print('rms_flux',rms_flux)
+    if debug:
+        print('beamsize',beamsize) 
+        print('rms_flux',rms_flux)
 
     known_sources = source_finder(baseimage, fov_scale=fov_scale)
     
-    flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
+    #flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
     if basename is None:
         basename = os.path.basename(baseimage)
         print('basename', basename)
@@ -1124,13 +1149,15 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
         s = snr[i]
         s_b = snr[i-1]
         # calculate the completeness
-        snr_select = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        snr_select = np.bitwise_and((detection_input_array[:, 0]<s), 
+                                    (detection_input_array[:, 0]>s_b))
         n_input = np.sum(snr_select)
         n_found = np.sum(np.array(detection_input_array[:,1][snr_select]))
         completeness_list.append(1.0*n_found/n_input)
         
         # calculate the fake detaction rate
-        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), 
+                                     (detection_found_array[:, 0]>s_b))
         n_found2 = np.sum(snr_select2)
         n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
         fake_rate_list.append(1.0*n_fake/n_found2)
@@ -1160,13 +1187,15 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
 
 
         # calculate the completeness
-        snr_select1 = np.bitwise_and((detection_input_array[:, 0]<s), (detection_input_array[:, 0]>s_b))
+        snr_select1 = np.bitwise_and((detection_input_array[:, 0]<s), 
+                                     (detection_input_array[:, 0]>s_b))
         n_input = np.sum(snr_select1)
         n_found = np.sum(np.array(detection_input_array[:,1][snr_select1]))
         completeness_list.append(1.0*n_found/n_input)
         
         # calculate the fake detaction rate
-        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), (detection_found_array[:, 0]>s_b))
+        snr_select2 = np.bitwise_and((detection_found_array[:, 0]<s), 
+                                     (detection_found_array[:, 0]>s_b))
         n_found2 = np.sum(snr_select2)
         n_fake = n_found2 - np.sum(np.array(detection_found_array[:,1][snr_select2]))
         fake_rate_list.append(1.0*n_fake/n_found2)
