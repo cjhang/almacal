@@ -814,7 +814,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         return []
 
 def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 
-                    snr=(1,20), fov_scale=1.5, outdir='./', basename=None,
+                    snr=(0.1,20), fov_scale=1.5, outdir='./', basename=None,
                     uvtaper_scale=None, budget=None,
                     debug=False, **kwargs):
     """generate the fake images with man-made sources
@@ -862,7 +862,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
             basename_repeat = basename + '.run{}'.format(i)
             complist_file = os.path.join(outdir, basename_repeat+'.txt')
             mycomplist = make_random_source(mydirection, freq=myfreq, 
-                    radius=0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
+                    radius=0.9*0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
                     debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
                     sampler=np.random.uniform, sampler_params={},
                     known_sources=known_sources, budget=budget, **kwargs) 
@@ -898,7 +898,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose().value
         if debug:
             print('fov', fov)
-            print('radius', 0.5*fov)
+            print('radius', 0.45*fov)
         if imagefile is None:
             imagefile = os.path.join(outdir, basename+'.image.fits')
             if os.path.isfile(imagefile):
@@ -980,13 +980,15 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
                         # inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
 
 def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
-        basename=None, savefile=None, fov_scale=1.5, second_check=True,
+        basename=None, savefile=None, fov_scale=1.5, second_check=False,
         threshold=5.0, plot=False, snr_mode='peak', debug=False, **kwargs):
     """simulation the completeness of source finding algorithm
 
     mode:
         peak: snr is the peak value
         integrated: snr is the integrated value
+
+    The second_check is set to false to get the completeness across the whole SNR
     """
     # one time function
     f_mean = lambda x: np.mean(x)
