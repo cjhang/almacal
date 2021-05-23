@@ -874,6 +874,158 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                         print("Error in matching the obs name for filname: {}".format(item))
                         continue
 
+def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=1, nrow=3):
+    '''visual inspection of the classification results from check_images
+    
+    '''
+        # gui program
+    from Tkinter import Tk, Frame, Checkbutton, IntVar, Button, Canvas
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    #
+    if imagedir is None:
+        raise ValueError("basedir should be defined along with filelist")
+    all_good_files = []
+    all_bad_files = []
+    if goodfile:
+        if debug:
+            print('goodfile', goodfile)
+        if isinstance(goodfile, str):
+            try:
+                flist = []
+                with open(goodfile) as f:
+                    filelist_lines = f.readlines()
+                for line in filelist_lines:
+                    pngfile = line.strip()+'.cont.auto.fits.png'
+                    all_good_files.append(os.path.join(imagedir, pngfile))
+            except:
+                print("Failed in open {}".format(goodfile))
+                pass
+    
+    if badfile:
+        if debug:
+            print('badfile', badfile)
+        if isinstance(badfile, str):
+            try:
+                with open(badfile) as f:
+                    filelist_lines = f.readlines()
+                for line in filelist_lines:
+                    pngfile = line.strip()+'.cont.auto.fits.png'
+                    all_bad_files.append(os.path.join(imagedir, pngfile))
+            except:
+                print("Failed in open {}".format(badfile))
+                pass
+
+    root = Tk()
+    root.title('Checking images')
+    # frame=Frame(root, width=300, height=300)
+    # frame.pack(expand = True, fill=BOTH)
+    # canvas = Canvas(frame, bg='white', width=300, height=300)
+
+
+    # Var1 = IntVar()
+    # Var2 = IntVar()
+     
+    # ChkBttn = Checkbutton(frame, width = 15, variable = Var1)
+    # ChkBttn.pack(padx = 5, pady = 5)
+     
+    # ChkBttn2 = Checkbutton(frame, width = 15, variable = Var2)
+    # ChkBttn2.pack(padx = 5, pady = 5)
+
+    # Button = Button(frame, text = "Submit", command = retrieve)
+    # Button.pack(padx = 5, pady = 5)
+
+    list_patches = {}
+    for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
+        print(">>>>>>>>>>> {} images".format(desc))
+        is_continue = int(raw_input("Continue? File list has changed! \n ") or '1')
+        if is_continue == 0:
+            break
+        total_num = len(all_files)
+        select_num = 0
+        print("Find {} files".format(total_num))
+        all_select = []
+        for i in range(0, len(all_files), ncol*nrow):
+            fig = plt.figure(figsize=(12*ncol, 4*nrow))
+            for j in range(0, nrow*ncol):
+                if (i+j)>=len(all_files):
+                    continue
+                try:
+                    imagedata = plt.imread(all_files[i+j])
+                except:
+                    print("Error in reading: {}".format(all_files[i+j]))
+                    continue
+                ax = fig.add_subplot(nrow, ncol, j+1)#, projection=wcs2, slices=(0, 0, 'x', 'y'))
+                # ax.text(10, 10, str(j), fontsize=20)
+                ax.set_title(str(j+1))
+                ax.imshow(imagedata, interpolation='none')
+                #plt.tight_layout()
+                canvas = FigureCanvasTkAgg(f, master=root)
+                canvas.show()
+                button = Tk.Button(master=root, text='Quit', command=sys.exit)
+                button.pack(side=Tk.BOTTOM)
+                Tk.mainloop()
+        
+            # show the image and record the 
+            # plt.show()
+            # print('Input the index of images, seperate with comma: [{}/{}]'.format(i+3,total_num))
+            # try:
+                # find_zero = False
+                # idx_input = input()
+                # while idx_input < 0:
+                    # print("Previous selection: \n    {}".format(all_select[idx_input]))
+                    # print("Select again:")
+                    # idx_input = input()
+
+                # if idx_input == 0:
+                    # print("Currently at {}/{}".format(i, len(all_files)))
+                    # plt.close('all')
+                    # break
+                # if isinstance(idx_input, int):
+                    # idx_input = [idx_input]
+                # select_num += len(idx_input)
+                # for ind in idx_input:
+                    # if ind == 0:
+                        # print("Currently at {}/{}".format(i, len(all_files)))
+                        # plt.close('all')
+                        # find_zero = True
+                        # break
+                    # all_select.append(all_files[i+ind-1])
+                # if find_zero:
+                    # break
+            # except:
+                # plt.close('all')
+                # continue
+            # # plt.clf()
+            # plt.close('all')
+        # list_patches[desc] = all_select
+        # if total_num > 0:
+            # print("Totally {}% of data have been selected.".format(100.*select_num/total_num))
+        # else:
+            # print("No data found.")
+
+    list_updated = {}
+    list_updated['good'] = (set(all_good_files) - set(list_patches['good'])).union(set(list_patches['bad']))
+    list_updated['bad'] = (set(all_bad_files) - set(list_patches['bad'])).union(set(list_patches['good']))
+    
+    if debug:
+        print('list_patches')
+        print(list_patches)
+        print("list_updated")
+        print(list_updated)
+    else:
+        obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
+        for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
+            # if f is None:
+                # continue
+            with open(f+'.updated', 'w+') as f:
+                for item in list_updated[desc]:
+                    try:
+                        obsname = obsname_match.search(item).groupdict()['obsname']
+                        f.write(obsname+'\n')
+                    except:
+                        print("Error in matching the obs name for filname: {}".format(item))
+                        continue
+
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
                     computwt=True, 
