@@ -1260,8 +1260,7 @@ def image_sim(image, outdir='./',):
     #save(completeness)
     for obj in detections:
         for band in ['B6', 'B7']:
-            imagefile = 'make_all_goodimages_run6/{}/{}_{}_combine.ms.auto.cont.image.fits'.format(obj, o
-    bj, band)
+            imagefile = 'make_all_goodimages_run6/{}/{}_{}_combine.ms.auto.cont.image.fits'.format(obj, obj, band)
             outdir = '/home/data/almacal/simulations_detections2/{}'.format(obj)
             if os.path.isfile(imagefile):
                 gen_sim_images(imagefile=imagefile, outdir=outdir, snr=(1,20), repeat=1000)
