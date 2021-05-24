@@ -1719,14 +1719,6 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 detections[band] = 0
             if interative:
                 plt.show()
-                dection_input = str(raw_input("Is SMG? [n/y]: ") or 'n')
-                if dection_input == 'y':
-                    is_SMG = 1
-                elif dection_input == 'n':
-                    pass
-                else:
-                    os.system('rm -rf {}'.format(obj_outdir))
-                    break
                     
                 for band in bands:
                     detection_input=str(raw_input("Dection in Band:{} [n/y]?: ".format(band)) or 'n')
@@ -1735,6 +1727,9 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         detections[band] = 1
                     if goodfield_input == 'y':
                         goodfields[band] = 1
+                SMG_input = int(raw_input("Is SMG? [integer, No[0], Yes[1], NA[2]]: ") or 0)
+                if SMG_input == 'y':
+                    is_SMG = 1
                 plt.close()
             for band in bands:
                 found_string += ' {} {}'.format(detections[band], goodfields[band])
