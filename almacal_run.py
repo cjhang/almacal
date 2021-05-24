@@ -1239,8 +1239,10 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=10.0)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0)  
+        mask = data_masked.mask & (data_masked.data >= 5.0*std)
         pbcor = (data / data_pbcor).reshape(ny, nx)
+        pbcor[mask] = 0.0
         if fovscale:
             rlimit = 0.5 * fovscale * fov.value
             # print('rlimit', rlimit)
@@ -1607,7 +1609,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['', 'uvtaper1.5', 'uvtaper2.0'], 
-                   interative=False, outdir='./', continue_mode=False):
+                   interative=False, outdir='./', continue_mode=True):
     """finding sources
     Adding a dot in the string: 
         resolutions = ['0.3arcsec','0.8arcsec']
@@ -1621,39 +1623,37 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             if obj_match.match(obj):
                 objs.append(item)
 
-    if continue_mode:
-        file_mode = 'a+'
-    else:
-        file_mode = 'w+'
-
     summary_file = os.path.join(outdir, 'summary.txt')
-    if not os.path.isfile(summary_file):
+    goodbands_file = {}
+    for band in bands:
+        goodbands_file[band] = os.path.join(outdir, 'goodfields4'+band+'.txt')
+    if not continue_mode:
+        print('Initializing the output file')
         with open(summary_file, file_mode) as f:
             f.write("obj")
             for band in bands:
                 for res in resolutions:
                     f.write(' ')
                     f.write(band+'_'+res)
+            f.write(' detection')
+            for band in bands:
+                f.write(' good4{}'.format(band))
             f.write('\n')
-        
-    detections = []
-    goodfields = {}
-    for band in bands:
-        goodfields[band] = []
+    else:
+        summary = Table.read(summary_file, format='ascii')
+        objs_finished = summary['obj']
 
     failed_files = []
     for obj in objs:
+        if obj in objs_finished:
+            print("{} already done!".format(obj))
+            continue
         if obj_match.match(obj):
             print('>>>>> {}'.format(obj))
             obj_dir = os.path.join(basedir, obj)
             obj_outdir = os.path.join(outdir, obj)
             # write into summary file
             obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
-            if continue_mode:
-                if os.path.isfile(obj_summary_file):
-                    print("{} already done!".format(obj))
-                    continue
-            
             obj_sourcefound = {}
             for band in bands:
                 for res in resolutions:
@@ -1713,12 +1713,16 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             # save figure
             fig.subplots_adjust(wspace=0.2, hspace=0.2)
             fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
-
+            
+            is_detection = 0
+            goodfields = {}
+            for band in bands:
+                goodfields[band] = 0
             if interative:
                 plt.show()
                 dection_input = str(raw_input("Is detection? [n/y]: ") or 'n')
                 if dection_input == 'y':
-                    detections.append(obj)
+                    is_detection = 1
                 elif dection_input == 'n':
                     pass
                 else:
@@ -1728,15 +1732,14 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 for band in bands:
                     goodfield_input=str(raw_input("Good for Band:{} [n/y]?: ".format(band)) or 'n')
                     if goodfield_input == 'y':
-                        goodfields[band].append(obj)
+                        goodfields[band] = 1
                 plt.close()
+            found_string += {' {}'.format(is_detection)}
+            for band in bands:
+                found_string += {' {}'.format(goodfields[band])}
             with open(summary_file, 'a+') as f:
                 f.write("{}\n".format(found_string)) 
     plt.close()
-    savelist(detections, filename='detections.txt', outdir=outdir, file_mode=file_mode)
-    for band in bands:
-        savelist(goodfields[band], filename='goodfields4{}.txt'.format(band), outdir=outdir,
-                 file_mode=file_mode)
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     pass
@@ -1745,7 +1748,7 @@ def run_calculate_completeness():
     pass
 
 def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, bands=['B6','B7'], 
-        suffix='combine.ms.auto.cont', resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
+        suffix='combine.ms.auto.cont', resolutions=['', 'uvscale1.5', 'uvscale2.0'], 
         outdir='./', snr_threshold=5.0, savefile=None):
     """calculate the effecitve area for all the usable fields
     """
@@ -1777,7 +1780,7 @@ def run_calculate_effarea(basedir, flux=np.linspace(0.1, 1, 10),  objs=None, ban
                 image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
                 if os.path.isfile(image_fullpath):
                     _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
-                                    images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath])
+                                    images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,])
                     effarea[band+'_'+res] += objarea
     if savefile:
         effarea.write(savefile, format='ascii')
