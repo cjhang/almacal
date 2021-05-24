@@ -431,7 +431,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
-                  return_image_cuts=False):
+                  return_image_cuts=False, central_mask_radius=2.0):
     """finding point source in the image
 
     This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
@@ -439,6 +439,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     second stage can be configured by 
 
     mask_threshold: the mask size of known_sources
+    central_mask: central mask radius in arcsec
     """
     with fits.open(fitsimage) as hdu:
         header = hdu[0].header
@@ -506,6 +507,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 # aperture.plot(color='white', lw=2)
             plt.show()
 
+    if central_mask_radius > 0.0:
+        central_aper = CircularAperture([ny/2., nx/2.], central_mask_radius/3600.0*pixel_scale)
+        central_aper_mask = central_aper.to_mask(method='center')
+        known_mask = np.bitwise_or(known_mask, central_aper_mask[0].to_image((ny,nx)).astype(bool))
     if debug:
         print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
@@ -635,6 +640,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                     + (sources_found_y_candidates[i]-pixel_center[1])**2) >\
                             (fov_scale*fov_pixel*0.5)**2:
                     is_true = False
+
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
                 sources_found_y.append(sources_found_y_candidates[i])
@@ -720,7 +726,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #x_map, y_map = np.meshgrid(x_index, y_index)
         #ax.pcolormesh(x_map, y_map, data_masked)
         extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
-        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none')
+        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none', vmax=10.*std, 
+                  vmin=-3.0*std, cmap='winter')
         
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
@@ -761,8 +768,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                                           height=3*a*scale, angle=theta, facecolor=None, fill=False, 
                                           edgecolor='white', alpha=0.8, linewidth=2)
                 ax.add_patch(ellipse)
-                ax.text(1.1*yy, 1.0*xx, "({})\n{:.2f}mJy".format(i, flux_auto[i][0]), 
-                        color='white', fontsize=12,)
+                ax.text(1.0*yy+1, 1.0*xx, 
+                        "[{}]{:.2f}mJy".format(i, flux_auto[i][0]), 
+                        color='white', fontsize=10, horizontalalignment='left', 
+                        verticalalignment='center')
                         #bbox=dict(boxstyle="round", ec=(1,0.5,0.5), fc=(1,0.8,0.8), alpha=0.3))
                 # plt.figure()
                 # plt.imshow(data_masked_sub)
