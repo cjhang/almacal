@@ -1626,7 +1626,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     summary_file = os.path.join(outdir, 'summary.txt')
     if not continue_mode:
         print('Initializing the output file')
-        with open(summary_file, file_mode) as f:
+        with open(summary_file, 'w+') as f:
             f.write("obj")
             for band in bands:
                 for res in resolutions:
@@ -1636,107 +1636,109 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 f.write(' detection_{} goodfield_{}'.format(band, band))
             f.write(' is_SMG')
             f.write('\n')
+            objs_finished = []
     else:
         summary = Table.read(summary_file, format='ascii')
         objs_finished = summary['obj']
 
     failed_files = []
-    for obj in objs:
-        if obj in objs_finished:
-            print("{} already done!".format(obj))
-            continue
-        if obj_match.match(obj):
-            print('>>>>> {}'.format(obj))
-            obj_dir = os.path.join(basedir, obj)
-            obj_outdir = os.path.join(outdir, obj)
-            # write into summary file
-            obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
-            obj_sourcefound = {}
-            for band in bands:
-                for res in resolutions:
-                    obj_sourcefound[band+'_'+res] = 0
-            if not os.path.isdir(obj_outdir):
-                os.system('mkdir -p {}'.format(obj_outdir))
-            # open the summary file
-            obj_summary = open(obj_summary_file, 'w+')
-            # make a summary plot
-            summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
-            fig, ax = plt.subplots(len(bands), len(resolutions), 
-                                   figsize=(4.2*len(resolutions),4*len(bands))) 
-            fig.suptitle(obj)
-            #for img in imgs:
-            # sources_number = {}
-            for i,band in enumerate(bands):
-                for j,res in enumerate(resolutions):
-                    if res == '':
-                        res_string = ''
-                    else:
-                        res_string = res+'.'
-                    image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
-                    image_fullpath = os.path.join(obj_dir, image_name)
-                    print(image_fullpath)
-                    #print('Finding source in:', image_fullpath)
-                    if not os.path.isfile(image_fullpath):
-                        continue
-                    savefile = image_name + '.source_found.txt'
-                    figname = image_name + '.png'
-                    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                            ax=ax[i,j], pbcor=True)
-                    ax[i,j].set_title('{} {}'.format(band, res))
-                    #try:
-                    #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                    #            ax=ax[i,j], pbcor=True)
-                    #except:
-                    #    print("Error found for {}".format(image_name))
-                    #    failed_files.append(image_name)
-
-                    if len(sources_found) > 0:
-                        obj_summary.write('# {} {} {}\n'.format(obj, band, res))
-                        obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
-                        source_idx = 0
-                        for ra, dec, flux, snr in sources_found:
-                            obj_summary.write('{} {:.6f} {:.6f} '.format(source_idx, ra, dec))
-                            for f_m, f_snr in zip(flux, snr):
-                                obj_summary.write(" {:.4f} {:.2f} ".format(f_m, f_snr))
-                            obj_summary.write('\n')
-                            source_idx += 1
-            # write into files
-            obj_summary.close()
-            found_string = obj
-            for band in bands:
-                for res in resolutions:
-                    found_string += ' '+str(obj_sourcefound[band+'_'+res])
-            print(found_string)
-            # save figure
-            fig.subplots_adjust(wspace=0.2, hspace=0.2)
-            fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
-            
-            is_SMG = 0
-            detections = {}
-            goodfields = {}
-            for band in bands:
-                goodfields[band] = 0
-                detections[band] = 0
-            if interative:
-                plt.show()
-                    
+    try:
+        for obj in objs:
+            if obj in objs_finished:
+                print("{} already done!".format(obj))
+                continue
+            if obj_match.match(obj):
+                print('>>>>> {}'.format(obj))
+                obj_dir = os.path.join(basedir, obj)
+                obj_outdir = os.path.join(outdir, obj)
+                # write into summary file
+                obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
+                obj_sourcefound = {}
                 for band in bands:
-                    detection_input=str(raw_input("Dection in Band:{} [n/y]?: ".format(band)) or 'n')
-                    goodfield_input=str(raw_input("Good for Band:{} [n/y]?: ".format(band)) or 'n')
-                    if detection_input == 'y':
-                        detections[band] = 1
-                    if goodfield_input == 'y':
-                        goodfields[band] = 1
-                SMG_input = int(raw_input("Is SMG? [integer, No[0], Yes[1], NA[2]]: ") or 0)
-                if SMG_input == 'y':
-                    is_SMG = 1
+                    for res in resolutions:
+                        obj_sourcefound[band+'_'+res] = 0
+                if not os.path.isdir(obj_outdir):
+                    os.system('mkdir -p {}'.format(obj_outdir))
+                # open the summary file
+                obj_summary = open(obj_summary_file, 'w+')
+                # make a summary plot
+                summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
+                fig, ax = plt.subplots(len(bands), len(resolutions), 
+                                       figsize=(4.2*len(resolutions),4*len(bands))) 
+                fig.suptitle(obj)
+                #for img in imgs:
+                # sources_number = {}
+                for i,band in enumerate(bands):
+                    for j,res in enumerate(resolutions):
+                        if res == '':
+                            res_string = ''
+                        else:
+                            res_string = res+'.'
+                        image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+                        image_fullpath = os.path.join(obj_dir, image_name)
+                        print(image_fullpath)
+                        #print('Finding source in:', image_fullpath)
+                        if not os.path.isfile(image_fullpath):
+                            continue
+                        savefile = image_name + '.source_found.txt'
+                        figname = image_name + '.png'
+                        sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
+                                ax=ax[i,j], pbcor=True)
+                        ax[i,j].set_title('{} {}'.format(band, res))
+                        #try:
+                        #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
+                        #            ax=ax[i,j], pbcor=True)
+                        #except:
+                        #    print("Error found for {}".format(image_name))
+                        #    failed_files.append(image_name)
+
+                        if len(sources_found) > 0:
+                            obj_summary.write('# {} {} {}\n'.format(obj, band, res))
+                            obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
+                            source_idx = 0
+                            for ra, dec, flux, snr in sources_found:
+                                obj_summary.write('{} {:.6f} {:.6f} '.format(source_idx, ra, dec))
+                                for f_m, f_snr in zip(flux, snr):
+                                    obj_summary.write(" {:.4f} {:.2f} ".format(f_m, f_snr))
+                                obj_summary.write('\n')
+                                source_idx += 1
+                # write into files
+                obj_summary.close()
+                found_string = obj
+                for band in bands:
+                    for res in resolutions:
+                        found_string += ' '+str(obj_sourcefound[band+'_'+res])
+                print(found_string)
+                # save figure
+                fig.subplots_adjust(wspace=0.2, hspace=0.2)
+                fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
+                
+                is_SMG = 0
+                detections = {}
+                goodfields = {}
+                for band in bands:
+                    goodfields[band] = 0
+                    detections[band] = 0
+                if interative:
+                    plt.show()
+                        
+                    for band in bands:
+                        detection_input=str(raw_input("Dection in Band:{} [n/y]?: ".format(band)) or 'n')
+                        goodfield_input=str(raw_input("Good for Band:{} [n/y]?: ".format(band)) or 'n')
+                        if detection_input == 'y':
+                            detections[band] = 1
+                        if goodfield_input == 'y':
+                            goodfields[band] = 1
+                    SMG_input = int(raw_input("Is SMG? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
+                    plt.close()
+                for band in bands:
+                    found_string += ' {} {}'.format(detections[band], goodfields[band])
+                found_string += ' {}'.format(SMG_input)
+                with open(summary_file, 'a+') as f:
+                    f.write("{}\n".format(found_string)) 
                 plt.close()
-            for band in bands:
-                found_string += ' {} {}'.format(detections[band], goodfields[band])
-            found_string += {' {}'.format(is_SMG)}
-            with open(summary_file, 'a+') as f:
-                f.write("{}\n".format(found_string)) 
-    plt.close()
+    except KeyboardInterrupt:
+        return 0
 
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     pass
