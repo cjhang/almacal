@@ -439,7 +439,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     second stage can be configured by 
 
     mask_threshold: the mask size of known_sources
-    central_mask: central mask radius in arcsec
+    central_mask: central mask radius in units of FWHM of final synthesised beam
     """
     with fits.open(fitsimage) as hdu:
         header = hdu[0].header
@@ -508,7 +508,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             plt.show()
 
     if central_mask_radius > 0.0:
-        central_aper = CircularAperture([ny/2., nx/2.], central_mask_radius/3600.0*pixel_scale)
+        central_aper = CircularAperture([ny/2., nx/2.], central_mask_radius*a)
         central_aper_mask = central_aper.to_mask(method='center')
         known_mask = np.bitwise_or(known_mask, central_aper_mask[0].to_image((ny,nx)).astype(bool))
     if debug:
