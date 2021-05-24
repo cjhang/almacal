@@ -1608,7 +1608,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                             basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                   resolutions=['', 'uvtaper1.5', 'uvtaper2.0'], 
+                   resolutions=['', 'uvscale1.5', 'uvscale2.0'], 
                    interative=False, outdir='./', continue_mode=True):
     """finding sources
     Adding a dot in the string: 
@@ -1624,9 +1624,6 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 objs.append(item)
 
     summary_file = os.path.join(outdir, 'summary.txt')
-    goodbands_file = {}
-    for band in bands:
-        goodbands_file[band] = os.path.join(outdir, 'goodfields4'+band+'.txt')
     if not continue_mode:
         print('Initializing the output file')
         with open(summary_file, file_mode) as f:
@@ -1635,9 +1632,9 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 for res in resolutions:
                     f.write(' ')
                     f.write(band+'_'+res)
-            f.write(' detection')
             for band in bands:
-                f.write(' good4{}'.format(band))
+                f.write(' detection_{} goodfield_{}'.format(band, band))
+            f.write(' is_SMG')
             f.write('\n')
     else:
         summary = Table.read(summary_file, format='ascii')
@@ -1714,15 +1711,17 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             fig.subplots_adjust(wspace=0.2, hspace=0.2)
             fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
             
-            is_detection = 0
+            is_SMG = 0
+            detections = {}
             goodfields = {}
             for band in bands:
                 goodfields[band] = 0
+                detections[band] = 0
             if interative:
                 plt.show()
-                dection_input = str(raw_input("Is detection? [n/y]: ") or 'n')
+                dection_input = str(raw_input("Is SMG? [n/y]: ") or 'n')
                 if dection_input == 'y':
-                    is_detection = 1
+                    is_SMG = 1
                 elif dection_input == 'n':
                     pass
                 else:
@@ -1730,13 +1729,16 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     break
                     
                 for band in bands:
+                    detection_input=str(raw_input("Dection in Band:{} [n/y]?: ".format(band)) or 'n')
                     goodfield_input=str(raw_input("Good for Band:{} [n/y]?: ".format(band)) or 'n')
+                    if detection_input == 'y':
+                        detections[band] = 1
                     if goodfield_input == 'y':
                         goodfields[band] = 1
                 plt.close()
-            found_string += {' {}'.format(is_detection)}
             for band in bands:
-                found_string += {' {}'.format(goodfields[band])}
+                found_string += ' {} {}'.format(detections[band], goodfields[band])
+            found_string += {' {}'.format(is_SMG)}
             with open(summary_file, 'a+') as f:
                 f.write("{}\n".format(found_string)) 
     plt.close()
