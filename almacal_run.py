@@ -1625,6 +1625,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
 
     summary_file = os.path.join(outdir, 'summary.txt')
     if not continue_mode:
+        if os.path.isfile(summary_file):
+            os.system('mv {} {}.old'.format(summary_file, summary_file))
         print('Initializing the output file')
         with open(summary_file, 'w+') as f:
             f.write("obj")
