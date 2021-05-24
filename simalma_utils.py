@@ -1075,28 +1075,27 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         #calculate the snr
         if snr_mode == 'peak':
             snr_input = flux_input_auto[:,2] / rms_flux
-            snr_input_list.append(snr_input)
         elif snr_mode == 'integrated':
             snr_input = flux_input / rms_flux
-            snr_input_list.append(snr_input)
+        snr_input_list.append(snr_input)
         # the snr of the detection
-        snr_input_found = flux_input_auto[:,2][idxs[0]] / rms_flux
+        snr_input_isfound = flux_input_auto[:,2][idxs[0]] / rms_flux
+        snr_found_isinput = flux_found_auto[:,2][idxs[1]] / rms_flux
         snr_input_failed = flux_input_auto[:,2][idxs[2]] / rms_flux
-        snr_found_input = flux_found_auto[:,2][idxs[1]] / rms_flux
         snr_found_fake = flux_found_auto[:,2][idxs[3]] / rms_flux
         # snr_input_foundlist.append(snr_input_found)
         # print('snr_inputfound',snr_inputfound)
         # print('snr_inputfound_faild',snr_inputfound_failed)
         # print('detection_array', detection_array)
-        if len(snr_input_found) > 0:
+        if len(snr_input_isfound) > 0:
             detection_input_array = np.vstack([detection_input_array, 
-                np.array(zip(snr_input_found, np.ones_like(snr_input_found)))])
+                np.array(zip(snr_input_isfound, np.ones_like(snr_input_isfound)))])
         if len(snr_input_failed) > 0:
             detection_input_array = np.vstack([detection_input_array, 
                 np.array(zip(snr_input_failed, np.zeros_like(snr_input_failed)))])
-        if len(snr_found_input) > 0:
+        if len(snr_found_isinput) > 0:
             detection_found_array = np.vstack([detection_found_array, 
-                np.array(zip(snr_found_input, np.ones_like(snr_found_input)))])
+                np.array(zip(snr_found_isinput, np.ones_like(snr_found_isinput)))])
         if len(snr_found_fake) > 0:
             detection_found_array = np.vstack([detection_found_array, 
                 np.array(zip(snr_found_fake, np.zeros_like(snr_found_fake)))])

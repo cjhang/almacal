@@ -1601,11 +1601,12 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, outdir=os.path.join(outdir, obj),
-                                    computwt=computwt, basedir=os.path.join(basedir, obj), **kwargs)
+                    make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
+                            outdir=os.path.join(outdir, obj), computwt=computwt, 
+                            basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                   resolutions=['', 'uvtaper1.0', 'uvtaper1.7'], 
+                   resolutions=['', 'uvtaper1.5', 'uvtaper2.0'], 
                    interative=False, outdir='./', continue_mode=False):
     """finding sources
     Adding a dot in the string: 
