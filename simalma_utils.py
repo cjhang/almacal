@@ -431,7 +431,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
-                  return_image_cuts=False, central_mask_radius=2.0):
+                  return_image_cuts=False, central_mask_radius=2.0, cmap=None,):
     """finding point source in the image
 
     This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
@@ -727,7 +727,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #ax.pcolormesh(x_map, y_map, data_masked)
         extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
         ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none', vmax=10.*std, 
-                  vmin=-3.0*std, cmap='winter')
+                  vmin=-3.0*std, cmap=cmap)
         
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
