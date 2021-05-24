@@ -1239,7 +1239,7 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0)  
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
         mask = data_masked.mask & (data_masked.data >= 5.0*std)
         pbcor = (data / data_pbcor).reshape(ny, nx)
         pbcor[mask] = 0.0
@@ -1635,6 +1635,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             for band in bands:
                 f.write(' detection_{} goodfield_{}'.format(band, band))
             f.write(' is_SMG')
+            f.write(' is_Jet')
             f.write('\n')
             objs_finished = []
     else:
@@ -1730,10 +1731,12 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         if goodfield_input == 'y':
                             goodfields[band] = 1
                     SMG_input = int(raw_input("Is SMG? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
+                    Jet_input = int(raw_input("Is Jet? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
                     plt.close()
                 for band in bands:
                     found_string += ' {} {}'.format(detections[band], goodfields[band])
                 found_string += ' {}'.format(SMG_input)
+                found_string += ' {}'.format(Jet_input)
                 with open(summary_file, 'a+') as f:
                     f.write("{}\n".format(found_string)) 
                 plt.close()
