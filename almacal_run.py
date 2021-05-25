@@ -1028,7 +1028,7 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
-                    computwt=True, 
+                    computwt=True,
                     uvtaper_list=None, #uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], 
                     uvtaper_scale=[1.5, 2.0], 
                     **kwargs):
@@ -1091,8 +1091,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         for i in glob.glob(concatvis+'.*.image'):
             exportfits(imagename=i, fitsimage=i+'.fits')
         rmtables(concatvis+'*')
-    rmtables(os.path.join(outdir,'uid___*'))
-    os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
+        rmtables(os.path.join(outdir,'uid___*'))
+        os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 
