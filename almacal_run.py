@@ -1054,8 +1054,11 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         vis_new = []
         for v in vis:
             v_new = os.path.join(outdir, os.path.basename(v))
-            os.system('rm -rf {}*'.format(v_new))
-            print(v, v_new)
+            if os.path.isdir(v_new):
+                print('Found splitted file: {}'.format(v_new))
+                continue
+            # os.system('rm -rf {}*'.format(v_new))
+            print('Splitting... {} {}'.format(v, v_new))
             #os.system('cp -r {} {}'.format(v, v_new))
             if not split(vis=v, outputvis=v_new, datacolumn='corrected'):
                 print("No corrected data existing, spliting the data column")
