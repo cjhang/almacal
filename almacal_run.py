@@ -1627,6 +1627,28 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     if not continue_mode:
         if os.path.isfile(summary_file):
             os.system('mv {} {}.old'.format(summary_file, summary_file))
+        objs_finished = []
+    if not os.path.isfile(summary_file):
+        print('Initializing the output file')
+        with open(summary_file, 'w+') as f:
+            f.write("obj")
+            for band in bands:
+                for res in resolutions:
+                    f.write(' ')
+                    f.write(band+'_'+res)
+            for band in bands:
+                f.write(' detection_{} goodfield_{}'.format(band, band))
+            f.write(' is_SMG')
+            f.write(' is_Jet')
+            f.write('\n')
+    if continue_mode:
+        summary = Table.read(summary_file, format='ascii')
+        objs_finished = summary['obj']
+
+    summary_file = os.path.join(outdir, 'summary.txt')
+    if not continue_mode:
+        if os.path.isfile(summary_file):
+            os.system('mv {} {}.old'.format(summary_file, summary_file))
         print('Initializing the output file')
         with open(summary_file, 'w+') as f:
             f.write("obj")
