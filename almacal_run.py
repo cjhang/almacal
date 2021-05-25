@@ -1738,7 +1738,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 fig.subplots_adjust(wspace=0.2, hspace=0.2)
                 fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
                 
-                is_SMG = 0
+                SMG_input = 0
+                Jet_input = 0
                 detections = {}
                 goodfields = {}
                 for band in bands:
