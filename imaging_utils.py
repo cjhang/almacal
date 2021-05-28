@@ -130,7 +130,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     antenna_diameter = np.max(antenna_diameter_list) * u.m
 
     wavelength = const.c / (freq_mean * u.GHz) # in um
-    fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose()
+    fov = (fov_scale * 1.02 * wavelength / antenna_diameter * 206265).decompose()
 
     # calcuate the cell size
     if mycell is None:
