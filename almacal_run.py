@@ -1030,7 +1030,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
                     computwt=True,
                     uvtaper_list=[['0.3arcsec'], ['0.6arcsec']], 
-                    #uvtaper_scale=[1.5, 2.0], 
+                    uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
     """make the final good image with all the good observations
 
