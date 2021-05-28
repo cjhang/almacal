@@ -1029,8 +1029,8 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
                     computwt=True,
-                    uvtaper_list=None, #uvtaper_list=[['0.3arcsec'], ['0.8arcsec']], 
-                    uvtaper_scale=[1.5, 2.0], 
+                    uvtaper_list=[['0.3arcsec'], ['0.6arcsec']], 
+                    #uvtaper_scale=[1.5, 2.0], 
                     **kwargs):
     """make the final good image with all the good observations
 
@@ -1088,8 +1088,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     if uvtaper_scale:
             myimagename = concatvis+'.auto.cont'
             make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
-                          pblimit=pblimit, fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, debug=debug, 
-                          **kwargs)
+                          pblimit=pblimit, fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, 
+                          debug=debug, **kwargs)
     if only_fits:
         for i in glob.glob(concatvis+'.*.image'):
             exportfits(imagename=i, fitsimage=i+'.fits')
@@ -1526,8 +1526,8 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_auto_classify_goodimags(imgs_dir=None, objlist=None, basedir=None, outdir='./', 
-        debug=False, suffix='_good_imgs.txt', update=False, plot=True, savefig=True, **kwargs):
+def run_auto_classify_goodimags(imgs_dir=None, objlist=None, outdir='./', 
+        debug=False, suffix='_good_imgs.txt', plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
