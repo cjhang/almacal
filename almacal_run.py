@@ -1297,7 +1297,7 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False):
         return
     if os.path.isfile(selected_files):
         vis_list = gen_filenames(listfile=selected_files, basedir=outdir)
-        make_good_image(vis=vis_list, basename=os.path.basename(basedir)+'_combined', outdir=image_dir)
+        make_good_image(vis=vis_list, basename=os.path.basename(basedir)+'_combined_'+band, outdir=image_dir)
 
 
 
@@ -1771,7 +1771,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     except KeyboardInterrupt:
         return 0
 
-def run_search_band_detection(basedir=None, objs=None, bands=['B6','B7'], outdir='./', debug=False):
+def run_search_bands_detections(basedir=None, objs=None, bands=['B6','B7'], outdir='./', debug=False):
     for obj in objs:
         for band in bands:
             search_band_detection(basedir=os.path.join(basedir, obj), band=band, 
