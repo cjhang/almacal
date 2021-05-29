@@ -1771,6 +1771,12 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     except KeyboardInterrupt:
         return 0
 
+def run_search_band_detection(basedir=None, objs=None, bands=['B6','B7'], outdir='./', debug=False):
+    for obj in objs:
+        for band in bands:
+            search_band_detection(basedir=os.path.join(basedir, obj), band=band, 
+                                  outdir=os.path.join(outdir, obj, band), debug=debug)
+
 def run_gen_fake_images(basedir, bands=['B7',], outdir='./tmp'):
     pass
 
