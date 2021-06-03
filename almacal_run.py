@@ -1290,7 +1290,7 @@ def read_flux(basedir, obj, band, resolution,):
             flux = None
     return flux
 
-def search_band_detection(basedir=None, band='B3', outdir='./', debug=False):
+def search_band_detection(basedir=None, band='B3', outdir='./', debug=False, **kwargs):
     """This function used to search source detections in other bands
 
     basedir: the obj directory contains the data of all the bands
@@ -1309,7 +1309,8 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False):
         return
     if os.path.isfile(selected_files):
         vis_list = gen_filenames(listfile=selected_files, basedir=outdir)
-        make_good_image(vis=vis_list, basename=os.path.basename(basedir)+'_combined_'+band, outdir=image_dir)
+        make_good_image(vis=vis_list, basename=os.path.basename(basedir)+'_combined_'+band, 
+                outdir=image_dir, **kwargs)
 
 
 
