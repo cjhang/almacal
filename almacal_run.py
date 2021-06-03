@@ -1492,7 +1492,7 @@ def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], 
                 select_band=select_band, debug=debug)
 
 def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
-                  debug=False, **kwargs):
+                  debug=False, niter=100, **kwargs):
     """fix the missing and wrong images for gen_all_image output
     
 
@@ -1534,7 +1534,7 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                                 print(">> {} already exists.".format(outfile_fullname))
                     else:
                         if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=exclude_aca, 
-                                     debug=debug, **kwargs):
+                                     debug=debug, niter=niter, **kwargs):
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
