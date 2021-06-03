@@ -18,6 +18,7 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 from astropy.coordinates import SkyCoord
 from scipy.optimize import curve_fit
+from astropy.stats import sigma_clipped_stats, sigma_clip
 
 import analysisUtils as au
 # from analysisUtils import tbtool
@@ -491,9 +492,9 @@ def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
 def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, 
-                minimal_fluxval=0.001, outlier_frac=0.02, gaussian_deviation=0.25, 
+                minimal_fluxval=0.001, outlier_frac=0.25, gaussian_deviation=0.25, 
                 central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, 
-                figname=None, outdir=None):
+                figname=None, outdir=None, strick_mode=False):
     """This program designed to determine the validity of the image after point source subtraction
     
     The recommended img is the fits image, if not, it will be converted into fits using casa exportfits
@@ -511,22 +512,27 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         header = hdu[0].header
         data = hdu[0].data
     if outdir is None:
-        outdir = os.path.basedir(img)
+        outdir = os.path.dirname(img)
     ny, nx = data.shape[-2:]
     masked_data = np.ma.masked_invalid(data.reshape(ny, nx))
     mask_invalid = masked_data.mask
     data4hist = masked_data[~mask_invalid]
     # Testing the sigma clip
     if sigmaclip:
-        clipped_data, clip_low, clip_up = scipy.stats.sigmaclip(data4hist, 5, 5)
-        data4hist = clipped_data    
+        # run only once sigma-clip, to exclude the most extreme value
+        clipped_data, clip_low, clip_up = scipy.stats.sigmaclip(data4hist, 10, 10)
+        data4hist = clipped_data 
+        # clipped_data = sigma_clip(masked_data, sigma=5, iters=5)
+        # data4hist = clipped_data.compressed()
     # statistics the noisy of the image
     # hist, bins = np.histogram(masked_data.data[~masked_data.mask], bins=100)
     hist, bins = np.histogram(data4hist, bins=100)
     bins_mid = (bins[:-1] + bins[1:])*0.5
     
     # sigmaclip based statistics
-    mean0, median0, std0 = sigma_clipped_stats(masked_data, sigma=5.0)
+    # clip any bad value to get the most accurate statistics
+    mean0, median0, std0 = sigma_clipped_stats(masked_data, sigma=5.0,
+            iters=5)
     p0 = (mean0, 1.0, std0)
     #p0 = (0, 1, 1e-4) # mean, max and std
     amp_scale = 1.0*np.max(hist) # change to int into float
@@ -577,8 +583,10 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
     mean_central = np.ma.mean(masked_data[mask])
     median_central = np.ma.median(masked_data[mask])
     
-    n_outlier_central = np.sum(hist_center[bins_mid_center>upper_5sigma])
+    n_outlier_central = np.sum(hist_center[bins_mid_center>upper_3sigma])
+    n_outlier_central_neg = np.sum(hist_center[bins_mid_center<lower_3sigma])
     percent_outlier_central = 1.0*n_outlier_central/np.sum(hist_center+1e-6)
+    percent_outlier_central_neg = 1.0*n_outlier_central_neg/np.sum(hist_center+1e-6)
     
     if debug:
         print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
@@ -677,21 +685,24 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         if debug:
             print("Rejected, large central median value!\n")
         return False
-    strick_mode = False
     # comparing the noise distribution with Gaussian
     for deviation in [deviation_1sigma, deviation_2sigma, deviation_3sigma]:
         if deviation > gaussian_deviation:
             if debug:
                 print("Rjected, non-Gaussian noise")
             return False
+    if percent_outlier_central >= outlier_frac:
+        if debug:
+            print("Rejected, large central residual!\n")
+        return False
+    if percent_outlier_central_neg >= outlier_frac:
+        if debug:
+            print("Rejected, negative central residual!\n")
+        return False
     if strick_mode:
         if deviation_3sigma > gaussian_deviation:
             if debug:
                 print("Rejected, non-Gaussian noise at 3sigma boudary!\n")
-            return False
-        if percent_outlier_central >= outlier_frac:
-            if debug:
-                print("Rejected, large central residual!\n")
             return False
         if mean_central > threshold_mean:
             if debug:
@@ -1099,7 +1110,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
 
 def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10, snr=np.arange(1,20,0.5), 
         suffix='.cont.auto', known_file=None, obj=None, band=None, basename=None, savefile=None, 
-        threshold=5.0, plot=False, snr_mode='peak', **kwargs):
+        threshold=5.0, plot=False, snr_mode='integrated', **kwargs):
     """simulation the completeness of source finding algorithm
 
     mode:
@@ -1797,7 +1808,7 @@ def run_make_simulations(imagedir=None, objs=None, bands=['B6','B7'], outdir='./
         obj_outdir = os.path.join(outdir, obj)
         for band in bands:
             imagefile = os.path.join(obj_outdir,
-                    '{}_{}_combine.ms.auto.cont{}.image.fits'.format(obj, band, resolution_string)
+                    '{}_{}_combine.ms.auto.cont{}.image.fits'.format(obj, band, resolution_string))
             obj_outdir = os.path.join(outdir, obj)
             if os.path.isfile(imagefile):
                 gen_sim_images(imagefile=imagefile, outdir=outdir, snr=(0.1,20), repeat=repeat)
