@@ -26,7 +26,7 @@ import analysisUtils as au
 
 tb = au.tbtool()
 
-def gen_filenames(dirname=None, listfile=None, basedir=None, debug=False):
+def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False):
     """generate all the valid files names
 
     """
@@ -491,8 +491,8 @@ def copy_ms(basedir=None, outdir=None, selectfile=None, debug=False, time_select
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_flux=True, 
-                minimal_fluxval=0.001, outlier_frac=0.25, gaussian_deviation=0.25, 
+def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, check_flux=True, 
+                minimal_fluxval=0.001, outlier_frac=0.05, gaussian_deviation=0.02, 
                 central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, 
                 figname=None, outdir=None, strick_mode=False):
     """This program designed to determine the validity of the image after point source subtraction
@@ -547,19 +547,19 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
     lower_1sigma = mean - 1.0*sigma
     lower_2sigma = mean - 2.0*sigma
     lower_3sigma = mean - 3.0*sigma
+    upper_1sigma = mean + 1.0*sigma
+    upper_2sigma = mean + 2.0*sigma
     upper_3sigma = mean + 3.0*sigma
-    lower_5sigma = mean - 5.0*sigma
-    upper_5sigma = mean + 5.0*sigma
     ## checking the fitting
     # the fraction of the 3 sigma outlier, theoretical gaussian value is 
-    n_outlier_3sigma = np.sum(hist[bins_mid < lower_3sigma])
-    percent_outlier_3sigma = 1.0 * n_outlier_3sigma / np.sum(hist) 
-    percent_outlier_1sigma = 1.0 * np.sum(hist[bins_mid < lower_1sigma]) / np.sum(hist) 
-    percent_outlier_2sigma = 1.0 * np.sum(hist[bins_mid < lower_2sigma]) / np.sum(hist) 
+    n_3sigma = np.sum(hist[(bins_mid > lower_3sigma) & (bins_mid < upper_3sigma)])
+    percent_3sigma = 1.0 * n_3sigma / np.sum(hist) 
+    percent_2sigma = 1.0 * np.sum(hist[(bins_mid > lower_2sigma) & (bins_mid < upper_2sigma)]) / np.sum(hist) 
+    percent_1sigma = 1.0 * np.sum(hist[(bins_mid > lower_1sigma) & (bins_mid < upper_1sigma)]) / np.sum(hist) 
     # calculating the deviation from Gaussian
-    deviation_1sigma = np.abs((percent_outlier_1sigma - 0.1587)/0.1587)
-    deviation_2sigma = np.abs((percent_outlier_2sigma - 0.0228)/0.0228)
-    deviation_3sigma = np.abs((percent_outlier_3sigma - 0.0014)/0.0014)
+    deviation_1sigma = np.abs((percent_1sigma - 0.6827)/0.6827)
+    deviation_2sigma = np.abs((percent_2sigma - 0.9545)/0.9545)
+    deviation_3sigma = np.abs((percent_3sigma - 0.9973)/0.9973)
 
     # statistics in the central region
     bmaj = header['BMAJ']
@@ -593,28 +593,29 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         print('>> Checking the fitting of noise:')
         print('mean: {}, std:{}'.format(mean, sigma))
         # print('number of 3 sigma outlier: {}'.format(n_outlier_3sigma))
-        print('fraction of 1 sigma outlier: {:.4f}%. [theoretical: 15.87]'.format(percent_outlier_1sigma*100.))
+        print('fraction of 1 sigma outlier: {:.4f}%. [theoretical: 68.27%]'.format(percent_1sigma*100.))
         print('deviation of 1 sigma: {:.4f}%.'.format(deviation_1sigma*100.))
-        print('fraction of 2 sigma outlier: {:.4f}%. [theoretical: 2.28%]'.format(percent_outlier_2sigma*100.))
+        print('fraction of 2 sigma outlier: {:.4f}%. [theoretical: 95.45%]'.format(percent_2sigma*100.))
         print('deviation of 2 sigma: {:.4f}%.'.format(deviation_2sigma*100.))
-        print('fraction of 3 sigma outlier: {:.4f}%. [theoretical: 0.14%]'.format(percent_outlier_3sigma*100.))
+        print('fraction of 3 sigma outlier: {:.4f}%. [theoretical: 99.73%]'.format(percent_3sigma*100.))
         print('deviation of 3 sigma: {:.4f}%.'.format(deviation_3sigma*100.))
         print('>> Statistics of central region')
         print("central mean: {}".format(mean_central))
         print("central median: {}".format(median_central))
-        print('deviation of central median: {:.4f}.'.format(median_central/sigma))
-        print('number of 5sigma outlier of central region: {}'.format(n_outlier_central))
-        print('fraction of 5sigma outlier of central region: {}'.format(percent_outlier_central))
+        print('deviation of central median: {:.4f}.'.format(np.abs(median_central)/sigma))
+        print('number of 3sigma outlier of central region: {}'.format(n_outlier_central))
+        print('fraction of 3sigma outlier of central region: {}'.format(percent_outlier_central))
 
     if plot:
         # show the image
         fig = plt.figure(figsize=(16, 4.5))
+        fig.suptitle(uidname)
         ax = fig.add_subplot(131)
         scale = np.abs(header['CDELT1'])*3600
         x_index = (np.arange(0, nx) - nx/2.0) * scale
         y_index = (np.arange(0, ny) - ny/2.0) * scale
         x_map, y_map = np.meshgrid(x_index, y_index)
-        ax.pcolormesh(x_map, y_map, masked_data, vmin=lower_2sigma, vmax=upper_5sigma)
+        ax.pcolormesh(x_map, y_map, masked_data, vmin=3*lower_1sigma, vmax=5*upper_1sigma)
         ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
                 verticalalignment='center')
         circle = patches.Circle((0, 0), radius=bmaj*3600*radius*0.5, facecolor=None, fill=None, 
@@ -646,7 +647,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
         ax.plot(bins_mid, hist_fit/amp_scale, color='r', label='Gaussian Fitting')
         ax.vlines(upper_3sigma, 0, 2.0, color='k', label=r'3$\sigma$ boundary')
         ax.vlines(lower_3sigma, 0, 2.0, color='k')
-        ax.vlines(upper_5sigma, 0, 2.0, color='k', lw=4, label=r'5$\sigma$ upper boundary')
+        ax.vlines(5.*upper_1sigma, 0, 2.0, color='k', lw=4, label=r'5$\sigma$ upper boundary')
         ax.set_xlabel('Flux density [Jy/beam]')
         ax.set_ylabel('Normalized Pixel numbers')
         ax.tick_params(axis='x', which='major', labelsize=8)
@@ -686,7 +687,7 @@ def check_image(img, plot=False, radius=6, debug=False, sigmaclip=True, check_fl
             print("Rejected, large central median value!\n")
         return False
     # comparing the noise distribution with Gaussian
-    for deviation in [deviation_1sigma, deviation_2sigma, deviation_3sigma]:
+    for deviation in [deviation_1sigma, deviation_2sigma]:
         if deviation > gaussian_deviation:
             if debug:
                 print("Rjected, non-Gaussian noise")

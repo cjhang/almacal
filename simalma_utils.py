@@ -858,7 +858,10 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         # theta = header['BPA']
         # beamsize = np.pi*a*b/(4*np.log(2))
         #gaussian_norm = 2*np.pi*a*b/2.35482**2
-        refer = 'J'+str(int(header['EQUINOX']))
+        try:
+            refer = 'J'+str(int(header['EQUINOX']))
+        except:
+            refer = 'J2000'
         mydirection = refer +' '+ SkyCoord(header['CRVAL1'], header['CRVAL2'], 
                                           unit="deg").to_string('hmsdms')
         myfreq = "{:.2f}GHz".format(header['CRVAL3']/1e9)
