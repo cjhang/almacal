@@ -1298,19 +1298,29 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False, **k
     """
     copy_ms(basedir=basedir, outdir=outdir, select_band=band, debug=debug)
     image_dir = os.path.join(outdir, 'images')
+    goodimage_dir = os.path.join(outdir, 'goodimages')
     gen_images(dirname=outdir, debug=debug, outdir=image_dir)
+    basename = os.path.basename(basedir)+'_{}'.format(band)
     
     is_visual_checking = str(raw_input("Checking the images now? [n/y]: ") or 'n')
     if is_visual_checking == 'y':
-        selected_files = os.path.join(image_dir, 'seleted.txt')
-        show_images(fileglob=image_dir+'/*.fits', savefile=selected_files)
+        # selected_files = os.path.join(image_dir, 'seleted.txt')
+        # show_images(fileglob=image_dir+'/*.fits', savefile=selected_files)
+        check_images(os.path.join(image_dir,'*.fits'), outdir=goodimage_dir, band=band, 
+                basename=basename, plot=True, savefig=True)
+        band_imagedir = os.path.join(goodimage_dir, band)
+        goodfile = os.path.join(goodimage_dir, "{}_good_imgs.txt".format(basename))
+        badfile = os.path.join(goodimage_dir, "{}_bad_imgs.txt".format(basename))
+        check_images_manual(imagedir=band_imagedir, goodfile=goodfile, badfile=badfile, 
+                ncol=1, nrow=3)
     else:
         print("See you next time...")
         return
-    if os.path.isfile(selected_files):
-        vis_list = gen_filenames(listfile=selected_files, basedir=outdir)
-        make_good_image(vis=vis_list, basename=os.path.basename(basedir)+'_combined_'+band, 
-                outdir=image_dir, **kwargs)
+    goodfile_updated = os.path.join(goodimage_dir, "{}_good_imgs.txt.updated".format(basename))
+    print(goodfile_updated)
+    if os.path.isfile(goodfile_updated):
+        vis_list = gen_filenames(listfile=goodfile_updated, basedir=outdir)
+        make_good_image(vis=vis_list, basename=basename+'_combined', outdir=goodimage_dir, **kwargs)
 
 
 
@@ -1408,7 +1418,7 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
             json.dump(searching_info, jf)
     return searching_info
 
-def run_gen_all_obstime(base_dir=None, output_dir=None, bad_obs=None, 
+def run_gen_all_obstime(basedir=None, output_dir=None, bad_obs=None, 
         info_file=None, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
        dataset
@@ -1492,7 +1502,7 @@ def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], 
                 end_time='2015-07-01T00:00:00',
                 select_band=select_band, debug=debug)
 
-def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
+def run_gen_all_images(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, niter=100, **kwargs):
     """fix the missing and wrong images for gen_all_image output
     
@@ -1539,7 +1549,7 @@ def run_gen_all_image(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'],
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_auto_classify_goodimags(imgs_dir=None, objlist=None, outdir='./', 
+def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', 
         debug=False, suffix='_good_imgs.txt', plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
