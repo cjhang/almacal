@@ -713,9 +713,17 @@ def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, check_fl
             print("\n")
     return True
 
-def check_images(imgs, outdir=None, basename='', band=None, debug=False, **kwargs):
+def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwrite=False,
+        **kwargs):
     """wraps up check_image to handle multiple images
     """
+    if outdir:
+        goodfile = os.path.join(outdir, basename+"_good_imgs.txt")
+        badfile = os.path.join(outdir, basename+"_bad_imgs.txt")
+        if os.path.isfile(goodfile) or os.path.isfile(badfile):
+            if not overwrite:
+                print("Classification already done!")
+                return
     if isinstance(imgs, str):
         all_files = glob.glob(imgs)
     elif isinstance(imgs, list):
