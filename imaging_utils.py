@@ -87,7 +87,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                   myuvtaper=None, uvtaper=[], pbcor=True,
                   cellsize_scale=1, datacolumn="corrected", specmode='mfs', outframe="LSRK", 
                   weighting='natural', niter=0, interactive=False, usemask='auto-multithresh', 
-                  threshold=None, auto_threshold=5.0, only_fits=False, suffix='', 
+                  threshold=None, auto_threshold=5.0, only_fits=False, save_psf=True, suffix='', 
                   uvtaper_scale=None, debug=False, **kwargs):
 
     """This function is used to make the continuum image
@@ -256,6 +256,10 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     if only_fits:
         for image in glob.glob(myimagename+'*.image'):
             exportfits(imagename=image, fitsimage=image+'.fits')
+        if save_psf:
+            for psf in glob.glob(myimagename+'*.psf'):
+                exportfits(imagename=psf, fitsimage=psf+'.fits')
+
         rmtables(tablenames=myimagename+'.*')
 
 def image_selfcal(vis=None, ncycle=3, ):
@@ -322,4 +326,109 @@ def image_selfcal(vis=None, ncycle=3, ):
            interactive=True,
            savemodel='modelcolumn')
 
+def make_cube(vis, imagename):
+    spw_specrange = read_spw(vis)
+    freq_mean = np.mean(spw_specrange) # in GHz
+    freq_range = [np.min(spw_specrange), np.max(spw_specrange)]
+    
+    # get the baselines
+    tb = tbtool()
+    if isinstance(vis, list):
+        baselines_list = []
+        for v in vis:
+            obs_baselines = au.getBaselineLengths(v, returnLengthsOnly=True)
+            baselines_list.append(obs_baselines)
+        # unfold the list
+        baselines_list = [item for sublist in baselines_list for item in sublist]
+    if isinstance(vis, str):
+        baselines_list = au.getBaselineLengths(vis, returnLengthsOnly=True)
+        
+    baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
+
+    # read the antenna_diameter
+    if isinstance(vis, list):
+        antenna_diameter_list = []
+        for v in vis:
+            tb.open(v + '/ANTENNA')
+            antenna_diameter_list.append(tb.getcol('DISH_DIAMETER'))
+            tb.close()
+        antenna_diameter_list = [item for sublist in antenna_diameter_list for item in sublist]
+    if isinstance(vis, str):
+        tb.open(vis + '/ANTENNA')
+        antenna_diameter_list = tb.getcol('DISH_DIAMETER')
+        tb.close()
+    antenna_diameter = np.max(antenna_diameter_list) * u.m
+
+    wavelength = const.c / (freq_mean * u.GHz) # in um
+    fov = (fov_scale * 1.02 * wavelength / antenna_diameter * 206265).decompose()
+
+    # calcuate the cell size
+    if mycell is None:
+        if myuvtaper:
+            if isinstance(myuvtaper, list):
+                myuvtaper_value = u.Unit(myuvtaper[0]).to(u.arcsec)
+            else:
+                myuvtaper_value = u.Unit(myuvtaper).to(u.arcsec)
+            uvtaper = str(myuvtaper_value)+'arcsec'
+            cellsize = np.sqrt((206265 / (baseline_typical / wavelength).decompose())**2 
+                               + myuvtaper_value**2)/ 7.0
+        else:
+            cellsize = 206265 / (baseline_typical / wavelength).decompose()/ 7.0
+        mycell = "{:.4f}arcsec".format(cellsize)
+    # calculate image size 
+    if myimsize is None:
+        myimsize = cleanhelper.getOptimumSize(int(imgsize_scale * fov / cellsize))
+        print(">>>", myimsize)
+    # calculate frequecy
+    myrestfreq = str(freq_mean)+'GHz'
+    # calcuate threshold
+    if not threshold:
+        if has_analysisUtils:
+            threshold = "{}mJy".format(1000.0*auto_threshold*calculate_sensitivity(vis))
+        else:
+            print("Warning: no analysisUtils found, set threshold to 0.0!")
+            threshold = 0.0
+
+    if basename is None:
+        if isinstance(vis, list):
+            basename = 'concat'
+        else:
+            basename = os.path.basename(vis)
+    if myimagename is None:
+        myimagename = os.path.join(outdir, basename + suffix)
+    # else:
+        # myimagename = o.path.join(outdir, myimagename)
+    if debug:
+        print("mean frequecy:", freq_mean)
+        print("maximum baseline:", baseline_typical)
+        print("cell size:", mycell)
+        print("image size:", myimsize)
+
+    if isinstance(vis, list):
+        if len(vis) > 4:
+            vis_combined = '/tmp/vis_combined.ms'
+            concat(vis=vis, concatvis=vis_combined)
+            vis = vis_combined
+    if clean:
+        rmtables('{}.*'.format(myimagename))
+        os.system('rm -rf {}.fits'.format(myimagename))
+        tclean(vis=vis,
+               imagename=myimagename,
+               imsize=myimsize, 
+               cell=mycell, 
+               restfreq=myrestfreq, 
+               datacolumn=datacolumn, 
+               specmode=specmode, 
+               outframe=outframe, 
+               weighting=weighting,
+               uvtaper=uvtaper,
+               niter=niter, 
+               threshold=threshold,
+               interactive=interactive, 
+               usemask=usemask,
+               **kwargs)
+        if pbcor:
+            impbcor(imagename=myimagename+'.image',
+                    pbimage=myimagename+'.pb',
+                    outfile=myimagename+'.pbcor.image')
 

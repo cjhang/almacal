@@ -389,7 +389,7 @@ def ms_restore(obs_list, allflux_file=None, basedir=None, outdir='./output', tmp
         myfreq = str(np.mean(spw_list)) + 'GHz'
         # read the flux from the fluxval file
         try:
-            myflux = read_flux(obs, allflux_file=allflux_file)
+            myflux = search_flux(os.path.basename(obs), allflux_file=allflux_file)
         except:
             print("No fluxval found for {}".format(obs))
             continue
@@ -1048,7 +1048,7 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
-                    computwt=True,
+                    computwt=True, save_psf=True,
                     uvtaper_list=[['0.3arcsec'], ['0.6arcsec']], 
                     uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
@@ -1111,8 +1111,12 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
                           pblimit=pblimit, fov_scale=fov_scale, uvtaper_scale=uvtaper_scale, 
                           debug=debug, **kwargs)
     if only_fits:
-        for i in glob.glob(concatvis+'.*.image'):
+        for i in glob.glob(concatvis+'*.image'):
             exportfits(imagename=i, fitsimage=i+'.fits')
+        if save_psf:
+            for psf in glob.glob(concatvis+'*.psf'):
+                exportfits(imagename=psf, fitsimage=psf+'.fits')
+
         rmtables(concatvis+'*')
         rmtables(os.path.join(outdir,'uid___*'))
         os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
