@@ -1561,13 +1561,13 @@ def run_gen_all_images(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7']
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', 
+def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', bands=['B6','B7'], 
         debug=False, suffix='_good_imgs.txt', plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
     """
-    if imgs_dir:
+    if imgsdir:
         obj_match = re.compile('^J\d*[+-]\d*$')
         for obj in os.listdir(imgs_dir):
             if obj_match.match(obj):
@@ -1578,7 +1578,7 @@ def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./',
                 obj_dir = os.path.join(outdir, obj)
                 if not os.path.isdir(obj_dir):
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
-                for band in os.listdir(os.path.join(imgs_dir, obj)):
+                for band in bands:
                     obj_band_path = os.path.join(imgs_dir, obj, band)
                     good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', 
                             outdir=os.path.join(outdir, obj), plot=plot, savefig=savefig, 
