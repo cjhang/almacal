@@ -1579,7 +1579,7 @@ def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', bands=[
                 if not os.path.isdir(obj_dir):
                     os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
                 for band in bands:
-                    obj_band_path = os.path.join(imgs_dir, obj, band)
+                    obj_band_path = os.path.join(imgsdir, obj, band)
                     good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', 
                             outdir=os.path.join(outdir, obj), plot=plot, savefig=savefig, 
                             band=band, basename=obj+'_'+band, debug=debug, **kwargs)
