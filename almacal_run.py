@@ -1569,7 +1569,7 @@ def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', bands=[
     """
     if imgsdir:
         obj_match = re.compile('^J\d*[+-]\d*$')
-        for obj in os.listdir(imgs_dir):
+        for obj in os.listdir(imgsdir):
             if obj_match.match(obj):
                 if objlist is not None:
                     if obj not in objlist:
