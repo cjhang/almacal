@@ -26,7 +26,11 @@ import analysisUtils as au
 
 tb = au.tbtool()
 
-def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False):
+def flatten(t):
+    flat_list = [item for sublist in t for item in sublist]
+    return flat_list
+
+def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False, exclude_aca=True):
     """generate all the valid files names
 
     """
@@ -43,6 +47,17 @@ def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False):
                 obj_path = os.path.join(dirname, item)
                 for obs in os.listdir(obj_path):
                     if obs_match.match(obs):
+                        if exclude_aca:
+                            try:
+                                tb.open(vis + '/ANTENNA')
+                                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                                tb.close()
+                            except:
+                                continue
+                            if antenna_diameter < 12.0:
+                                if debug:
+                                    print("Excuding data from {}".format(antenna_diameter))
+                                continue
                         file_list.append(os.path.join(obj_path, obs))
             elif obs_match.match(item):
                 file_list.append(os.path.join(dirname, item))
@@ -1430,8 +1445,8 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
             json.dump(searching_info, jf)
     return searching_info
 
-def run_gen_all_obstime(basedir=None, output_dir=None, bad_obs=None, 
-        info_file=None, **kwargs):
+def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=None, bad_obs=None, 
+        bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, suffix='good_imgs.txt.updated', **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
        dataset
     
@@ -1463,35 +1478,44 @@ def run_gen_all_obstime(basedir=None, output_dir=None, bad_obs=None,
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obj_match = re.compile('J\d{4}[-+]\d{4}')
 
-    for i,obj in enumerate(os.listdir(base_dir)):
-        obj_exptime = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 
-                    'B7':0, 'B8':0,  'B9':0, 'B10':0}
-        if not obj_match.match(obj):
-            print('Error load obj:', obj)
-            continue
+    if objs is None:
+        objs = []
+        for item in enumerate(os.listdir(base_dir)):
+            if obj_match.match(obj):
+                objs.append(item)
+            else:
+                if debug:
+                    print('Error load obj:', obj)
+
+    for i,obj in enumerate(objs):
+        obj_exptime = {}
+        for band in bands:
+            obj_exptime[band] = 0
         print('index=', i, "obj:", obj)
             
-        obj_dirname = base_dir +'/'+ obj
-        obj_output_dir = output_dir + '/' + obj
+        obj_dirname = os.path.join(base_dir, obj)
+        obj_output_dir = os.path.join(output_dir, obj)
         os.system('mkdir {}'.format(obj_output_dir))
-        obj_stat = spw_stat(gen_filenames(obj_dirname),
-                            savedata=True, 
+        if listfile_dir:
+            vis_list = []
+            for band in bands:
+                obj_band_list = gen_filenames(os.path.join(listfile_dir, obj, "{}_{}_{}".format(obj, band, suffix)), basedir=obj_dirname)
+                vis_list.append(obj_band_list)
+            vis_list = flatten(vis_list) 
+        else:
+            vis_list = gen_filenames(dirname=obj_dirname)
+        obj_stat = spw_stat(vis=vis_list,
+                            savedata=True,
+                            bands=bands,
                             filename=obj_output_dir+'/'+ obj+'.json', 
                             **kwargs)
     
         if info_file is not None:
+            string_stat = '{:<12s}'.format(obj)
+            for band in bands:
+                string_stat += ' {:>8.2f}'.format(obj_stat[band]['time'])
             with open(info_file, 'a+') as f_info:
-                f_info.write('{:<12s} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f} {:>8.2f}\n'.format(
-            obj, 
-            np.sum(obj_stat['B3']['time']),
-            np.sum(obj_stat['B4']['time']),
-            np.sum(obj_stat['B5']['time']),
-            np.sum(obj_stat['B6']['time']),
-            np.sum(obj_stat['B7']['time']),
-            np.sum(obj_stat['B8']['time']),
-            np.sum(obj_stat['B9']['time']),
-            np.sum(obj_stat['B10']['time']),
-            ))
+                f_info.write(string_stat + '\n')
 
 def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], debug=False):
     """copy the data used in oteo2016

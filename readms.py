@@ -51,7 +51,7 @@ def read_refdir(vis):
     return direction
 
 def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None, 
-        plotbands=['B5', 'B6', 'B7', 'B8'], figname=None, showfig=False,  
+        bands=['B3','B4','B5', 'B6', 'B7', 'B8','B9','B10'], figname=None, showfig=False,  
         z=0, lines=None, lines_names=None, debug=False):
     """make the statistics about one calibrator
 
@@ -75,14 +75,9 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
     
 
     """
-    spw_list = {'B3':{'name':[], 'time':[], 'freq':[]}, 
-                'B4':{'name':[], 'time':[], 'freq':[]}, 
-                'B5':{'name':[], 'time':[], 'freq':[]}, 
-                'B6':{'name':[], 'time':[], 'freq':[]}, 
-                'B7':{'name':[], 'time':[], 'freq':[]}, 
-                'B8':{'name':[], 'time':[], 'freq':[]}, 
-                'B9':{'name':[], 'time':[], 'freq':[]}, 
-                'B10':{'name':[], 'time':[], 'freq':[]},} 
+    spw_list = {}
+    for band in bands:
+        spw_list[band] = {'name':[], 'time':[], 'freq':[]}
     filelist = []
 
     if vis:
@@ -108,7 +103,11 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
                 if debug:
                     print("Band: ", band)
             else:
-                print("Error in band match.")
+                if debug:
+                    print("Error in band match.")
+                continue
+            if band not in bands:
+                continue
             time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
             time_minutes = time_on_source[0]['minutes_on_source']
             if debug:
@@ -123,8 +122,7 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
         except:
             print("Error: in", obs)
     if plot:
-        band_in_plot = plotbands
-        fig = plt.figure(figsize=(3*len(band_in_plot),5))
+        fig = plt.figure(figsize=(3*len(bands),5))
         # fig.suptitle(os.path.basename(objfolder))
         ax = fig.add_subplot(111)
 
@@ -135,7 +133,7 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
 
         band_min = 1000
         band_max = 10
-        for band in band_in_plot:
+        for band in bands:
             if band_min > band_list[band][0]:
                 band_min = np.min(band_list[band])
             if band_max < band_list[band][1]:
@@ -155,7 +153,7 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
         ax.tick_params(axis='y', labelcolor='w', top='off', bottom='on', left='off', right='off', labelsize=2)
 
         # plot the spectral window
-        for band in band_in_plot:
+        for band in bands:
             h = 0
             band_total_time = np.sum(spw_list[band]['time'])
             ax.text(np.mean(band_list[band]), -0.1, 
