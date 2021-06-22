@@ -1468,7 +1468,7 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
 
     p_obj = re.compile('J\d+[+-]\d')
     p_obs = re.compile('uid___')
-    
+
     if bad_obs is not None:
         with open(bad_obs) as f:
             all_bad_obs = f.readlines()
@@ -1480,12 +1480,12 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
 
     if objs is None:
         objs = []
-        for item in enumerate(os.listdir(base_dir)):
-            if obj_match.match(obj):
+        for item in os.listdir(basedir):
+            if obj_match.match(item):
                 objs.append(item)
             else:
                 if debug:
-                    print('Error load obj:', obj)
+                    print('Error load obj:', item)
 
     for i,obj in enumerate(objs):
         obj_exptime = {}
@@ -1493,18 +1493,21 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
             obj_exptime[band] = 0
         print('index=', i, "obj:", obj)
             
-        obj_dirname = os.path.join(base_dir, obj)
+        obj_dirname = os.path.join(basedir, obj)
         obj_output_dir = os.path.join(output_dir, obj)
-        os.system('mkdir {}'.format(obj_output_dir))
+        os.system('mkdir -p {}'.format(obj_output_dir))
         if listfile_dir:
             vis_list = []
             for band in bands:
-                obj_band_list = gen_filenames(os.path.join(listfile_dir, obj, "{}_{}_{}".format(obj, band, suffix)), basedir=obj_dirname)
+                obj_band_selectfile = os.path.join(listfile_dir, obj, "{}_{}_{}".format(obj, band, suffix))
+                if not os.path.isfile(obj_band_selectfile):
+                    continue
+                obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname)
                 vis_list.append(obj_band_list)
             vis_list = flatten(vis_list) 
         else:
             vis_list = gen_filenames(dirname=obj_dirname)
-        obj_stat = spw_stat(vis=vis_list,
+        obj_stat = spw_stat(vis=vis_list, debug=True,
                             savedata=True,
                             bands=bands,
                             filename=obj_output_dir+'/'+ obj+'.json', 
@@ -1513,7 +1516,7 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
         if info_file is not None:
             string_stat = '{:<12s}'.format(obj)
             for band in bands:
-                string_stat += ' {:>8.2f}'.format(obj_stat[band]['time'])
+                string_stat += ' {:>8.2f}'.format(np.sum(obj_stat[band]['time']))
             with open(info_file, 'a+') as f_info:
                 f_info.write(string_stat + '\n')
 

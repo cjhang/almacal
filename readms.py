@@ -80,7 +80,7 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
         spw_list[band] = {'name':[], 'time':[], 'freq':[]}
     filelist = []
 
-    if vis:
+    if vis is not None:
         if debug:
             print('vis', vis)
         if isinstance(vis, str):
@@ -89,7 +89,7 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
             filelist = vis
     elif jsonfile:
         if debug:
-            print('jsonfiel', jsonfile)
+            print('jsonfile', jsonfile)
         with open(jsonfile, 'r') as f:
             spw_list = json.load(f)
     else:
