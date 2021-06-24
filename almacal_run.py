@@ -1670,7 +1670,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                             basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                   resolutions=['', 'uvscale1.5', 'uvscale2.0'],
+                   resolutions=['', '0.3arcsec', '0.6arcsec'],
                    summary_file='summary.txt',
                    interative=False, outdir='./', continue_mode=True):
     """finding sources
