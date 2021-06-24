@@ -1446,7 +1446,8 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
     return searching_info
 
 def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=None, bad_obs=None, 
-        bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, suffix='good_imgs.txt.updated', **kwargs):
+        bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, suffix='good_imgs.txt.updated', 
+        debug=False, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
        dataset
     
