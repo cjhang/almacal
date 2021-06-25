@@ -1446,7 +1446,8 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
     return searching_info
 
 def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=None, bad_obs=None, 
-        bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, suffix='good_imgs.txt.updated', 
+        bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, 
+        suffix='good_imgs.txt.updated', exclude_aca=True,
         debug=False, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
        dataset
@@ -1503,7 +1504,7 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
                 obj_band_selectfile = os.path.join(listfile_dir, obj, "{}_{}_{}".format(obj, band, suffix))
                 if not os.path.isfile(obj_band_selectfile):
                     continue
-                obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname)
+                obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname, exclude_aca=exclude_aca)
                 vis_list.append(obj_band_list)
             vis_list = flatten(vis_list) 
         else:
