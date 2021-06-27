@@ -1763,6 +1763,10 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 # sources_number = {}
                 for i,band in enumerate(bands):
                     for j,res in enumerate(resolutions):
+                        if len(bands) > 1:
+                            ax_select = ax[i,j]
+                        else:
+                            ax_select = ax[max(i,j)]
                         if res == '':
                             res_string = ''
                         else:
@@ -1776,8 +1780,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         savefile = image_name + '.source_found.txt'
                         figname = image_name + '.png'
                         sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                                ax=ax[i,j], pbcor=True)
-                        ax[i,j].set_title('{} {}'.format(band, res))
+                                ax=ax_select, pbcor=True)
+                        ax_select.set_title('{} {}'.format(band, res))
                         #try:
                         #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
                         #            ax=ax[i,j], pbcor=True)
@@ -1823,8 +1827,9 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                             detections[band] = 1
                         if goodfield_input == 'y' or detection_input == '1':
                             goodfields[band] = 1
-                    SMG_input = int(raw_input("Is SMG? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
-                    Jet_input = int(raw_input("Is Jet? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
+                    if len(bands) > 1:
+                        SMG_input = int(raw_input("Is SMG? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
+                        Jet_input = int(raw_input("Is Jet? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
                     plt.close()
                 for band in bands:
                     found_string += ' {} {}'.format(detections[band], goodfields[band])
