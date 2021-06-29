@@ -7,6 +7,7 @@
 import os
 import glob
 import re
+import pickle
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
@@ -1521,6 +1522,61 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
                 string_stat += ' {:>8.2f}'.format(np.sum(obj_stat[band]['time']))
             with open(info_file, 'a+') as f_info:
                 f_info.write(string_stat + '\n')
+
+def run_gen_statistics(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'], 
+        suffix=['good_imgs.txt.updated', 'bad_imgs.txt.updated'], 
+        exclude_aca=True, debug=False, pickle_file=None,
+        func_list=[],
+        **kwargs):
+    """The function to make some statistics like gen_all_obstime in a more general way
+    """
+
+    p_obj = re.compile('J\d+[+-]\d')
+    p_obs = re.compile('uid___')
+    band_match = re.compile('_(?P<band>B\d{1,2})$')
+    obj_match = re.compile('J\d{4}[-+]\d{4}')
+
+    if objs is None:
+        objs = []
+        for item in os.listdir(basedir):
+            if obj_match.match(item):
+                objs.append(item)
+            else:
+                if debug:
+                    print('Error load obj:', item)
+
+    all_stats = {}
+    for i,obj in enumerate(objs):
+        obj_stat = {}
+        for band in bands:
+            obj_exptime[band] = 0
+        print('index=', i, "obj:", obj)
+            
+        obj_dirname = os.path.join(basedir, obj)
+        obj_output_dir = os.path.join(output_dir, obj)
+        os.system('mkdir -p {}'.format(obj_output_dir))
+        if listfile_dir:
+            vis_list = []
+            for suf in suffix:
+                vis_list_suf = []
+                for band in bands:
+                    obj_band_selectfile = os.path.join(listfile_dir, obj, 
+                            "{}_{}_{}".format(obj, band, suf))
+                    if not os.path.isfile(obj_band_selectfile):
+                        continue
+                    obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname, exclude_aca=exclude_aca)
+                    vis_list_suf.append(obj_band_list)
+                vis_list.append(flatten(vis_list_suf)) 
+        else:
+            vis_list = gen_filenames(dirname=obj_dirname)
+
+        for func in func_list:
+            obj_stat[func.func_name] = func(vis_list)
+        all_stats[obj] = obj_stat
+    if pickle_file:
+        with open(pickle_file, 'wb') as f_pickle:
+                pickle.dump(all_stats, f_pickle)
+
 
 def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], debug=False):
     """copy the data used in oteo2016
