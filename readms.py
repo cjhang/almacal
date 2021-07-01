@@ -251,4 +251,21 @@ def readimage(image):
     im_info['bmin'] = im_beam['minor']['value'] / (im_incr[0]/np.pi*180*3600) 
     im_info['peak'] = im_stat['max']
     return im_info
- 
+
+def read_onSourceTime(vis):
+    all_onSourceTime = []
+    for item in vis:
+        if isinstance(item, list):
+            item_results = []
+            for obs in item:
+                time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
+                time_minutes = time_on_source[0]['minutes_on_source']
+                item_results.append(time_minutes)
+            all_onSourceTime.append(item_results)
+        else:
+            time_on_source = au.timeOnSource(item, verbose=False, debug=False)
+            time_minutes = time_on_source[0]['minutes_on_source']
+            all_onSourceTime.append(time_minutes)
+
+    return all_onSourceTime
+

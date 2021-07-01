@@ -1350,8 +1350,6 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False, **k
         vis_list = gen_filenames(listfile=goodfile_updated, basedir=outdir)
         make_good_image(vis=vis_list, basename=basename+'_combined', outdir=goodimage_dir, **kwargs)
 
-
-
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -1523,8 +1521,8 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
             with open(info_file, 'a+') as f_info:
                 f_info.write(string_stat + '\n')
 
-def run_gen_statistics(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'], 
-        suffix=['good_imgs.txt.updated', 'bad_imgs.txt.updated'], 
+def run_gen_stats(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'], 
+        suffix=['good_imgs.txt.updated', 'bad_imgs.txt.updated'],
         exclude_aca=True, debug=False, pickle_file=None,
         func_list=[],
         **kwargs):
@@ -1548,13 +1546,11 @@ def run_gen_statistics(basedir=None, listfile_dir=None, objs=None, bands=['B6','
     all_stats = {}
     for i,obj in enumerate(objs):
         obj_stat = {}
-        for band in bands:
-            obj_exptime[band] = 0
         print('index=', i, "obj:", obj)
             
         obj_dirname = os.path.join(basedir, obj)
-        obj_output_dir = os.path.join(output_dir, obj)
-        os.system('mkdir -p {}'.format(obj_output_dir))
+        # obj_output_dir = os.path.join(output_dir, obj)
+        # os.system('mkdir -p {}'.format(obj_output_dir))
         if listfile_dir:
             vis_list = []
             for suf in suffix:
