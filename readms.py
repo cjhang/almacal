@@ -261,7 +261,6 @@ def read_num(vis):
             all_num.append(1)
     return all_num
 
-
 def read_onSourceTime(vis):
     all_onSourceTime = []
     for item in vis:
@@ -296,3 +295,11 @@ def read_flux(vis):
             flux_list.append(item_list)
         else:
             flux_list.append(search_flux(item))
+    return flux_list
+
+read_ra(vis):
+    pass
+read_dec(vis):
+    pass
+read_elevation(vis):
+    pass

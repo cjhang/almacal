@@ -340,10 +340,16 @@ def make_combine_obs(obj, basedir=None, band=None, badfiles=None):
     # print(valid_files)
     return valid_files
     
-def search_flux(obs, allflux_file=None, strick_mode=False):
+def search_flux(obs, allflux_file=None, strick_mode=False, debug=False):
     obs_filename = os.path.basename(obs)
     if allflux_file is None:
-        allflux_file = os.path.join(os.path.expanduser('~'), 'Documents/projects/almacal/data/allcal.fluxval')
+        if 'ALMACAL_NUMBERCOUNTS_HOME' in os.environ.keys():
+            root_path = os.environ['ALMACAL_NUMBERCOUNTS_HOME']
+        else:
+            root_path = os.path.join(os.path.expanduser('~'), 'projects/almacal/number_counts')
+        allflux_file = os.path.join(root_path, 'code/data/allcal.fluxval')
+    if debug:
+        print(allflux_file)
     # allflux_file = './allcal.fluxval'
     try:
         allflux = np.loadtxt(allflux_file, dtype=str)
