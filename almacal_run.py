@@ -1858,8 +1858,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     plt.show()
                         
                     for band in bands:
-                        detection_input=str(raw_input("Dection in Band:{} [n/y]?: ".format(band)) or 'n')
-                        goodfield_input=str(raw_input("Good for Band:{} [n/y]?: ".format(band)) or 'n')
+                        detection_input=str(raw_input("Dection in Band:{} (integer, No[0], Yes[1], ex-central[2]) [0]?: ".format(band)) or '0')
+                        goodfield_input=str(raw_input("Good for Band:{} (integer, No[0], Yes[1], ex-central[2] ) [0]?: ".format(band)) or '0')
                         if detection_input == 'y' or detection_input == '1':
                             detections[band] = 1
                         if goodfield_input == 'y' or detection_input == '1':
