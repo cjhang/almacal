@@ -307,11 +307,11 @@ def read_radec(vis):
         if isinstance(item, list):
             item_list = []
             for obs in item:
-                obs_refdir = read_refdir(obs, return_coord=False)
+                obs_refdir = read_refdir(obs, return_coord=True)
                 item_list.append((obs_refdir.ra.value, obs_refdir.dec.value))
             radec_list.append(item_list)
         else:
-            item_refdir = read_refdir(item, return_coord=False)
+            item_refdir = read_refdir(item, return_coord=True)
             radec_list.append(item_refdir.ra.value, item_refdir.dec.value)
     return radec_list
 
