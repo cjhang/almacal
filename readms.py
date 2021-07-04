@@ -37,7 +37,7 @@ def read_spw(vis):
 
     return spw_specrange.values()
 
-def read_refdir(vis):
+def read_refdir(vis, return_coord=False):
     """read the reference direction and return the standard direction string
     """
     tb = tbtool()
@@ -46,8 +46,12 @@ def read_refdir(vis):
     tb.close()
     
     rad2deg = 180./np.pi
-    direction = "J2000 " + SkyCoord(reference_dir[0]*rad2deg, reference_dir[1]*rad2deg, 
-                                      unit="deg").to_string('hmsdms')
+    ref_coord = SkyCoord(reference_dir[0]*rad2deg, reference_dir[1]*rad2deg, 
+                                      unit="deg")
+    direction = "J2000 " + ref_coord.to_string('hmsdms')
+    if return_coord:
+        return ref_coord
+
     return direction
 
 def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None, 
@@ -297,9 +301,29 @@ def read_flux(vis):
             flux_list.append(search_flux(item))
     return flux_list
 
-read_ra(vis):
-    pass
-read_dec(vis):
-    pass
-read_elevation(vis):
-    pass
+def read_radec(vis):
+    radec_list = []
+    for item in vis:
+        if isinstance(item, list):
+            item_list = []
+            for obs in item:
+                obs_refdir = read_refdir(obs, return_coord=False)
+                item_list.append((obs_refdir.ra.value, obs_refdir.dec.value))
+            radec_list.append(item_list)
+        else:
+            item_refdir = read_refdir(item, return_coord=False)
+            radec_list.append(item_refdir.ra.value, item_refdir.dec.value)
+    return radec_list
+
+def read_alel(vis):
+    alel_list = []
+    for item in vis:
+        if isinstance(item, list):
+            item_list = []
+            for obs in item:
+                obs_alel = au.computeAzElForMS(obs)
+                item_list.append(obs_alel)
+            alel_list.append(item_list)
+        else:
+            alel_list.append(au.computeAzElForMS(item))
+    return alel_list
