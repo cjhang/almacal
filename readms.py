@@ -252,20 +252,47 @@ def readimage(image):
     im_info['peak'] = im_stat['max']
     return im_info
 
+def read_num(vis):
+    all_num = []
+    for item in vis:
+        if isinstance(item, list):
+            all_num.append(len(item))
+        else:
+            all_num.append(1)
+    return all_num
+
+
 def read_onSourceTime(vis):
     all_onSourceTime = []
     for item in vis:
         if isinstance(item, list):
             item_results = []
             for obs in item:
-                time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
-                time_minutes = time_on_source[0]['minutes_on_source']
+                try:
+                    time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
+                    time_minutes = time_on_source[0]['minutes_on_source']
+                except:
+                    time_minutes = 0.0
                 item_results.append(time_minutes)
             all_onSourceTime.append(item_results)
         else:
-            time_on_source = au.timeOnSource(item, verbose=False, debug=False)
-            time_minutes = time_on_source[0]['minutes_on_source']
+            try:
+                time_on_source = au.timeOnSource(item, verbose=False, debug=False)
+                time_minutes = time_on_source[0]['minutes_on_source']
+            except:
+                time_minutes = 0.0
             all_onSourceTime.append(time_minutes)
 
     return all_onSourceTime
 
+def read_flux(vis):
+    flux_list = []
+    for item in vis:
+        if isinstance(item, list):
+            item_list = []
+            for obs in item:
+                obs_flux = search_flux(obs)
+                item_list.append(obs_flux)
+            flux_list.append(item_list)
+        else:
+            flux_list.append(search_flux(item))
