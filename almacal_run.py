@@ -1672,7 +1672,8 @@ def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', bands=[
                     if debug:
                         print(good_imgs)
 
-def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7']):
+def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7'], 
+        suffix='imgs.txt'):
     """manually checking all the images
     """
     if isinstance(objlist, str):
@@ -1685,8 +1686,8 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
         for band in bands:
             obj_band_imagedir = os.path.join(obj_imagedir, band)
             obj_outdir = os.path.join(outdir, obj)
-            goodfile = os.path.join(obj_outdir, "{}_{}_good_imgs.txt".format(obj, band))
-            badfile = os.path.join(obj_outdir, "{}_{}_bad_imgs.txt".format(obj, band))
+            goodfile = os.path.join(obj_outdir, "{}_{}_good_{}".format(obj, band, suffix))
+            badfile = os.path.join(obj_outdir, "{}_{}_bad_{}".format(obj, band, suffix))
             if os.path.isfile(goodfile+'.updated'):
                 print('{} of {} already done'.format(band, obj))
                 continue
