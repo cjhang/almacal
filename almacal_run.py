@@ -1732,7 +1732,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
                             basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                   resolutions=['', '0.3arcsec', '0.6arcsec'],
+                   resolutions=['0.3arcsec', '0.6arcsec'],
                    summary_file='summary.txt',
                    interative=False, outdir='./', continue_mode=True):
     """finding sources
@@ -1770,27 +1770,6 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
         summary = Table.read(summary_file, format='ascii')
         objs_finished = summary['obj']
 
-    summary_file = os.path.join(outdir, 'summary.txt')
-    if not continue_mode:
-        if os.path.isfile(summary_file):
-            os.system('mv {} {}.old'.format(summary_file, summary_file))
-        print('Initializing the output file')
-        with open(summary_file, 'w+') as f:
-            f.write("obj")
-            for band in bands:
-                for res in resolutions:
-                    f.write(' ')
-                    f.write(band+'_'+res)
-            for band in bands:
-                f.write(' detection_{} goodfield_{}'.format(band, band))
-            f.write(' is_SMG')
-            f.write(' is_Jet')
-            f.write('\n')
-            objs_finished = []
-    else:
-        summary = Table.read(summary_file, format='ascii')
-        objs_finished = summary['obj']
-
     failed_files = []
     try:
         for obj in objs:
@@ -1818,7 +1797,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 #for img in imgs:
                 # sources_number = {}
                 for i,band in enumerate(bands):
-                    obj_band_dir = os.path.join(basedir, band, obj)
+                    obj_band_dir = os.path.join(basedir, band, 'make_good_images', obj)
                     for j,res in enumerate(resolutions):
                         if len(bands) > 1:
                             ax_select = ax[i,j]
