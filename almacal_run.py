@@ -1860,10 +1860,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     for band in bands:
                         detection_input=int(raw_input("Dection in Band:{} (integer, No[0], Yes[1], ex-central[2]) [0]?: ".format(band)) or 0)
                         goodfield_input=int(raw_input("Good for Band:{} (integer, No[0], Yes[1], ex-central[2] ) [0]?: ".format(band)) or 0)
-                        if detection_input == 'y' or detection_input == '1':
-                            detections[band] = 1
-                        if goodfield_input == 'y' or detection_input == '1':
-                            goodfields[band] = 1
+                        detections[band] = detection_input
+                        goodfields[band] = goodfield_input
                     if len(bands) > 1:
                         SMG_input = int(raw_input("Is SMG? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
                         Jet_input = int(raw_input("Is Jet? (integer, No[0], Yes[1], NA[2]) [0]: ") or 0)
