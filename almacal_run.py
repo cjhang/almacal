@@ -1799,7 +1799,6 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 continue
             if obj_match.match(obj):
                 print('>>>>> {}'.format(obj))
-                obj_dir = os.path.join(basedir, obj)
                 obj_outdir = os.path.join(outdir, obj)
                 # write into summary file
                 obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
@@ -1819,6 +1818,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 #for img in imgs:
                 # sources_number = {}
                 for i,band in enumerate(bands):
+                    obj_band_dir = os.path.join(basedir, band, obj)
                     for j,res in enumerate(resolutions):
                         if len(bands) > 1:
                             ax_select = ax[i,j]
@@ -1829,7 +1829,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         else:
                             res_string = res+'.'
                         image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
-                        image_fullpath = os.path.join(obj_dir, image_name)
+                        image_fullpath = os.path.join(obj_band_dir, image_name)
                         print(image_fullpath)
                         #print('Finding source in:', image_fullpath)
                         if not os.path.isfile(image_fullpath):
