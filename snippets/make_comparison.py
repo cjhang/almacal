@@ -113,10 +113,10 @@ for band in ['B6','B7']:
     data_main_valid = data_main[band][data_main[band] > 0.1]
     data_oteo2016_valid = data_oteo2016[band][data_oteo2016[band] > 0.1] / 60.
     data_select_valid = data_select[band][band][data_select[band][band] > 0.1]
-    im = plt.hist(np.log10(data_all_valid), bins=20, label='All (main+ACA)', alpha=0.5)
+    # im = plt.hist(np.log10(data_all_valid), bins=20, label='All (main+ACA)', alpha=0.5)
     im = plt.hist(np.log10(data_main_valid), bins=20, label='Main', alpha=0.7)
     im = plt.hist(np.log10(data_oteo2016_valid), bins=20, label='Oteo et al. (2016)', alpha=0.9)
-    im = plt.hist(np.log10(data_select_valid), bins=20, label='Selected', alpha=0.9)
+    im = plt.hist(np.log10(data_select_valid), bins=20, label='Selected', alpha=0.5)
     ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
     ax.set_ylabel('Number')
     # for 1000 minutes, 43 antenna, at 243GHz

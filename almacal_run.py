@@ -1303,7 +1303,7 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         effarea = effarea + np.array(effarea_list) / 3600. # convert to deg^2
     return np.array([flux, effarea])
 
-def read_flux(basedir, obj, band, resolution,):
+def read_fluxsummary(basedir, obj, band, resolution,):
     """read flux from the obj summary file
     """
     summary_file = os.path.join(basedir, obj, obj+'.sources_found.txt')
@@ -1572,7 +1572,6 @@ def run_gen_stats(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'],
     if pickle_file:
         with open(pickle_file, 'wb') as f_pickle:
                 pickle.dump(all_stats, f_pickle)
-
 
 def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], debug=False):
     """copy the data used in oteo2016
