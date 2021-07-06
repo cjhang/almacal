@@ -13,6 +13,31 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import analysisUtils as au
 
+def check_intent(vis):
+    tb = tbtool()
+    tb.open(vis+'/STATE')
+    intents = tb.getcol('OBS_MODE')
+    # print(intents)
+
+    is_bandpass_cal = False
+    is_phase_cal = False
+
+    for item in intents:
+        # print('item', item)
+        if "BANDPASS" in item:
+            is_bandpass_cal = True
+        if "PHASE" in item:
+            is_phase_cal = True
+    if is_bandpass_cal:
+        if is_phase_cal:
+            return "Bandpass&Phase"
+        else:
+            return "Bandpass"
+    elif is_phase_cal:
+        return "Phase"
+    else:
+        return "None"
+
 def read_spw(vis):
     """read the spectral windows
     """
@@ -327,3 +352,17 @@ def read_alel(vis):
         else:
             alel_list.append(au.computeAzElForMS(item))
     return alel_list
+
+def read_intents(vis):
+    intents_list = []
+    for item in vis:
+        if isinstance(item, list):
+            item_list = []
+            for obs in item:
+                obs_intent = check_intent(obs)
+                item_list.append(obs_intent)
+            intents_list.append(item_list)
+        else:
+            intents_list.append(check_intent(item))
+    return intents_list
+
