@@ -15,14 +15,20 @@ import analysisUtils as au
 
 def check_intent(vis):
     tb = tbtool()
+    tb.open(vis)
+    intent_idx = np.unique(tb.getcol('STATE_ID'))
+    tb.close()
     tb.open(vis+'/STATE')
     intents = tb.getcol('OBS_MODE')
-    # print(intents)
+    intents_list = []
+    for idx in intent_idx:
+        intents_list.append(intents[idx])
+    # print(intents_list)
 
     is_bandpass_cal = False
     is_phase_cal = False
 
-    for item in intents:
+    for item in intents_list:
         # print('item', item)
         if "BANDPASS" in item:
             is_bandpass_cal = True
