@@ -73,8 +73,9 @@ if False:
         obs_valid = np.array(depth)>0.1
         band_depth_oteo2016[band] = np.array(depth)[obs_valid]
 
-for band in ['B6','B7']:
-    fig = plt.figure(figsize=(6,5))
+# for band in ['B6','B7']:
+if True:
+    fig = plt.figure(figsize=(12,5))
     plt.style.use('default')
     # fig.suptitle('Comparison', fontsize=16)
 
@@ -103,9 +104,9 @@ for band in ['B6','B7']:
     # ax.set_ylim(0, 6)
 
 
-
+    band = 'B6'
     # plot the new data
-    ax = fig.add_subplot(111)
+    ax = fig.add_subplot(121)
     # ax.set_xscale('log')
     ax.set_title(band)
     # ax.text(3.2, 87, 'Band 6')
@@ -120,35 +121,46 @@ for band in ['B6','B7']:
     ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
     ax.set_ylabel('Number')
     # for 1000 minutes, 43 antenna, at 243GHz
-    ax.axvline(x=3, color='b', linestyle='-.', alpha=0.5)
-    ax.text(3.1, 60, r'$4\,\mu$Jy', color='b', alpha=0.5)
+    # ax.axvline(x=3, color='b', linestyle='-.', alpha=0.5)
+    # ax.text(3.1, 60, r'$4\,\mu$Jy', color='b', alpha=0.5)
     # for 50 minutes, 30 antenna, at 243GHz
-    ax.axvline(x=1.7, color='b', linestyle='-.', alpha=0.5)
-    ax.text(1.7, 60, r'$25\,\mu$Jy', color='b', alpha=0.5)
+    ax.axvline(x=2.25, color='b', linestyle='-.', alpha=0.5)
+    ax.text(2.25, 60, r'ASPEC $10\,\mu$Jy', color='b', alpha=0.5)
     ax.set_xlim(0, 3.7)
     ax.set_ylim(0, 95)
     # locs, labels = plt.xticks()
     plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
     # print(locs, labels)
     ax.legend()
+
+    band = 'B7'
+    # plot the new data
+    ax = fig.add_subplot(122)
+    # ax.set_xscale('log')
+    ax.set_title(band)
+    # ax.text(3.2, 87, 'Band 6')
+    data_all_valid = data_all[band][data_all[band] > 0.1]
+    data_main_valid = data_main[band][data_main[band] > 0.1]
+    data_oteo2016_valid = data_oteo2016[band][data_oteo2016[band] > 0.1] / 60.
+    data_select_valid = data_select[band][band][data_select[band][band] > 0.1]
+    # im = plt.hist(np.log10(data_all_valid), bins=20, label='All (main+ACA)', alpha=0.5)
+    im = plt.hist(np.log10(data_main_valid), bins=20, label='Main', alpha=0.7)
+    im = plt.hist(np.log10(data_oteo2016_valid), bins=20, label='Oteo et al. (2016)', alpha=0.9)
+    im = plt.hist(np.log10(data_select_valid), bins=20, label='Selected', alpha=0.5)
+    ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
+    ax.set_ylabel('Number')
+    # for 1000 minutes, 43 antenna, at 243GHz
+    # ax.axvline(x=3, color='b', linestyle='-.', alpha=0.5)
+    # ax.text(3.1, 60, r'$4\,\mu$Jy', color='b', alpha=0.5)
+    # for 50 minutes, 30 antenna, at 243GHz
+    ax.axvline(x=2.47, color='b', linestyle='-.', alpha=0.5)
+    ax.text(2.47, 60, r'$10\,\mu$Jy', color='b', alpha=0.5)
+    ax.set_xlim(0, 3.7)
+    ax.set_ylim(0, 65)
+    # locs, labels = plt.xticks()
+    plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
+    # print(locs, labels)
+    ax.legend()
     plt.show()
+
     #fig.savefig('../results/comparison.pdf')
-
-    # ax = fig.add_subplot(122)
-    # # ax.text(3.2, 55, 'Band 7')
-    # ax.set_title('Band 7')
-    # im = plt.hist(np.log10(band_depth_new['B7']), bins=20, alpha=0.5)
-    # im = plt.hist(np.log10(band_depth_good['B7']), bins=20, alpha=0.7)
-    # im = plt.hist(np.log10(band_depth_oteo2016['B7']), bins=20, alpha=0.9)
-    # plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
-    # ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
-    # ax.set_ylabel('Number')
-    # # for 1000 minutes, 43 antenna, at 345 GHz
-    # ax.axvline(x=3, color='r', linestyle='-.', alpha=0.5)
-    # ax.text(3.1, 50, r'$6\,\mu$Jy', color='r', alpha=0.5)
-    # # for 50 minutes, 30 antenna, at 345GHz
-    # ax.axvline(x=1.7, color='r', linestyle='-.', alpha=0.5)
-    # ax.text(1.7, 50, r'$39\,\mu$Jy', color='r', alpha=0.5)
-    # ax.set_xlim(0, 3.7)
-    # ax.set_ylim(0, 60)
-
