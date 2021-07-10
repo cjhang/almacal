@@ -358,7 +358,10 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
             vis_combined = os.path.join(outdir, basename+'.combine.ms')
         else:
             vis_combined = os.path.join(outdir,'combined.ms')
-        concat(vis=vis, concatvis=vis_combined)
+        if os.path.isdir(vis_combined):
+            print("Warning: reuse existing combined file: {}".format(vis_combined))
+        else:
+            concat(vis=vis, concatvis=vis_combined)
         vis = vis_combined
     spw_specrange = read_spw(vis)
     freq_mean = np.mean(spw_specrange) # in GHz
@@ -384,7 +387,15 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         baselines_list = au.getBaselineLengths(vis, returnLengthsOnly=True)
         # read channel width
         tb.open(os.path.join(vis, 'SPECTRAL_WINDOW'))
-        chanwidth_list = tb.getcol('RESOLUTION').flatten().tolist()
+        try:
+            chanwidth_list = tb.getcol('RESOLUTION').flatten().tolist()
+        except:
+            chanwidth_list = []
+            chanwidth_varlist = tb.getvarcol('RESOLUTION')
+            for key in chanwidth_varlist.keys():
+                varlist = [item for sublist in chanwidth_varlist[key] for item in sublist]
+                chanwidth_list.append(varlist)
+            chanwidth_list = [item for sublist in chanwidth_list for item in sublist]
         tb.close()
         
     baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
