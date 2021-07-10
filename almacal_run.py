@@ -1858,13 +1858,13 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     plt.show()
                     print("Single Band:\n") 
                     print("Detection: 0)None 1)point source 2)Partially 3)enlongated jet -1)Not Sure")
-                    print("Usable: 0)No 1)Full 2)exclude center -1)need re-image")
+                    print("Usable: 0)No 1)Full 2)exclude center -1)re-imaging -2)images reselection")
                     print("General Classification")
                     print("Is SMG: 0)No 1)Yes 2)Multiple 3)Radio Source -1)Not Sure")
                     print("Is Jet: 0)No 1)Compact 2)Enlongated -1)Not Sure")
                     for band in bands:
                         detection_input=int(raw_input("Dection in Band:{} (integer, 0,1,2,3,-1) [0]?: ".format(band)) or 0)
-                        goodfield_input=int(raw_input("Usable for Band:{} (integer, 0,1,2,-1) [0]?: ".format(band)) or 0)
+                        goodfield_input=int(raw_input("Usable for Band:{} (integer, 0,1,2,-1,-2) [0]?: ".format(band)) or 0)
                         detections[band] = detection_input
                         goodfields[band] = goodfield_input
                     if len(bands) > 1:
