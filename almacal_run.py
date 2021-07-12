@@ -1735,42 +1735,45 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['0.3arcsec', '0.6arcsec'],
                    summary_file='summary.txt',
-                   interative=False, outdir='./', continue_mode=True):
+                   interative=False, outdir=None, continue_mode=True):
     """finding sources
     Adding a dot in the string: 
         resolutions = ['0.3arcsec','0.8arcsec']
     """
-    if not os.path.isdir(outdir):
-        os.system('mkdir -p {}'.format(outdir))
+    if outdir is not None:
+        if not os.path.isdir(outdir):
+            os.system('mkdir -p {}'.format(outdir))
+        summary_file = os.path.join(outdir, summary_file)
+    else:
+        summary_file = None
+    if summary_file is not None:
+        if os.path.isfile(summary_file):
+            if continue_mode:
+                summary = Table.read(summary_file, format='ascii')
+                objs_finished = summary['obj']
+            else:
+                os.system('mv {} {}.old'.format(summary_file, summary_file))
+                objs_finished = []
+        else os.path.isfile(summary_file):
+            print('Initializing the output file')
+            with open(summary_file, 'w+') as f:
+                f.write("obj")
+                for band in bands:
+                    for res in resolutions:
+                        f.write(' ')
+                        f.write(band+'_'+res)
+                for band in bands:
+                    f.write(' detection_{} goodfield_{}'.format(band, band))
+                f.write(' is_SMG')
+                f.write(' is_Jet')
+                f.write('\n')
+
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
         for item in os.listdir(basedir):
             if obj_match.match(obj):
                 objs.append(item)
-
-    summary_file = os.path.join(outdir, summary_file)
-    if not continue_mode:
-        if os.path.isfile(summary_file):
-            os.system('mv {} {}.old'.format(summary_file, summary_file))
-        objs_finished = []
-    if not os.path.isfile(summary_file):
-        print('Initializing the output file')
-        with open(summary_file, 'w+') as f:
-            f.write("obj")
-            for band in bands:
-                for res in resolutions:
-                    f.write(' ')
-                    f.write(band+'_'+res)
-            for band in bands:
-                f.write(' detection_{} goodfield_{}'.format(band, band))
-            f.write(' is_SMG')
-            f.write(' is_Jet')
-            f.write('\n')
-    if continue_mode:
-        summary = Table.read(summary_file, format='ascii')
-        objs_finished = summary['obj']
-
     failed_files = []
     try:
         for obj in objs:
@@ -1779,19 +1782,22 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 continue
             if obj_match.match(obj):
                 print('>>>>> {}'.format(obj))
-                obj_outdir = os.path.join(outdir, obj)
                 # write into summary file
-                obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
+                if outdir is not None:
+                    obj_outdir = os.path.join(outdir, obj)
+                    obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
+                    if not os.path.isdir(obj_outdir):
+                        os.system('mkdir -p {}'.format(obj_outdir))
+                    # open the summary file
+                    obj_summary = open(obj_summary_file, 'w+')
+                    summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
+                else:
+                    obj_summary = None
                 obj_sourcefound = {}
                 for band in bands:
                     for res in resolutions:
                         obj_sourcefound[band+'_'+res] = 0
-                if not os.path.isdir(obj_outdir):
-                    os.system('mkdir -p {}'.format(obj_outdir))
-                # open the summary file
-                obj_summary = open(obj_summary_file, 'w+')
                 # make a summary plot
-                summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
                 fig, ax = plt.subplots(len(bands), len(resolutions), 
                                        figsize=(4.2*len(resolutions),4*len(bands))) 
                 fig.suptitle(obj)
@@ -1826,7 +1832,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                         #    print("Error found for {}".format(image_name))
                         #    failed_files.append(image_name)
 
-                        if len(sources_found) > 0:
+                        if len(sources_found) > 0 and obj_summary is not None:
                             obj_summary.write('# {} {} {}\n'.format(obj, band, res))
                             obj_sourcefound['{}_{}'.format(band, res)] = len(sources_found)
                             source_idx = 0
@@ -1837,7 +1843,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                                 obj_summary.write('\n')
                                 source_idx += 1
                 # write into files
-                obj_summary.close()
+                if obj_summary is not None:
+                    obj_summary.close()
                 found_string = obj
                 for band in bands:
                     for res in resolutions:
@@ -1846,37 +1853,43 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 # save figure
                 fig.subplots_adjust(wspace=0.2, hspace=0.2)
                 fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
-                
-                SMG_input = 0
-                Jet_input = 0
-                detections = {}
-                goodfields = {}
-                for band in bands:
-                    goodfields[band] = 0
-                    detections[band] = 0
-                if interative:
-                    plt.show()
-                    print("Single Band:\n") 
-                    print("Detection: 0)None 1)point source 2)Partially 3)enlongated jet -1)Not Sure")
-                    print("Usable: 0)No 1)Full 2)exclude center -1)re-imaging -2)images reselection")
-                    print("General Classification")
-                    print("Is SMG: 0)No 1)Yes 2)Multiple 3)Radio Source -1)Not Sure")
-                    print("Is Jet: 0)No 1)Compact 2)Enlongated -1)Not Sure")
+                if summary_file: 
+                    SMG_input = 0
+                    Jet_input = 0
+                    detections = {}
+                    goodfields = {}
                     for band in bands:
-                        detection_input=int(raw_input("Dection in Band:{} (integer, 0,1,2,3,-1) [0]?: ".format(band)) or 0)
-                        goodfield_input=int(raw_input("Usable for Band:{} (integer, 0,1,2,-1,-2) [0]?: ".format(band)) or 0)
-                        detections[band] = detection_input
-                        goodfields[band] = goodfield_input
-                    if len(bands) > 1:
-                        SMG_input = int(raw_input("Is SMG? (integer, 0,1,2,3,-1) [0]: ") or 0)
-                        Jet_input = int(raw_input("Is Jet? (integer, 0,1,2,-1) [0]: ") or 0)
-                    plt.close()
-                for band in bands:
-                    found_string += ' {} {}'.format(detections[band], goodfields[band])
-                found_string += ' {}'.format(SMG_input)
-                found_string += ' {}'.format(Jet_input)
-                with open(summary_file, 'a+') as f:
-                    f.write("{}\n".format(found_string)) 
+                        goodfields[band] = 0
+                        detections[band] = 0
+                    if interative:
+                        plt.show()
+                        print("Single Band:\n") 
+                        print("Detection: 0)None 1)point source 2)Partially 3)enlongated jet -1)Not Sure")
+                        print("Usable: 0)No 1)Full 2)exclude center -1)re-imaging -2)images reselection")
+                        print("General Classification")
+                        print("Is SMG: 0)No 1)Yes 2)Multiple 3)Radio Source -1)Not Sure")
+                        print("Is Jet: 0)No 1)Compact 2)Enlongated -1)Not Sure")
+                        for band in bands:
+                            detection_input=int(raw_input("Dection in Band:{} (integer, 0,1,2,3,-1) [0]?: ".format(band)) or 0)
+                            goodfield_input=int(raw_input("Usable for Band:{} (integer, 0,1,2,-1,-2) [0]?: ".format(band)) or 0)
+                            detections[band] = detection_input
+                            goodfields[band] = goodfield_input
+                        if len(bands) > 1:
+                            SMG_input = int(raw_input("Is SMG? (integer, 0,1,2,3,-1) [0]: ") or 0)
+                            Jet_input = int(raw_input("Is Jet? (integer, 0,1,2,-1) [0]: ") or 0)
+                        plt.close()
+                    for band in bands:
+                        found_string += ' {} {}'.format(detections[band], goodfields[band])
+                    found_string += ' {}'.format(SMG_input)
+                    found_string += ' {}'.format(Jet_input)
+                    with open(summary_file, 'a+') as f:
+                        f.write("{}\n".format(found_string)) 
+                else:
+                    next_one = int(raw_input("Next one [1/0] [1]") or 1)
+                    if next_one == 1:
+                        continue
+                    else:
+                        return 0
                 plt.close()
     except KeyboardInterrupt:
         return 0
