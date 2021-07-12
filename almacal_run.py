@@ -1734,7 +1734,7 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['0.3arcsec', '0.6arcsec'],
-                   summary_file='summary.txt',
+                   summary_file='summary.txt', view_mode='multiple',
                    interative=False, outdir=None, continue_mode=True):
     """finding sources
     Adding a dot in the string: 
@@ -1746,15 +1746,15 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
         summary_file = os.path.join(outdir, summary_file)
     else:
         summary_file = None
+    objs_finished = []
     if summary_file is not None:
-        if os.path.isfile(summary_file):
-            if continue_mode:
+        if continue_mode:
+            if os.path.isfile(summary_file):
                 summary = Table.read(summary_file, format='ascii')
                 objs_finished = summary['obj']
             else:
                 os.system('mv {} {}.old'.format(summary_file, summary_file))
-                objs_finished = []
-        else os.path.isfile(summary_file):
+        else:
             print('Initializing the output file')
             with open(summary_file, 'w+') as f:
                 f.write("obj")
@@ -1793,6 +1793,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
                 else:
                     obj_summary = None
+                    obj_outdir = None
+                    summary_plot = None
                 obj_sourcefound = {}
                 for band in bands:
                     for res in resolutions:
@@ -1852,7 +1854,8 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 print(found_string)
                 # save figure
                 fig.subplots_adjust(wspace=0.2, hspace=0.2)
-                fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
+                if summary_plot:
+                    fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
                 if summary_file: 
                     SMG_input = 0
                     Jet_input = 0
@@ -1887,8 +1890,15 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 else:
                     next_one = int(raw_input("Next one [1/0] [1]") or 1)
                     if next_one == 1:
-                        continue
+                        if view_mode == 'single':
+                            pass
+                        elif view_mode == 'multiple':
+                            continue
                     else:
+                        return 0
+                if view_mode == 'multiple':
+                    is_close = int(raw_input("Close all windows? (1/0) [1]") or 1)
+                    if is_close == 0:
                         return 0
                 plt.close()
     except KeyboardInterrupt:
