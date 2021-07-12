@@ -609,7 +609,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #flux_aper_found = (phot_table_found['aperture_sum'] / beamsize * 1000).tolist() # convert mJy
 
         # automatically aperture photometry
-        segments = RectangularAperture(sources_found_center_candidates, 2.*a, 2.*a, theta=0)
+        seg_radius = np.int(a)
+        segments = RectangularAperture(sources_found_center_candidates, seg_radius, 
+                seg_radius, theta=0)
         segments_mask = segments.to_mask(method='center')
         for i,s in enumerate(segments_mask):
             if subtract_background:
