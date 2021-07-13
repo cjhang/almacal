@@ -333,42 +333,52 @@ def read_flux(vis):
     return flux_list
 
 def read_radec(vis):
-    radec_list = []
-    for item in vis:
-        if isinstance(item, list):
-            item_list = []
-            for obs in item:
-                obs_refdir = read_refdir(obs, return_coord=True)
-                item_list.append((obs_refdir.ra.value, obs_refdir.dec.value))
-            radec_list.append(item_list)
-        else:
-            item_refdir = read_refdir(item, return_coord=True)
-            radec_list.append(item_refdir.ra.value, item_refdir.dec.value)
+    if isinstance(vis, list):
+        radec_list = []
+        for item in vis:
+            if isinstance(item, list):
+                item_list = []
+                for obs in item:
+                    obs_refdir = read_refdir(obs, return_coord=True)
+                    item_list.append((obs_refdir.ra.value, obs_refdir.dec.value))
+                radec_list.append(item_list)
+            else:
+                item_refdir = read_refdir(item, return_coord=True)
+                radec_list.append(item_refdir.ra.value, item_refdir.dec.value)
+    else:
+        vis_refdir = read_refdir(vis, return_coord=True)
+        radec_list = [vis_refdir.ra.value, vis_refdir.dec.value]
     return radec_list
 
-def read_alel(vis):
-    alel_list = []
-    for item in vis:
-        if isinstance(item, list):
-            item_list = []
-            for obs in item:
-                obs_alel = au.computeAzElForMS(obs)
-                item_list.append(obs_alel)
-            alel_list.append(item_list)
-        else:
-            alel_list.append(au.computeAzElForMS(item))
-    return alel_list
+def read_azel(vis):
+    if isinstance(vis, list):
+        alel_list = []
+        for item in vis:
+            if isinstance(item, list):
+                item_list = []
+                for obs in item:
+                    obs_alel = au.computeAzElForMS(obs)
+                    item_list.append(obs_alel)
+                alel_list.append(item_list)
+            else:
+                alel_list.append(au.computeAzElForMS(item))
+        return alel_list
+    else:
+        return au.computeAzElForMS(vis)
 
 def read_intents(vis):
-    intents_list = []
-    for item in vis:
-        if isinstance(item, list):
-            item_list = []
-            for obs in item:
-                obs_intent = check_intent(obs)
-                item_list.append(obs_intent)
-            intents_list.append(item_list)
-        else:
-            intents_list.append(check_intent(item))
-    return intents_list
+    if isinstance(vis, list):
+        intents_list = []
+        for item in vis:
+            if isinstance(item, list):
+                item_list = []
+                for obs in item:
+                    obs_intent = check_intent(obs)
+                    item_list.append(obs_intent)
+                intents_list.append(item_list)
+            else:
+                intents_list.append(check_intent(item))
+        return intents_list
+    else:
+        return check_intent(vis)
 
