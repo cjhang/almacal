@@ -38,7 +38,8 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, full_pwv=False, debug=True, band_width=None):
+def calculate_sensitivity(vis, full_pwv=False, debug=True, band_width=None, elevation=45.0, 
+        pwv=1.0):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
@@ -49,6 +50,10 @@ def calculate_sensitivity(vis, full_pwv=False, debug=True, band_width=None):
     central_freq = "{:.2f}GHz".format(np.mean(spw_list))
     if band_width is None:
         band_width = "{:.2f}GHz".format(np.sum(np.diff(spw_list)))
+    try:
+        az, elevation = read_azel(vis)
+    except:
+        print("Error found in reading elevation from visibility, using default value!")
     
     antennalist = au.buildConfigurationFile(vis)
     time_onsource = au.timeOnSource(vis)
@@ -65,9 +70,8 @@ def calculate_sensitivity(vis, full_pwv=False, debug=True, band_width=None):
             sensitivity.append(au.sensitivity(central_freq, band_width, 
                 "{}min".format(time_onsource_minutes), pwv=pwv, antennalist=vis+'.cfg'))
     else:
-        pwv = 1.0
-        sensitivity = au.sensitivity(central_freq, band_width, 
-                "{}min".format(time_onsource_minutes), pwv=pwv, antennalist=vis+'.cfg')
+        sensitivity = au.sensitivity(central_freq, band_width, "{}min".format(time_onsource_minutes), 
+                pwv=pwv, elevation=elevation, antennalist=vis+'.cfg')
     os.system('rm -f {}.cfg'.format(vis))
     return sensitivity
 
