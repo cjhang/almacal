@@ -367,7 +367,7 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         else:
             concat(vis=vis, concatvis=vis_combined)
         vis = vis_combined
-    if spec_range is None:
+    if freq_range is None:
         spw_specrange = read_spw(vis)
         freq_range = [np.min(spw_specrange), np.max(spw_specrange)]
     freq_mean = np.mean(freq_range) # in GHz
@@ -415,8 +415,8 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         
     baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
     if mychanwidth is None:
-        chan_select = (np.array(chanfreq_list) > freq_range[0]) & (np.array(chanfreq_list) < 
-                                                                   freq_range[1])
+        chan_select = (np.array(chanfreq_list) > freq_range[0]*1e9) & (
+                       np.array(chanfreq_list) < freq_range[1]*1e9)
         chanwidth_list_select = np.array(chanwidth_list)[chan_select]
         chanwidth = np.ceil(np.max(chanwidth_list_select)/1e6)
         mychanwidth = "{}MHz".format(chanwidth)
