@@ -1098,10 +1098,10 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             spw = ''
             if drop_FDM:
                 spw_select = []
-                tb.open(v=os.path.join(v, 'SPECTRAL_WINDOW'))
+                tb.open(os.path.join(v, 'SPECTRAL_WINDOW'))
                 chan_num = tb.getcol('NUM_CHAN')
                 for s,sn in enumerate(chan_num):
-                    if s > 5:
+                    if sn > 5:
                         spw_select.append(str(s))
                 spw = ','.join(spw_select)
 
