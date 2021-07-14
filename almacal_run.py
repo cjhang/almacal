@@ -77,6 +77,32 @@ def savelist(l, filename=None, outdir='./', file_mode='a+'):
         for item in l:
             f.write(item+'\n')
 
+def search_obs(basedir, config='main', band='B6'):
+    band_match = re.compile('_(?P<band>B\d{1,2})$')
+    obs_match = re.compile('^uid___')
+    if config == 'main':
+        dish_diameter = 12.0
+    elif config == 'aca':
+        dish_diameter = 7.0
+    filelist = []
+    for obs in os.listdir(basedir):
+        if debug:
+            print(obs)
+        if obs_match.match(obs):
+            if band_match.search(vis):
+                obs_band = band_match.search(vis).groupdict()['band']
+                if obs_band != band:
+                    continue
+            try:
+                tb.open(obs + '/ANTENNA')
+                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                tb.close()
+            except:
+                continue
+        if (antenna_diameter - dish_diameter) < 1e-4:
+            filelist.append(obs)
+    return filelist
+
 def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, overwrite=False, **kwargs):
     """make images for one calibrator on all or specific band
 
