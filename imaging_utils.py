@@ -352,7 +352,7 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         mycell=None, myimsize=None, mychanwidth=None, mynchan=None, outdir='./',
         cellsize_scale=1, datacolumn="corrected", specmode='cube', outframe="LSRK", 
         weighting='natural', niter=0, interactive=False, usemask='auto-multithresh', 
-        suffix='.cube', clean=True, pbcor=False, uvtaper=[],
+        suffix='.cube', clean=True, pbcor=False, uvtaper=[], freq_range=None,
         save_psf=True, save_pb=True, imgsize_scale=1.0, only_fits=False,
         fov_scale=2.0, threshold=None, auto_threshold=5.0, debug=False, **kwargs):
     """function to make cubes
@@ -367,15 +367,17 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         else:
             concat(vis=vis, concatvis=vis_combined)
         vis = vis_combined
-    spw_specrange = read_spw(vis)
-    freq_mean = np.mean(spw_specrange) # in GHz
-    freq_range = [np.min(spw_specrange), np.max(spw_specrange)]
+    if spec_range is None:
+        spw_specrange = read_spw(vis)
+        freq_range = [np.min(spw_specrange), np.max(spw_specrange)]
+    freq_mean = np.mean(freq_range) # in GHz
     
     # get the baselines
     tb = tbtool()
     if isinstance(vis, list):
         baselines_list = []
         chanwidth_list = []
+        chanfreq_list = []
         for v in vis:
             obs_baselines = au.getBaselineLengths(v, returnLengthsOnly=True)
             baselines_list.append(obs_baselines)
@@ -383,10 +385,12 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
             # read the chanwidth
             tb.open(os.path.join(v, 'SPECTRAL_WINDOW'))
             chanwidth_list.append(tb.getcol('RESOLUTION')).flatten().tolist()
+            chanfreq_list.append(tb.getcol('CHAN_FREQ')).flatten().tolist()
             tb.close()
         # unfold the list
         baselines_list = [item for sublist in baselines_list for item in sublist]
         chanwidth_list = [item for sublist in chanwidth_list for item in sublist]
+        chanfreq_list = [item for sublist in chanfreq_list for item in sublist]
     if isinstance(vis, str):
         baselines_list = au.getBaselineLengths(vis, returnLengthsOnly=True)
         # read channel width
@@ -404,9 +408,12 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         
     baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
     if mychanwidth is None:
-        chanwidth = np.ceil(np.max(chanwidth_list)/1e6)
+        chan_select = (np.array(chanfreq_list) > freq_range[0]) & (np.array(chanfreq_list) < 
+                                                                   freq_range[1])
+        chanwidth_list_select = np.array(chanwidth_list)[chan_select]
+        chanwidth = np.ceil(np.max(chanwidth_list_select)/1e6)
         mychanwidth = "{}MHz".format(chanwidth)
-        print('>>> chanwidth:', chanwidth)
+        print('>>> chanwidth: {}MHz'.format(chanwidth))
     if mynchan is None:
         nchan = int(np.diff(freq_range) * 1000.0 / chanwidth)
         print('>>> nchan:', nchan)
