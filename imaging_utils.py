@@ -397,13 +397,20 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         tb.open(os.path.join(vis, 'SPECTRAL_WINDOW'))
         try:
             chanwidth_list = tb.getcol('RESOLUTION').flatten().tolist()
+            chanfreq_list = tb.getcol('CHAN_FREQ').flatten().tolist()
         except:
             chanwidth_list = []
+            chanfreq_list = []
             chanwidth_varlist = tb.getvarcol('RESOLUTION')
+            chanfreq_varlist = tb.getvarcol('CHAN_FREQ')
             for key in chanwidth_varlist.keys():
                 varlist = [item for sublist in chanwidth_varlist[key] for item in sublist]
                 chanwidth_list.append(varlist)
             chanwidth_list = [item for sublist in chanwidth_list for item in sublist]
+            for key in chanfreq_varlist.keys():
+                varlist = [item for sublist in chanfreq_varlist[key] for item in sublist]
+                chanfreq_list.append(varlist)
+            chanfreq_list = [item for sublist in chanfreq_list for item in sublist]
         tb.close()
         
     baseline_typical = np.percentile(baselines_list, baseline_percent) * u.m
