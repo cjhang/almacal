@@ -1070,7 +1070,7 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
-                    computwt=True, save_psf=True,
+                    computwt=True, drop_FDM=True, save_psf=True,
                     uvtaper_list=[['0.3arcsec'], ['0.6arcsec']], 
                     uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
@@ -1095,6 +1095,16 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     if computwt:
         vis_new = []
         for v in vis:
+            spw = ''
+            if drop_FDM:
+                spw_select = []
+                tb.open(os.path.join(v, 'SPECTRAL_WINDOW'))
+                chan_num = tb.getcol('NUM_CHAN')
+                for s,sn in enumerate(chan_num):
+                    if sn > 5:
+                        spw_select.append(str(s))
+                spw = ','.join(spw_select)
+
             v_new = os.path.join(outdir, os.path.basename(v))
             if os.path.isdir(v_new):
                 print('Found splitted file: {}'.format(v_new))
@@ -1102,13 +1112,12 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             # os.system('rm -rf {}*'.format(v_new))
             print('Splitting... {} {}'.format(v, v_new))
             #os.system('cp -r {} {}'.format(v, v_new))
-            if not split(vis=v, outputvis=v_new, datacolumn='corrected'):
+            if not split(vis=v, outputvis=v_new, spw=spw, datacolumn='corrected'):
                 print("No corrected data existing, spliting the data column")
-                if not split(vis=v, outputvis=v_new, datacolumn='data'):
+                if not split(vis=v, outputvis=v_new, spw=spw, datacolumn='data'):
                     print("Data may be corrupted: {}".format(v))
                     os.system('rm -rf {}'.format(v_new))
                     continue
-
             statwt(v_new, datacolumn='data')
             vis_new.append(v_new)
         print(vis_new)
