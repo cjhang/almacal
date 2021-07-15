@@ -77,7 +77,7 @@ def savelist(l, filename=None, outdir='./', file_mode='a+'):
         for item in l:
             f.write(item+'\n')
 
-def search_obs(basedir, config='main', band='B6'):
+def search_obs(basedir, config='main', band='B6', debug=False):
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obs_match = re.compile('^uid___')
     if config == 'main':
@@ -88,19 +88,20 @@ def search_obs(basedir, config='main', band='B6'):
     for obs in os.listdir(basedir):
         if debug:
             print(obs)
+        obs_fullpath = os.path.join(basedir, obs)
         if obs_match.match(obs):
-            if band_match.search(vis):
-                obs_band = band_match.search(vis).groupdict()['band']
+            if band_match.search(obs):
+                obs_band = band_match.search(obs).groupdict()['band']
                 if obs_band != band:
                     continue
             try:
-                tb.open(obs + '/ANTENNA')
+                tb.open(obs_fullpath + '/ANTENNA')
                 antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
                 tb.close()
             except:
                 continue
-        if (antenna_diameter - dish_diameter) < 1e-4:
-            filelist.append(obs)
+            if (antenna_diameter - dish_diameter) < 1e-4:
+                filelist.append(obs)
     return filelist
 
 def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, overwrite=False, **kwargs):
