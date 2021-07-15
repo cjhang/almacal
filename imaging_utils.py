@@ -422,8 +422,8 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         mychanwidth = "{}MHz".format(chanwidth)
         print('>>> chanwidth: {}MHz'.format(chanwidth))
     if mynchan is None:
-        nchan = int(np.diff(freq_range) * 1000.0 / chanwidth)
-        print('>>> nchan:', nchan)
+        mynchan = int(np.diff(freq_range) * 1000.0 / chanwidth)
+        print('>>> mynchan:', mynchan)
 
     # read the antenna_diameter
     if isinstance(vis, list):
@@ -476,7 +476,7 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         print("cell size:", mycell)
         print("image size:", myimsize)
         print("channel width:", mychanwidth)
-        print("nchan:", nchan)
+        print("nchan:", mynchan)
 
     if clean:
         rmtables('{}.*'.format(myimagename))
