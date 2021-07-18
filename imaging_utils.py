@@ -97,9 +97,9 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
                   myuvtaper=None, uvtaper=[], pbcor=True,
                   cellsize_scale=1, datacolumn="corrected", specmode='mfs', outframe="LSRK", 
-                  weighting='natural', niter=0, interactive=False, usemask='auto-multithresh', 
-                  threshold=None, auto_threshold=5.0, only_fits=False, save_psf=True, save_pb=True,
-                  suffix='', uvtaper_scale=None, debug=False, **kwargs):
+                  weighting='natural', niter=1000, interactive=False, usemask='auto-multithresh', 
+                  threshold=None, only_fits=False, save_psf=True, save_pb=True,
+                  suffix='', uvtaper_scale=None, debug=False, threshold_scale=5.0, **kwargs):
 
     """This function is used to make the continuum image
     
@@ -173,7 +173,8 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calcuate threshold
     if not threshold:
         if has_analysisUtils:
-            threshold = "{}mJy".format(1000.0*auto_threshold*calculate_sensitivity(vis))
+            threshold = "{}mJy".format(threshold_scale * 1000.0 * auto_threshold 
+                                       * calculate_sensitivity(vis))
         else:
             print("Warning: no analysisUtils found, set threshold to 0.0!")
             threshold = 0.0
@@ -187,11 +188,11 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
         myimagename = os.path.join(outdir, basename + suffix)
     # else:
         # myimagename = o.path.join(outdir, myimagename)
-    if debug:
-        print("mean frequecy:", freq_mean)
-        print("maximum baseline:", baseline_typical)
-        print("cell size:", mycell)
-        print("image size:", myimsize)
+    print("mean frequecy:", freq_mean)
+    print("maximum baseline:", baseline_typical)
+    print("cell size:", mycell)
+    print("image size:", myimsize)
+    print("threshold:", threshold)
 
     if isinstance(vis, list):
         if len(vis) > 4:
