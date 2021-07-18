@@ -173,8 +173,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calcuate threshold
     if not threshold:
         if has_analysisUtils:
-            threshold = "{}mJy".format(threshold_scale * 1000.0 * auto_threshold 
-                                       * calculate_sensitivity(vis))
+            threshold = "{}mJy".format(threshold_scale * 1000.0 * calculate_sensitivity(vis))
         else:
             print("Warning: no analysisUtils found, set threshold to 0.0!")
             threshold = 0.0
