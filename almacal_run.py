@@ -1733,8 +1733,8 @@ def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6',
                 check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
 
 def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], basedir=None, 
-        outdir='./', debug=False, only_fits=True, update=True, 
-        computwt=True, suffix='good_imgs.txt.updated', **kwargs):
+        outdir='./', debug=False, only_fits=True, update=True, imagefile_suffix='combine',
+        computwt=True, listfile_suffix='good_imgs.txt.updated', **kwargs):
     """generate the good image with updated list
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./make_good_image') 
@@ -1752,8 +1752,8 @@ def run_make_all_goodimags(imgs_dir=None, objlist=None, bands=['B6','B7'], based
         if not os.path.isdir(obj_outdir):
             os.system('mkdir -p {}'.format(obj_outdir))
         for band in bands:
-            good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, suffix))
-            concatvis = os.path.join(obj_outdir,"{}_{}_combine.ms".format(obj, band))
+            good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, listfile_suffix))
+            concatvis = os.path.join(obj_outdir, "{}_{}_{}.ms".format(obj, band, imagefile_suffix))
             if debug:
                 print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis))
             if os.path.isfile(good_image_file):
