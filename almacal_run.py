@@ -230,29 +230,29 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
         if debug:
             print(fileglob)
         all_files = glob.glob(fileglob)
-    elif filelist:
+    if filelist:
         if debug:
             print(filelist)
-        if not os.path.isfile(filelist):
-            raise ValueError("{} is not found".format(filelist))
-        all_files = []
-        if basedir is None:
-            raise ValueError("basedir should be defined along with filelist")
         if isinstance(filelist, str):
+            if not os.path.isfile(filelist):
+                raise ValueError("{} is not found".format(filelist))
             try:
                 flist = []
                 with open(filelist) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    flist.append(line.strip()+'.cont.auto.fits')
+                    flist.append(line.strip())
             except:
                 raise ValueError("file {} cannot be open".format(filelist))
         elif isinstance(filelist, list):
             flist = filelist
         else:
             raise ValueError("Wrong file type of filelist!")
-        for item in flist:
-            all_files.append(os.path.join(basedir, item))
+        if basedir:
+            for item in flist:
+                all_files.append(os.path.join(basedir, item))
+        else:
+            all_files = flist
 
     total_num = len(all_files)
     if total_num == 1:
