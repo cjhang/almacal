@@ -31,7 +31,8 @@ def flatten(t):
     flat_list = [item for sublist in t for item in sublist]
     return flat_list
 
-def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False, exclude_aca=True):
+def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False, exclude_aca=True, 
+                  suffix=''):
     """generate all the valid files names
 
     """
@@ -69,7 +70,7 @@ def gen_filenames(listfile=None, dirname=None, basedir=None, debug=False, exclud
             line = l.strip()
             if basedir:
                 line = os.path.join(basedir, line)
-            file_list.append(line)
+            file_list.append(line+suffix)
     return file_list
 
 def savelist(l, filename=None, outdir='./', file_mode='a+'):
@@ -1636,7 +1637,7 @@ def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], 
                 end_time='2015-07-01T00:00:00',
                 select_band=select_band, debug=debug)
 
-def run_gen_all_images(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
+def run_gen_all_images(basedir, objlist=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
                   debug=False, niter=100, **kwargs):
     """fix the missing and wrong images for gen_all_image output
     
@@ -1646,23 +1647,23 @@ def run_gen_all_images(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7']
     filelist = []
     obj_match = re.compile('^J\d*[+-]\d*$')
     obs_match = re.compile('(?P<obsname>uid___\w*\.ms(\.split\.cal)?\.(?P<objname>[\s\w+-]+)_(?P<band>B\d+))')
-    if obj_list is None:
-        obj_list = []
-        for obj in os.listdir(allcal_dir):
+    if objlist is None:
+        objlist = []
+        for obj in os.listdir(basedir):
             if obj_match.match(obj):
-                obj_list.append(obj)
-    for obj in obj_list:
+                objlist.append(obj)
+    for obj in objlist:
         print(obj)
         # start to go through each obj
 
-        for obs in os.listdir(os.path.join(allcal_dir, obj)):
+        for obs in os.listdir(os.path.join(basedir, obj)):
             if obs_match.match(obs):
                 obs_band = obs_match.search(obs).groupdict()['band']
-                infile = os.path.join(allcal_dir, obj, obs)
+                infile = os.path.join(basedir, obj, obs)
                 if debug:
                     print(obs)
                 if obs_band in bands:
-                    outfile_fullpath = os.path.join(outdir, obj, obs_band)
+                    outfile_fullpath = os.path.join(outdir, obs_band, obj)
                     os.system('mkdir -p {}'.format(outfile_fullpath))
                     
                     outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
@@ -1683,27 +1684,29 @@ def run_gen_all_images(allcal_dir, obj_list=None, outdir='./', bands=['B6','B7']
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
 
-def run_auto_classify_goodimags(imgsdir=None, objlist=None, outdir='./', bands=['B6','B7'], 
+def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=['B6','B7'], 
         debug=False, suffix='_good_imgs.txt', plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
     """
-    if imgsdir:
+    if imagedir:
         obj_match = re.compile('^J\d*[+-]\d*$')
-        for obj in os.listdir(imgsdir):
-            if obj_match.match(obj):
-                if objlist is not None:
-                    if obj not in objlist:
-                        continue
-                    print(obj)
-                obj_dir = os.path.join(outdir, obj)
-                if not os.path.isdir(obj_dir):
-                    os.system('mkdir -p {}'.format(os.path.join(outdir, obj)))
-                for band in bands:
-                    obj_band_path = os.path.join(imgsdir, obj, band)
-                    good_imgs, bad_imgs = check_images(obj_band_path+'/*.fits', 
-                            outdir=os.path.join(outdir, obj), plot=plot, savefig=savefig, 
+        for band in bands:
+            band_imagedir = os.path.join(imagedir, band)
+            band_outdir = os.path.join(outdir, band)
+            for obj in os.listdir(band_imgsdir):
+                if obj_match.match(obj):
+                    if objlist is not None:
+                        if obj not in objlist:
+                            continue
+                        print(obj)
+                    obj_dir = os.path.join(band_outdir, obj)
+                    if not os.path.isdir(obj_dir):
+                        os.system('mkdir -p {}'.format(os.path.join(band_outdir, obj)))
+                    obj_path = os.path.join(band_imagedir, obj)
+                    good_imgs, bad_imgs = check_images(obj_path+'/*.fits', 
+                            outdir=os.path.join(band_outdir, obj), plot=plot, savefig=savefig, 
                             band=band, basename=obj+'_'+band, debug=debug, **kwargs)
                     if debug:
                         print(good_imgs)
