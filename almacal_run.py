@@ -1812,9 +1812,13 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
-        for item in os.listdir(basedir):
-            if obj_match.match(obj):
-                objs.append(item)
+        for band in bands:
+            for item in os.listdir(os.path.join(basedir, band)):
+                if obj_match.match(obj):
+                    objs.append(item)
+        objs = np.unique(objs).tolist()
+
+    # star to loop over all the objs
     failed_files = []
     try:
         for obj in objs:
