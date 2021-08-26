@@ -183,7 +183,7 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
             
     exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
     rmtables(tablenames=myimagename+'.*')
-    return 0
+    return myimagename+'.image.fits'
 
 def gen_images(vis=None, dirname=None, outdir='./', bands=None, exclude_aca=True, 
                   debug=False, **kwargs):
@@ -203,6 +203,7 @@ def gen_images(vis=None, dirname=None, outdir='./', bands=None, exclude_aca=True
 
         2. get all the images just for one folder
     """
+    os.system('mkdir -p {}'.format(outdir))
     if vis:
         if isinstance(vis, str):
             filelist = [vis,]
@@ -1167,8 +1168,8 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         vis_valid = []
         for v in vis:
             if check_sensitivity:
-                gen_image(vis=v, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
-                is_usable = check_vis2image(vis=v, imagedir=os.path.join(outdir, 'images'), suffix='.cont.auto.image.fits')
+                imagefile = gen_image(vis=v, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
+                is_usable = check_vis2image(vis=v, imagefile=imagefile)
                 if is_usable:
                     vis_valid.append(v)
         print('After sensitivity check, v:', vis_valid)

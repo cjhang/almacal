@@ -38,7 +38,7 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 5.186]):
+def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 4.0]):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
@@ -176,12 +176,14 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calculate frequecy
     myrestfreq = str(freq_mean)+'GHz'
     # calcuate threshold
-    if not threshold:
+    if not threshold and niter > 0:
         if has_analysisUtils:
             threshold = "{}mJy".format(threshold_scale * 1000.0 * calculate_sensitivity(vis, pwv=pwv))
         else:
             print("Warning: no analysisUtils found, set threshold to 0.0!")
             threshold = 0.0
+    else:
+        threshold = 0.0
 
     if basename is None:
         if isinstance(vis, list):
@@ -289,18 +291,24 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
 
         rmtables(tablenames=myimagename+'.*')
 
-def check_vis2image(vis, basename=None, imagedir=None, tmpdir='./_tmp', suffix='.image'):
+def check_vis2image(vis, basename=None, imagefile=None, tmpdir='./_tmp', debug=False):
     """This function initially used to check weather the visibility have reached the theoretical sensitivity
     """
     if basename is None:
         basename = os.path.basename(vis)
-    if imagedir:
-        iminfo = imstat(os.path.join(imagedir, basename+suffix))
+    if imagefile:
+        iminfo = imstat(imagefile)
     elif tmpdir:
         make_cont_img(vis, clean=True, basename=basename, outdir=tmpdir)
         imagefile = os.path.join(tmpdir, basename+'.image')
         iminfo = imstat(imagefile)
         os.system('rm -rf {}'.format(tmpdir))
+    else:
+        print('vis', vis)
+        raise ValueError('Cannot calculate the statistics of the image')
+    if debug:
+        print('vis', vis)
+        print('iminfo', iminfo)
 
     sensitivity = calculate_sensitivity(vis)
     rms = iminfo['rms'][0] # 
