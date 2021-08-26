@@ -682,8 +682,15 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         # flux_input = sources_input[:,-1]
         # sources_input_coords = SkyCoord(ra=sources_input[:,0]*u.arcsec, 
                                         # dec=sources_input[:,1]*u.arcsec)
+        # print("sources_input_coords", sources_input_coords)
+        # print("len(sources_input_coords)", len(sources_input_coords))
         sources_input_pixels = skycoord_to_pixel(sources_input_coords, wcs)
-        sources_input_center = zip(*sources_input_pixels)
+        # print("sources_input_pixels", sources_input_pixels)
+        # print('[0,0]',[sources_input_pixels[0].tolist(), sources_input_pixels[1].tolist()])
+        if sources_input_pixels[0].size < 2:
+            sources_input_center = [(sources_input_pixels[0].tolist(), sources_input_pixels[1].tolist()),]
+        else:
+            sources_input_center = list(zip(*sources_input_pixels))
         
         #automatically aperture photometry
         flux_input_auto = []
@@ -701,7 +708,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
         if sources_found:
             sources_input_pixels = skycoord_to_pixel(sources_input_coords, wcs)
-
+            print(">>sources_input_pixels", sources_input_coords)
+            # if sources_input_coords.size < 2:
+            # print(">>sources_found_coords", sources_found_coords)
             idx_found, idx_input, d2d, d3d = sources_input_coords.search_around_sky(
                     sources_found_coords, fwhm)
             # sources_input_found = [flux_input[idx_input], np.array(flux_auto)[idx_found]]
@@ -824,6 +833,157 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     else:
         return []
 
+def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, model_background=False,
+                 subtract_background=False, debug=False, ax=None, fov_scale=2.0):
+    """measure the flux from the images by given coordinates
+
+    the images can be multiple images on the same field but with different resolutions
+
+    the flux from the coarser resolution will be preferred
+
+    It also offers the validatiy check bettween the sythesized beam and the PSF
+    """
+    # convert the coordinates list to array
+    coords_array = np.array(coords_list)
+    known_sources_coords = SkyCoord(ra=coords_array[:,0]*u.arcsec, dec=coords_array[:,1]*u.arcsec)
+
+    # read the images
+    flux_all = []
+    flux_snr_all = []
+    with fits.open(image) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        deg2pixel = 1/np.abs(header['CDELT1'])
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fov_pixel = fov / 3600. * deg2pixel
+        a, b = header['BMAJ']*deg2pixel, header['BMIN']*deg2pixel
+        theta = header['BPA']
+        bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+        beamsize = np.pi*a*b/(4*np.log(2))
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        known_mask = data_masked.mask
+        # mask the known data to calculate the sensitivity of the map
+        known_sources_pixel = skycoord_to_pixel(known_sources_coords, wcs)
+        known_sources_center = list(zip(known_sources_pixel[0], known_sources_pixel[1]))
+        for p in known_sources_center:
+            aper = CircularAperture(p, 2.0*a)
+            aper_mask = aper.to_mask(method='center')
+            known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
+        data_field = np.ma.array(data_masked, mask=known_mask) 
+        mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
+        
+    if pbcor:
+        image_path = os.path.dirname(image)
+        image_basename = os.path.basename(image)
+        image_pbcor = os.path.join(image_path, image_basename.replace('image', 'pbcor.image'))
+        with fits.open(image_pbcor) as hdu_pbcor:
+            data_pbcor = hdu_pbcor[0].data
+            data_pbcor_masked = np.ma.masked_invalid(data_pbcor.reshape(ny, nx))
+            pbcor_map = (data_masked.filled(0.0) / data_pbcor_masked.filled(np.inf)).reshape(ny, nx)
+    
+    if model_background:
+        if filter_size is None:
+            filter_size = 3#max(int(fwhm_pixel/1.5), 6)
+        if box_size is None:
+            box_size = int(fwhm_pixel*2)
+        if debug:
+            print('filter_size', filter_size)
+            print('box_size', box_size)
+        sigma_clip = SigmaClip(sigma=3.)
+        # bkg_estimator = MedianBackground()
+        bkg_estimator = SExtractorBackground() 
+        bkg = Background2D(data_masked.data, (box_size, box_size), 
+                filter_size=(filter_size, filter_size),
+                mask=data_masked.mask,
+                sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
+        background = bkg.background
+    else:
+        background = median
+    data_masked_sub = data_masked - background
+
+    # numerical aperture correction
+    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
+                offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
+                theta=theta/180.*np.pi) 
+    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+                             methods='aperture', debug=False, aperture_correction=1.0,
+                             beamsize=1.0)
+    aperture_correction = 1/flux_g[0]
+    
+    print("known_sources_coords", known_sources_coords)
+    print("known_sources_pixel", known_sources_pixel)
+    print("known_sources_center", known_sources_center)
+    seg_radius = np.int(a)
+    segments = RectangularAperture(known_sources_center, 2.*a, 2.0*a, theta=0)
+    segments_mask = segments.to_mask(method='center')
+    
+    flux_auto = []
+    flux_snr_list = []
+    for i,s in enumerate(segments_mask):
+        if subtract_background:
+            data_cutout = s.cutout(data_masked_sub)
+        else:
+            data_cutout = s.cutout(data_masked)
+        flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+                                    theta=theta/180*np.pi, debug=False, methods=methods,
+                                    aperture_correction=aperture_correction)
+        # if pbcor:
+        if pbcor:
+            pbcor_pixel = pbcor_map[np.ceil(known_sources_center[i][0]), 
+                                    np.ceil(known_sources_center[i][1])]
+            flux_auto.append(np.array(flux_list) * 1000. / pbcor_pixel)
+        else:
+            flux_auto.append(np.array(flux_list) * 1000.)
+        flux_snr = np.array(flux_list) / std
+        flux_snr_list.append(flux_snr)
+    flux_all.append(flux_auto)
+    flux_snr_all.append(flux_snr_list)
+
+    if debug:
+        # visualize the results
+        if ax is None:
+            fig= plt.figure()
+            ax = fig.add_subplot(111)
+        ny, nx = data_masked.shape[-2:]
+        scale = np.abs(header['CDELT1'])*3600
+        x_index = (np.arange(0, nx) - nx/2.0) * scale
+        y_index = (np.arange(0, ny) - ny/2.0) * scale
+        #x_map, y_map = np.meshgrid(x_index, y_index)
+        #ax.pcolormesh(x_map, y_map, data_masked)
+        extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
+        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none', vmax=10.*std, 
+                  vmin=-3.0*std)
+        
+        ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+                verticalalignment='center')
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
+                                  angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
+        ax.add_patch(ellipse)
+        if debug:
+            ellipse = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
+                                      angle=0, fill=False, facecolor=None, edgecolor='grey', 
+                                      alpha=0.8)
+            ax.add_patch(ellipse)
+        ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
+                color='white', fontsize=10, horizontalalignment='center', verticalalignment='center')
+        for i,e in enumerate(zip(*known_sources_pixel)):
+            yy = scale*(e[0]-ny/2.)
+            xx = scale*(e[1]-ny/2.)
+            ellipse = patches.Ellipse((yy, xx), width=2*b*scale, 
+                                      height=2*a*scale, angle=theta, facecolor=None, fill=False, 
+                                      edgecolor='black', alpha=0.8, linewidth=2)
+            ax.add_patch(ellipse)
+        plt.show()
+
+    print('flux_all', flux_all)
+    print('flux_snr_all', flux_snr_all)
+
+    return flux_all, flux_snr_all
+ 
 def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 
                     snr=(0.1,20), fov_scale=1.5, outdir='./', basename=None,
                     uvtaper_scale=None, budget=None,
@@ -1062,6 +1222,10 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         simimage_sourcefile = "{basename}.run{run}.txt".format(basename=basename, run=run)
         simimage_fullpath = os.path.join(simfolder, simimage)
         simimage_sourcefile_fullpath = os.path.join(simfolder, simimage_sourcefile)
+        simimage_sources_input = np.loadtxt(simimage_sourcefile_fullpath, skiprows=1)
+        if len(simimage_sources_input.shape) == 1:
+            print("Skip run{}, too few sources.".format(run))
+            continue
         # try:
         sf_return = source_finder(simimage_fullpath, sources_file=simimage_sourcefile_fullpath, 
                 known_sources=known_sources, threshold=threshold, second_check=second_check, 
@@ -1069,7 +1233,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         # except:
             # continue
         # if sf_return == 0:
-            # continue
+            # continued
         flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
         # print('flux_input', flux_input)
         # print('flux_input_auto', flux_input_auto)
@@ -1077,7 +1241,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         # print('idxs', idxs)
         
         if len(idxs[0])<1:
-            print("Skip run{}".format(run))
+            print("Skip run{}, not sources found".format(run))
             continue
         flux_input_list.append(flux_input)
         flux_input_autolist.append(flux_input_auto)
