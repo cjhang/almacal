@@ -1106,7 +1106,7 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
-                    computwt=True, drop_FDM=True, save_psf=True,
+                    computwt=True, drop_FDM=True, save_psf=True, check_sensitivity=True,
                     uvtaper_list=[['0.3arcsec'], ['0.6arcsec']], 
                     uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
@@ -1129,7 +1129,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     if concatvis is None:
         concatvis = os.path.join(outdir, basename+'.ms')
     if computwt:
-        vis_new = []
+        vis_statwt = []
         for v in vis:
             spw = ''
             if drop_FDM:
@@ -1144,7 +1144,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             v_new = os.path.join(outdir, os.path.basename(v))
             if os.path.isdir(v_new):
                 print('Found splitted file: {}'.format(v_new))
-                vis_new.append(v_new)
+                vis_statwt.append(v_new)
                 continue
             # Only use valid data
             intent='CALIBRATE_BANDPASS#ON_SOURCE,CALIBRATE_FLUX#ON_SOURCE,CALIBRATE_PHASE#ON_SOURCE'
@@ -1160,14 +1160,20 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             statwt(v_new, datacolumn='data')
             
             # check the sensitivity
+            vis_statwt.append(v_new)
+        print("After statwt valid vis:", vis_statwt)
+        vis = vis_statwt
+    if check_sensitivity:
+        vis_valid = []
+        for v in vis:
             if check_sensitivity:
-                gen_images(vis=vis_new, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
-                is_usable = check_sensitivity(vis=vis_new, imagedir=os.path.join(outdir, 'images'), suffix='.cont.auto.image.fits')
-                if not is_usable:
-                    continue
-            vis_new.append(v_new)
-        print("Final vis:", vis_new)
-        vis = vis_new
+                gen_image(vis=v, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
+                is_usable = check_vis2image(vis=v, imagedir=os.path.join(outdir, 'images'), suffix='.cont.auto.image.fits')
+                if is_usable:
+                    vis_valid.append(v)
+        print('After sensitivity check, v:', vis_valid)
+        vis = vis_valid
+
     if os.path.isdir(concatvis):
         print("Skip concating, file exists....")
     else:

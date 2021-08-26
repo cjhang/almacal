@@ -289,7 +289,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
 
         rmtables(tablenames=myimagename+'.*')
 
-def check_sensitivity(vis, basename=None, imagedir=None, tmpdir='./_tmp', suffix='.image'):
+def check_vis2image(vis, basename=None, imagedir=None, tmpdir='./_tmp', suffix='.image'):
     """This function initially used to check weather the visibility have reached the theoretical sensitivity
     """
     if basename is None:
