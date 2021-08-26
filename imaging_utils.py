@@ -38,12 +38,12 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, full_pwv=False, debug=True, band_width=None, elevation=45.0, 
-        pwv=1.0):
+def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 5.186]):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
     # Octile PWV(mm)
+    # pwv_list = [0.472, 0.658, 0.913, 1.262, 1.796, 2.748, 5.186]
     if not isinstance(vis, str):
         raise ValueError("Only single visibility is supported.")
     spw_list = read_spw(vis)
@@ -60,18 +60,23 @@ def calculate_sensitivity(vis, full_pwv=False, debug=True, band_width=None, elev
     time_onsource_minutes = 0
     for idx in time_onsource['source_ids']:
         time_onsource_minutes += time_onsource[idx]['minutes_on_source']
-
     
-    #remove the cfg file
-    if full_pwv: 
-        pwv_list = [0.472, 0.658, 0.913, 1.262, 1.796, 2.748, 5.186]
+    if debug:
+        print('central frequency [GHz]', central_freq)
+        print('time_on_source [min]', time_onsource)
+        print('band_width [GHz]', band_width)
+        print('elevation [deg]', elevation)
+        print('PWV [mm]', pwv)
+    
+    if isinstance(pwv, (list, np.ndarray, tuple)):
         sensitivity = []
-        for pwv in pwv_list:
+        for p in pwv:
             sensitivity.append(au.sensitivity(central_freq, band_width, 
-                "{}min".format(time_onsource_minutes), pwv=pwv, antennalist=vis+'.cfg'))
-    else:
+                "{}min".format(time_onsource_minutes), pwv=p, antennalist=vis+'.cfg'))
+    elif isinstance(pwv, (int, float)):
         sensitivity = au.sensitivity(central_freq, band_width, "{}min".format(time_onsource_minutes), 
                 pwv=pwv, elevation=elevation, antennalist=vis+'.cfg')
+    #remove the cfg file
     os.system('rm -f {}.cfg'.format(vis))
     return sensitivity
 
@@ -95,7 +100,7 @@ def get_baselines(vis=None,):
 
 def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseline_percent=80,
                   mycell=None, myimsize=None, outdir='./', fov_scale=2.0, imgsize_scale=1, 
-                  myuvtaper=None, uvtaper=[], pbcor=True,
+                  myuvtaper=None, uvtaper=[], pbcor=True, pwv=2.0,
                   cellsize_scale=1, datacolumn="corrected", specmode='mfs', outframe="LSRK", 
                   weighting='natural', niter=1000, interactive=False, usemask='auto-multithresh', 
                   threshold=None, only_fits=False, save_psf=True, save_pb=True,
@@ -173,7 +178,7 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calcuate threshold
     if not threshold:
         if has_analysisUtils:
-            threshold = "{}mJy".format(threshold_scale * 1000.0 * calculate_sensitivity(vis))
+            threshold = "{}mJy".format(threshold_scale * 1000.0 * calculate_sensitivity(vis, pwv=pwv))
         else:
             print("Warning: no analysisUtils found, set threshold to 0.0!")
             threshold = 0.0
@@ -283,6 +288,27 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                 exportfits(imagename=pb, fitsimage=pb+'.fits')
 
         rmtables(tablenames=myimagename+'.*')
+
+def check_sensitivity(vis, basename=None, imagedir=None, tmpdir='./_tmp', suffix='.image'):
+    """This function initially used to check weather the visibility have reached the theoretical sensitivity
+    """
+    if basename is None:
+        basename = os.path.basename(vis)
+    if imagedir:
+        iminfo = imstat(os.path.join(imagedir, basename+suffix))
+    elif tmpdir:
+        make_cont_img(vis, clean=True, basename=basename, outdir=tmpdir)
+        imagefile = os.path.join(tmpdir, basename+'.image')
+        iminfo = imstat(imagefile)
+        os.system('rm -rf {}'.format(tmpdir))
+
+    sensitivity = calculate_sensitivity(vis)
+    rms = iminfo['rms'][0] # 
+    if (rms >= sensitivity[0]) and (rms <= sensitivity[1]):
+        return True
+    else:
+        return False
+
 
 def image_selfcal(vis=None, ncycle=3, ):
     # tclean and self-calibration
