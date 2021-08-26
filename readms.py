@@ -25,24 +25,16 @@ def check_intent(vis):
         intents_list.append(intents[idx])
     # print(intents_list)
 
-    is_bandpass_cal = False
-    is_phase_cal = False
-
+    intents_valid = []
     for item in intents_list:
         # print('item', item)
         if "BANDPASS" in item:
-            is_bandpass_cal = True
+            intents_valid.append('BANDPASS')
         if "PHASE" in item:
-            is_phase_cal = True
-    if is_bandpass_cal:
-        if is_phase_cal:
-            return "Bandpass&Phase"
-        else:
-            return "Bandpass"
-    elif is_phase_cal:
-        return "Phase"
-    else:
-        return "None"
+            intents_valid.append('PHASE')
+        if "FLUX" in item:
+            intents_valid.append('FLUX')
+    return intents_valid
 
 def read_spw(vis):
     """read the spectral windows
