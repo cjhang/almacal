@@ -447,7 +447,6 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         data = hdu[0].data
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
         freq = header['CRVAL3']
         lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
         fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
@@ -480,7 +479,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     beamsize = np.pi*a*b/(4*np.log(2))
 
     # read known_sources
-    known_mask = np.full((ny, nx), 0, dtype=bool)
+    # known_mask = np.full((ny, nx), 0, dtype=bool)
+    known_mask = data_masked.mask
     if baseimage:
         known_sources = source_finder(baseimage)
     if (known_sources is not None) and (len(known_sources) > 0):
@@ -511,6 +511,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         central_aper = CircularAperture([ny/2., nx/2.], central_mask_radius*a)
         central_aper_mask = central_aper.to_mask(method='center')
         known_mask = np.bitwise_or(known_mask, central_aper_mask[0].to_image((ny,nx)).astype(bool))
+    
+    data_field = np.ma.array(data_masked, mask=known_mask) 
+    mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
     if debug:
         print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
@@ -708,7 +711,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
 
         if sources_found:
             sources_input_pixels = skycoord_to_pixel(sources_input_coords, wcs)
-            print(">>sources_input_pixels", sources_input_coords)
+            # print(">>sources_input_pixels", sources_input_coords)
             # if sources_input_coords.size < 2:
             # print(">>sources_found_coords", sources_found_coords)
             idx_found, idx_input, d2d, d3d = sources_input_coords.search_around_sky(
@@ -832,6 +835,57 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                         sources_found_coords.dec.to(u.arcsec).value, flux_auto, flux_snr_list))
     else:
         return []
+
+def calculate_image_sensitivity(image, known_sources=None, central_mask_radius=2.0, 
+                                mask_radius=2.0, debug=False):
+    """The united function to calculate the sensitivity of the image
+
+    """
+    with fits.open(image) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        deg2pixel = 1/np.abs(header['CDELT1'])
+        a, b = header['BMAJ']*deg2pixel, header['BMIN']*deg2pixel
+    data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+    # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+    # print(mean, median, std)
+    known_mask = data_masked.mask
+
+    if known_sources is None:
+        known_sources = source_finder(image)
+    if (known_sources is not None) and (len(known_sources) > 0):
+        known_sources_coords_ra = []
+        known_sources_coords_dec = []
+        for source in known_sources:
+            known_sources_coords_ra.append(source[0])
+            known_sources_coords_dec.append(source[1])
+        known_sources_coords = SkyCoord(ra=known_sources_coords_ra, dec=known_sources_coords_dec, 
+                                        unit='arcsec')
+        known_sources_pixel = skycoord_to_pixel(known_sources_coords, wcs)
+        known_sources_center = list(zip(known_sources_pixel[0], known_sources_pixel[1]))
+        for p in known_sources_center:
+            aper = CircularAperture(p, mask_radius*a)
+            aper_mask = aper.to_mask(method='center')
+            known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
+    if central_mask_radius > 0.0:
+        central_aper = CircularAperture([ny/2., nx/2.], central_mask_radius*a)
+        central_aper_mask = central_aper.to_mask(method='center')
+        known_mask = np.bitwise_or(known_mask, central_aper_mask[0].to_image((ny,nx)).astype(bool))
+ 
+    if debug:
+        plt.figure()
+        plt.imshow(data_masked, origin='lower')
+        plt.imshow(known_mask, origin='lower', alpha=0.8)
+        # for p in known_sources_pixel:
+            # aperture = CircularAperture(p, r=2.*a)
+            # aperture.plot(color='white', lw=2)
+        plt.show()
+
+    data_field = np.ma.array(data_masked, mask=known_mask) 
+    mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
+    return mean, median, std
 
 def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, model_background=False,
                  subtract_background=False, debug=False, ax=None, fov_scale=2.0):
@@ -1010,7 +1064,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         fov = 1.02 * (lam / (12*u.m)).decompose().value * 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+        mean, median, std = calculate_image_sensitivity(imagefile)  
 
         # pixel_scale = 1/np.abs(header['CDELT1'])
         # fwhm = header['BMAJ']*3600*u.arcsec
@@ -1189,15 +1243,17 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         theta = header['BPA']
         beamsize = np.pi*a*b/(4*np.log(2))
 
-    rms_flux = std * 1000 # convert to mJy/pixel
     # sensitivity = 1000 * calculate_sensitivity(vis) # convert into mJy
     if debug:
         print('beamsize',beamsize) 
         print('rms_flux',rms_flux)
 
+    mean, median, std = calculate_image_sensitivity(baseimage)
+    rms_flux = std * 1000 # convert to mJy/pixel
     known_sources = source_finder(baseimage, fov_scale=fov_scale)
     
     #flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
+    # print('baseimage', baseimage)
     if basename is None:
         basename = os.path.basename(baseimage)
         print('basename', basename)
@@ -1305,7 +1361,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), plot=True,
-                     mode='median'):
+                     mode='median', text=''):
     if jsonfile:
         with open(jsonfile) as jf:
             data = json.load(jf)
@@ -1421,6 +1477,7 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
         ax.set_ylabel(r'Fake percentage')
         # ax.set_xlim((0., 8))
         # ax.set_ylim((-0.1, 1.2))
+        plt.suptitle(text)
 
         plt.show()
     return snr_mid, [aperture_mean, gaussian_mean], completeness_list, fake_rate_list
