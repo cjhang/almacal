@@ -1994,7 +1994,7 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
         return 0
 
 def run_measure_flux(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                   resolutions=['0.3arcsec', '0.6arcsec'], selected_resolution='0.6arcsec',
+                   resolutions=['0.3arcsec', '0.6arcsec'], selected_resolution='0.3arcsec',
                    summary_file=None, view_mode='multiple',
                    outdir=None, continue_mode=True):
     """finding sources
@@ -2221,8 +2221,9 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.1, 1, 10),  objs=Non
     if savefile:
         effarea.write(savefile, format='ascii')
 
-def run_differential_number_counts(flist, detections_file=None, band='B6', effective_area_file=None, 
-        simulation_folder=None, ax=None):
+def run_number_counts(flist, detections_file=None, band='B6', effective_area_file=None, 
+        simulation_folder=None, ax=None, flux_column='flux_guassian', flux_snr_column='flux_gaussian_snr',
+        default_simulation=None, objs_withdeafultsim=[],):
     """
 
     flist: flux list, [0.2, 0.6, 1.0]
@@ -2244,10 +2245,21 @@ def run_differential_number_counts(flist, detections_file=None, band='B6', effec
         obj = item['obj']
         snr = item[band+'_SNR']
         print(obj, flux, snr)
-        snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
-                jsonfile=os.path.join(simulation_folder, obj, obj+'_simulation.txt'), 
-                snr=np.arange(0.2, 10, 0.2), plot=False)
-        cs_comp = scipy.interpolate.interp1d(snr_list, comp_list) 
+        if obj in objs_withdeafultsim:
+            sim_jsonfile = default_simulation
+        else:
+            sim_jsonfile = os.path.join(simulation_folder, obj, obj+'_simulation.txt')
+        if not os.path.isfile(sim_jsonfile)
+            raise ValueError('No simulation could be found for {}'.format(obj))
+        try:
+            snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
+                jsonfile=sim_jsonfile, snr=np.arange(0.2, 10, 0.2), plot=False)
+        except:
+            snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
+                jsonfile=default_simulation, snr=np.arange(0.2, 10, 0.2), plot=False)
+            print("Using default simulations: {}".format(default_simulation))
+
+        cs_comp = scipy.interpolate.interp1d(snr_list, comp_list)
         def cs_comp2(snr):
             if snr<10:
                 return cs_comp(snr)
@@ -2261,6 +2273,7 @@ def run_differential_number_counts(flist, detections_file=None, band='B6', effec
     Ni_array = np.array(Ni_list)
     print(Ni_array)
 
+    # calculation the cumulative number counts
     NN = []
     for f in flist:
         print('flux:', f)
