@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import analysisUtils as au
 
-def check_intent(vis):
+def check_intent(vis, unique=True):
     tb = tbtool()
     tb.open(vis)
     intent_idx = np.unique(tb.getcol('STATE_ID'))
@@ -34,6 +34,8 @@ def check_intent(vis):
             intents_valid.append('PHASE')
         if "FLUX" in item:
             intents_valid.append('FLUX')
+    if unique:
+        intents_valid = np.unique(intents_valid).tolist()
     return intents_valid
 
 def read_spw(vis):
