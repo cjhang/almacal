@@ -38,7 +38,7 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 4.0]):
+def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 5.186]):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
@@ -47,7 +47,8 @@ def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=
     if not isinstance(vis, str):
         raise ValueError("Only single visibility is supported.")
     spw_list = read_spw(vis)
-    central_freq = "{:.2f}GHz".format(np.mean(spw_list))
+    # central_freq = "{:.2f}GHz".format(np.mean(spw_list))
+    central_freq = "{:.2f}GHz".format(np.min(spw_list))
     if band_width is None:
         band_width = "{:.2f}GHz".format(np.sum(np.diff(spw_list)))
     try:
@@ -56,7 +57,11 @@ def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=
         print("Error found in reading elevation from visibility, using default value!")
     
     antennalist = au.buildConfigurationFile(vis)
-    time_onsource = au.timeOnSource(vis)
+    try:
+        time_onsource = au.timeOnSource(vis)
+    except:
+        print("\n###\nError run au.timeOnSource, set the sensitivity to np.inf\n###\n")
+        return np.full_like(pwv, np.inf)
     time_onsource_minutes = 0
     for idx in time_onsource['source_ids']:
         time_onsource_minutes += time_onsource[idx]['minutes_on_source']
@@ -291,38 +296,9 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
 
         rmtables(tablenames=myimagename+'.*')
 
-def check_vis2image(vis, basename=None, imagefile=None, tmpdir='./_tmp', debug=False):
-    """This function initially used to check weather the visibility have reached the theoretical sensitivity
-    """
-    if basename is None:
-        basename = os.path.basename(vis)
-    if imagefile:
-        iminfo = imstat(imagefile)
-    elif tmpdir:
-        make_cont_img(vis, clean=True, basename=basename, outdir=tmpdir)
-        imagefile = os.path.join(tmpdir, basename+'.image')
-        iminfo = imstat(imagefile)
-        os.system('rm -rf {}'.format(tmpdir))
-    else:
-        print('vis', vis)
-        raise ValueError('Cannot calculate the statistics of the image')
-    if debug:
-        print('vis', vis)
-        print('iminfo', iminfo)
-
-    sensitivity = calculate_sensitivity(vis)
-    rms = iminfo['rms'][0] # 
-    if (rms >= sensitivity[0]) and (rms <= sensitivity[1]):
-        return True
-    else:
-        return False
-
-
 def image_selfcal(vis=None, ncycle=3, ):
-    # tclean and self-calibration
-
-    pass
-
+    """tclean and self-calibration
+    """
     os.system('rm -rf tclean/cycle0.*')
     tclean(vis=calmsfile,
            imagename='./tclean/cycle0',
