@@ -426,6 +426,30 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
             flux_list.append(flux_apers_stable)
     return flux_list
 
+def read_fitsimage(fitsimage):
+    with fits.open(fitsimage) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fcenter = [header['CRVAL1'], header['CRVAL2']] # in degrees
+        pixel_center = [nx/2., ny/2.]
+
+    # for DAOStarFinder, in pixel space
+    pixel_scale = 1/np.abs(header['CDELT1'])
+    fov_pixel = fov / 3600. * pixel_scale
+    fwhm = header['BMAJ']*3600*u.arcsec
+    fwhm_pixel = header['BMAJ']*pixel_scale
+    bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+    a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+    ratio = header['BMIN'] / header['BMAJ']
+    theta = header['BPA']
+    beamsize = np.pi*a*b/(4*np.log(2))
+
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
@@ -902,8 +926,6 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
     known_sources_coords = SkyCoord(ra=coords_array[:,0]*u.arcsec, dec=coords_array[:,1]*u.arcsec)
 
     # read the images
-    flux_all = []
-    flux_snr_all = []
     with fits.open(image) as hdu:
         header = hdu[0].header
         wcs = WCS(header)
@@ -992,10 +1014,8 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             flux_auto.append(np.array(flux_list) * 1000. / pbcor_pixel)
         else:
             flux_auto.append(np.array(flux_list) * 1000.)
-        flux_snr = np.array(flux_list) / std
+        flux_snr = flux_list / std
         flux_snr_list.append(flux_snr)
-    flux_all.append(flux_auto)
-    flux_snr_all.append(flux_snr_list)
 
     if debug:
         # visualize the results
@@ -1033,10 +1053,10 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             ax.add_patch(ellipse)
         plt.show()
 
-    print('flux_all', flux_all)
-    print('flux_snr_all', flux_snr_all)
+    print('flux_auto', flux_auto)
+    print('flux_snr_list', flux_snr_list)
 
-    return flux_all, flux_snr_all
+    return flux_auto, flux_snr_list
  
 def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 
                     snr=(0.1,20), fov_scale=1.5, outdir='./', basename=None,
