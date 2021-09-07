@@ -111,8 +111,7 @@ def search_obs(basedir, config='main', band='B6', debug=False):
     return filelist
 
 def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, overwrite=False,
-              suffix='.cont.auto',
-              intent='CALIBRATE_BANDPASS#ON_SOURCE,CALIBRATE_FLUX#ON_SOURCE,CALIBRATE_PHASE#ON_SOURCE', **kwargs):
+              suffix='.cont.auto', **kwargs):
     """make images for one calibrator on all or specific band
 
     Params:
@@ -137,9 +136,9 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
 
     basename = os.path.basename(vis)
     myimagename = os.path.join(outdir, basename + suffix)
-    if os.path.isfile(myimagename+'.fits') and not overwrite:
-        print('image already existing, return without making new.')
-        return 0
+    if os.path.isfile(myimagename+'.image.fits') and not overwrite:
+        print('{} already existing, return without making new.'.format(myimagename+'.image.fits'))
+        return myimagename+'.image.fits'
 
     if exclude_aca:
         try:
@@ -153,6 +152,12 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
                 print("Excuding data from {}".format(antenna_diameter))
             return False
 
+    intent_list = check_intent(vis)
+    intent_list_full = []
+    for i in intent_list:
+        intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
+    intent = ','.join(intent_list_full)
+    print('intent', intent)
     try:
         make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, niter=niter, intent=intent, **kwargs)
     except:
@@ -178,10 +183,10 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
                 os.system('mv {} {}'.format(outputvis, vis))
                 outputvis = vis
             rmtables(myimagename+'.*')
-            make_cont_img(vis=outputvis, clean=True, myimagename=myimagename, outdir=outdir, niter=1000, only_fits=True, **kwargs)
+            make_cont_img(vis=outputvis, clean=True, myimagename=myimagename, outdir=outdir, niter=0, only_fits=True, **kwargs)
             return 0
             
-    exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.fits')
+    exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.image.fits')
     rmtables(tablenames=myimagename+'.*')
     return myimagename+'.image.fits'
 
@@ -228,6 +233,37 @@ def gen_images(vis=None, dirname=None, outdir='./', bands=None, exclude_aca=True
         else:
             gen_image(infile, outdir=outdir, exclude_aca=exclude_aca, **kwargs)
 
+def check_vis2image(vis, imagefile=None, tmpdir='./_tmp', debug=False):
+    """This function initially used to check weather the visibility have reached the theoretical sensitivity
+    """
+    if imagefile:
+        iminfo = imstat(imagefile)
+    elif tmpdir:
+        # print("\n>>>>>>>Using tmpdir\n")
+        imagefile = gen_image(vis, outdir=tmpdir)
+        iminfo = imstat(imagefile)
+        os.system('rm -rf {}'.format(tmpdir))
+    else:
+        print('vis', vis)
+        raise ValueError('Cannot calculate the statistics of the image')
+    if debug:
+        print('vis', vis)
+        print('iminfo', iminfo)
+    try:
+        sensitivity = calculate_sensitivity(vis)
+        rms = iminfo['rms'][0] # 
+        print('visibility sensitivity:', sensitivity)
+        print('image rms:', rms)
+        if (rms >= sensitivity[0]) and (rms <= sensitivity[1]):
+            return True
+        else:
+            return False
+    except:
+        print("\n!!!Error in check_vis2image")
+        print('vis', vis)
+        print('imagefile', imagefile)
+        raise ValueError('Checking the vis and imagefile!')
+
 def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3, ncol=3, savefile=None, debug=False):
     """show images in an interactive ways, and record the input from inspector
     
@@ -258,6 +294,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
         else:
             raise ValueError("Wrong file type of filelist!")
         if basedir:
+            all_files = []
             for item in flist:
                 all_files.append(os.path.join(basedir, item))
         else:
@@ -612,7 +649,7 @@ def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, check_fl
     ## checking the fitting
     # the fraction of the 3 sigma outlier, theoretical gaussian value is 
     n_3sigma = np.sum(hist[(bins_mid > lower_3sigma) & (bins_mid < upper_3sigma)])
-    percent_3sigma = 1.0 * n_3sigma / np.sum(hist) 
+    percent_3sigma = 1.0 * n_3sigma / np.sum(hist)
     percent_2sigma = 1.0 * np.sum(hist[(bins_mid > lower_2sigma) & (bins_mid < upper_2sigma)]) / np.sum(hist) 
     percent_1sigma = 1.0 * np.sum(hist[(bins_mid > lower_1sigma) & (bins_mid < upper_1sigma)]) / np.sum(hist) 
     # calculating the deviation from Gaussian
@@ -650,7 +687,7 @@ def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, check_fl
     if debug:
         print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         print('>> Checking the fitting of noise:')
-        print('mean: {}, std:{}'.format(mean, sigma))
+        print('mean: {}, sigma:{}'.format(mean, sigma))
         # print('number of 3 sigma outlier: {}'.format(n_outlier_3sigma))
         print('fraction of 1 sigma outlier: {:.4f}%. [theoretical: 68.27%]'.format(percent_1sigma*100.))
         print('deviation of 1 sigma: {:.4f}%.'.format(deviation_1sigma*100.))
@@ -782,13 +819,13 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwri
         if os.path.isfile(goodfile) or os.path.isfile(badfile):
             if not overwrite:
                 print("Classification already done!")
-                return
+                return [], []
     if isinstance(imgs, str):
         all_files = glob.glob(imgs)
     elif isinstance(imgs, list):
         all_files = imgs
 
-    p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).cont.auto.fits')
+    p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).*.fits')
 
     good_imgs = []
     bad_imgs = []
@@ -804,20 +841,23 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwri
             uidname = p_uidimg.search(img).groupdict()['uidname']
         else:
             uidname = None
-        # 
-        if check_image(img, debug=debug, outdir=image_outdir, **kwargs):
-            if uidname is not None:
-                good_imgs.append(uidname)
+        try: 
+            if check_image(img, debug=debug, outdir=image_outdir, **kwargs):
+                if uidname is not None:
+                    good_imgs.append(uidname)
+                else:
+                    if debug:
+                        print("Not support filenames: {}".format(img))
             else:
-                if debug:
-                    print("Not support filenames: {}".format(img))
-
-        else:
-            if uidname is not None:
+                if uidname is not None:
+                    bad_imgs.append(uidname)
+                else:
+                    if debug:
+                        print("{} is not include in the returns!".format(img))
+        except:
+            print("Faild check: {}".format(img))
+            if uidname:
                 bad_imgs.append(uidname)
-            else:
-                if debug:
-                    print("{} is not include in the returns!".format(img))
     if outdir:
         if not os.path.isdir(outdir):
             os.system('mkdir -p {}'.format(outdir))
@@ -829,7 +869,7 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwri
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
-def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=1, nrow=3):
+def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=1, nrow=3, suffix='.updated'):
     '''visual inspection of the classification results from check_images
     
     '''
@@ -838,15 +878,16 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     all_good_files = []
     all_bad_files = []
     if goodfile:
-        if debug:
-            print('goodfile', goodfile)
+        # if debug:
+        print('imagedir', imagedir)
+        print('goodfile', goodfile)
         if isinstance(goodfile, str):
             try:
                 flist = []
                 with open(goodfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    pngfile = line.strip()+'.cont.auto.fits.png'
+                    pngfile = line.strip()+'.cont.auto.image.fits.png'
                     all_good_files.append(os.path.join(imagedir, pngfile))
             except:
                 print("Failed in open {}".format(goodfile))
@@ -860,7 +901,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                 with open(badfile) as f:
                     filelist_lines = f.readlines()
                 for line in filelist_lines:
-                    pngfile = line.strip()+'.cont.auto.fits.png'
+                    pngfile = line.strip()+'.cont.auto.image.fits.png'
                     all_bad_files.append(os.path.join(imagedir, pngfile))
             except:
                 print("Failed in open {}".format(badfile))
@@ -944,7 +985,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
             # if f is None:
                 # continue
-            with open(f+'.updated', 'w+') as f:
+            with open(f+suffix, 'w+') as f:
                 for item in list_updated[desc]:
                     try:
                         obsname = obsname_match.search(item).groupdict()['obsname']
@@ -1148,7 +1189,11 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
                 vis_statwt.append(v_new)
                 continue
             # Only use valid data
-            intent='CALIBRATE_BANDPASS#ON_SOURCE,CALIBRATE_FLUX#ON_SOURCE,CALIBRATE_PHASE#ON_SOURCE'
+            intent_list = check_intent(v)
+            intent_list_full = []
+            for i in intent_list:
+                intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
+            intent = ','.join(intent_list_full)
             # os.system('rm -rf {}*'.format(v_new))
             print('Splitting... {} {}'.format(v, v_new))
             #os.system('cp -r {} {}'.format(v, v_new))
@@ -1166,19 +1211,38 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         vis = vis_statwt
     if check_sensitivity:
         vis_valid = []
+        vis_excluded = []
         for v in vis:
             if check_sensitivity:
                 imagefile = gen_image(vis=v, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
+                print("imagefile", imagefile)
+                print('vis', v)
                 is_usable = check_vis2image(vis=v, imagefile=imagefile)
                 if is_usable:
                     vis_valid.append(v)
+                else:
+                    vis_excluded.append(v)
+        if only_fits:
+            os.system('rm -rf {}'.format(os.path.join(outdir, 'images')))
         print('After sensitivity check, v:', vis_valid)
         vis = vis_valid
+    
+    with open(concatvis+'.included.txt', 'w') as f:
+        f.write('\n'.join(str(item) for item in vis))
+    with open(concatvis+'.excluded.txt', 'w') as f:
+        f.write('\n'.join(str(item) for item in vis_excluded))
+
+    if len(vis) < 1:
+        print("No valid visibility left!")
+        os.system('touch {}'.format(os.path.join(outdir, 'Done')))
+        return 0
 
     if os.path.isdir(concatvis):
         print("Skip concating, file exists....")
     else:
         concat(vis=vis, concatvis=concatvis)
+
+
     if uvtaper_list:
         for uvtaper in uvtaper_list:
             if uvtaper == []:
@@ -1328,7 +1392,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
-        images_pbcorr=None, fovscale=2.0):
+        images_pbcorr=None, fovscale=2.0, central_mask_radius=2.0):
     """calculate the effective area for given images
 
     rlimit: in arcsec
@@ -1343,25 +1407,32 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
             header = hdu[0].header
         with fits.open(images_pbcorr[i]) as hdu_pbcor:
             data_pbcor = hdu_pbcor[0].data
-        pixel_scale = header['CDELT1']*3600
-        pix2area = pixel_scale**2  # pixel to arcsec^2
+        pixel2arcsec = np.abs(header['CDELT1'])*3600
+        pix2area = pixel2arcsec**2  # pixel to arcsec^2
         freq = header['CRVAL3']
         lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
         fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
         ny, nx = data.shape[-2:]
+        x = (np.arange(0, nx) - nx/2.0) * pixel2arcsec
+        y = (np.arange(0, ny) - ny/2.0) * pixel2arcsec
+        r = np.sqrt(x**2 + y**2)
+        a, b = header['BMAJ']*3600, header['BMIN']*3600
+        # print('pixel2arcsec', pixel2arcsec)
+        # print('r range', np.min(r), np.max(r))
+        # print('a',a,'b',b)
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
-        mask = data_masked.mask & (data_masked.data >= 5.0*std)
+        # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+        mean, median, std = calculate_image_sensitivity(images[i])
         pbcor = (data / data_pbcor).reshape(ny, nx)
+        if std < 1e-7:
+            print("Suspicious image: {}".format(images[i]))
+        mask = data_masked.mask & (data_masked.data >= 5.0*std)
         pbcor[mask] = 0.0
         if fovscale:
             rlimit = 0.5 * fovscale * fov.value
-            # print('rlimit', rlimit)
-            x = (np.arange(0, nx) - nx/2.0) * pixel_scale
-            y = (np.arange(0, ny) - ny/2.0) * pixel_scale
-            r = np.sqrt(x**2 + y**2)
-            # print('max r:', np.max(r))
             pbcor[r > rlimit] = 0.0
+        if central_mask_radius > 0.0:
+            pbcor[r < central_mask_radius*a] = 0.0
         effarea_list = []
         for f in flux:
             snr = f / (std * 1000) # from Jy to mJy
@@ -1392,6 +1463,8 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False, **k
     basedir: the obj directory contains the data of all the bands
     band: the target band
     """
+    if os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
     copy_ms(basedir=basedir, outdir=outdir, select_band=band, debug=debug)
     image_dir = os.path.join(outdir, 'images')
     goodimage_dir = os.path.join(outdir, 'goodimages')
@@ -1683,11 +1756,11 @@ def run_gen_oteo2016_data(basedir, outdir, objs=None, select_band=['B6', 'B7'], 
                 select_band=select_band, debug=debug)
 
 def run_gen_all_images(basedir, objlist=None, outdir='./', bands=['B6','B7'], exclude_aca=True, 
-                  debug=False, niter=100, **kwargs):
+                  debug=False, niter=0, **kwargs):
     """fix the missing and wrong images for gen_all_image output
     
 
-    default run: run_gen_all_image('all_image_dir', outdir='gen_all_image_run1')
+    default run: run_gen_all_image('basedir', outdir='', bands=[], )
     """
     filelist = []
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -1707,29 +1780,36 @@ def run_gen_all_images(basedir, objlist=None, outdir='./', bands=['B6','B7'], ex
                 infile = os.path.join(basedir, obj, obs)
                 if debug:
                     print(obs)
-                if obs_band in bands:
-                    outfile_fullpath = os.path.join(outdir, obs_band, obj)
-                    os.system('mkdir -p {}'.format(outfile_fullpath))
-                    
-                    outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
-                    if os.path.isfile(outfile_fullname):
-                        if exclude_aca:
-                            tb.open(infile + '/ANTENNA')
-                            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-                            tb.close()
-                            if antenna_diameter < 12.0:
-                                print("Removing aca image: {}".format(outfile_fullname))
-                                os.system('rm -f {}'.format(outfile_fullname))
+                if obs_band not in bands:
+                    continue
+                outfile_fullpath = os.path.join(outdir, obs_band, obj)
+                os.system('mkdir -p {}'.format(outfile_fullpath))
+                
+                outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
+                if os.path.isfile(outfile_fullname):
+                    if exclude_aca:
+                        tb.open(infile + '/ANTENNA')
+                        antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                        tb.close()
+                        if antenna_diameter < 12.0:
+                            print("Removing aca image: {}".format(outfile_fullname))
+                            os.system('rm -f {}'.format(outfile_fullname))
                         else:
-                            if debug:
-                                print(">> {} already exists.".format(outfile_fullname))
+                            print("Keeping existing file: {}".format(outfile_fullname))
                     else:
+                        if debug:
+                            print(">> {} already exists.".format(outfile_fullname))
+                else:
+                    try:
                         if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=exclude_aca, 
                                      debug=debug, niter=niter, **kwargs):
                             if debug:
                                 print("Adding new image: {}".format(outfile_fullname))
+                    except:
+                        print("Warning:\n Error found in imaging {}\n".format(infile))
+                        continue
 
-def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=['B6','B7'], 
+def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=[], 
         debug=False, suffix='_good_imgs.txt', plot=True, savefig=True, **kwargs):
     """generate the good image list for all the calibrators
 
@@ -1740,76 +1820,89 @@ def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=
         for band in bands:
             band_imagedir = os.path.join(imagedir, band)
             band_outdir = os.path.join(outdir, band)
-            for obj in os.listdir(band_imgsdir):
+            for obj in os.listdir(band_imagedir):
+                print('obj', obj)
                 if obj_match.match(obj):
                     if objlist is not None:
                         if obj not in objlist:
                             continue
-                        print(obj)
                     obj_dir = os.path.join(band_outdir, obj)
                     if not os.path.isdir(obj_dir):
                         os.system('mkdir -p {}'.format(os.path.join(band_outdir, obj)))
                     obj_path = os.path.join(band_imagedir, obj)
+                    # print(obj_path+'/*.fits')
                     good_imgs, bad_imgs = check_images(obj_path+'/*.fits', 
                             outdir=os.path.join(band_outdir, obj), plot=plot, savefig=savefig, 
                             band=band, basename=obj+'_'+band, debug=debug, **kwargs)
                     if debug:
                         print(good_imgs)
 
-def run_manual_inspection(imagedir=None, outdir=None, objlist=None, bands=['B6','B7'], 
+def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7'], 
         suffix='imgs.txt'):
     """manually checking all the images
     """
     if isinstance(objlist, str):
         if os.path.isfile(objlist):
             objlist = gen_filenames(listfile=objlist)
-    if not isinstance(objlist, (list, np.ndarray)):
-        raise ValueError("Unsupported objlist!")
+    elif isinstance(objlist, (list, np.ndarray)):
+        pass
+    else:
+        objlist = []
+        obj_match = re.compile('^J\d*[+-]\d*$')
+        for obj in os.listdir(classifiedfolder):
+            if obj_match.match(obj):
+                objlist.append(obj)
+        #raise ValueError("Unsupported objlist!")
     for obj in objlist:
-        obj_imagedir = os.path.join(imagedir, obj)
         for band in bands:
-            obj_band_imagedir = os.path.join(obj_imagedir, band)
-            obj_outdir = os.path.join(outdir, obj)
-            goodfile = os.path.join(obj_outdir, "{}_{}_good_{}".format(obj, band, suffix))
-            badfile = os.path.join(obj_outdir, "{}_{}_bad_{}".format(obj, band, suffix))
+            obj_classified_folder = os.path.join(classifiedfolder, band, obj)
+            obj_classified_imagedir = os.path.join(obj_classified_folder, band)
+            goodfile = os.path.join(obj_classified_folder, "{}_{}_good_{}".format(obj, band, suffix))
+            badfile = os.path.join(obj_classified_folder, "{}_{}_bad_{}".format(obj, band, suffix))
+
             if os.path.isfile(goodfile+'.updated'):
                 print('{} of {} already done'.format(band, obj))
                 continue
             else:
-                print(obj_band_imagedir)
+                print(obj_classified_imagedir)
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
-                check_images_manual(imagedir=obj_band_imagedir, goodfile=goodfile, badfile=badfile, debug=False, ncol=1, nrow=3)
+                check_images_manual(imagedir=obj_classified_imagedir, goodfile=goodfile, 
+                                    badfile=badfile, debug=False, ncol=1, nrow=3)
 
-def run_make_all_goodimags(imagedir=None, objlist=None, bands=['B6','B7'], basedir=None, 
+def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7'], basedir=None, 
         outdir='./', debug=False, only_fits=True, update=True, imagefile_suffix='combine',
-        computwt=True, listfile_suffix='good_imgs.txt.updated', **kwargs):
+        computwt=True, listfile_suffix='good_imgs.txt.updated', overwrite=False, **kwargs):
     """generate the good image with updated list
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./make_good_image') 
     """
     obj_match = re.compile('^J\d*[+-]\d*$')
     for band in bands:
-        band_imagedir = os.path.join(imagedir, band)
+        band_indir = os.path.join(classifiedfolder, band)
         band_outdir = os.path.join(outdir, band)
         if objlist is None:
             objlist = []
-            for obj in os.listdir(band_imagedir):
+            for obj in os.listdir(band_dir):
                 if obj_match.match(obj):
                     objlist.append(obj)
         for obj in objlist:
+            obj_indir = os.path.join(band_indir, obj)
             obj_outdir = os.path.join(band_outdir, obj)
             print(obj)
             print(obj_outdir)
             if not os.path.isdir(obj_outdir):
                 os.system('mkdir -p {}'.format(obj_outdir))
-            good_image_file = os.path.join(obj_outdir, "{}_{}_{}".format(obj, band, listfile_suffix))
+            good_image_file = os.path.join(obj_indir, "{}_{}_{}".format(obj, band, listfile_suffix))
             concatvis = os.path.join(obj_outdir, "{}_{}_{}.ms".format(obj, band, imagefile_suffix))
             if debug:
                 print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis))
             if os.path.isfile(good_image_file):
                 good_image_fitsfile = concatvis+'.*.fits'
                 # print('good_image_fitsfile: {}'.format(good_image_fitsfile))
-                if len(glob.glob(good_image_fitsfile)) > 0:
+                if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Done')):
+                    print("Skip {} of {}, delete the 'Done' file to continue...".format(band,obj))
+                    continue
+                elif not overwrite and (len(glob.glob(good_image_fitsfile)) > 0):
                     print("Skip {} of {}, delete the fits file to continue...".format(band,obj))
                     continue
                 else:
@@ -1993,17 +2086,14 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     except KeyboardInterrupt:
         return 0
 
-def run_measure_flux(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
+def run_measure_flux(basedir, objs=None, band='B6', suffix='combine.ms.auto.cont', 
                    resolutions=['0.3arcsec', '0.6arcsec'], selected_resolution='0.3arcsec',
                    summary_file=None, view_mode='multiple',
-                   outdir=None, continue_mode=True):
+                   continue_mode=True):
     """finding sources
     Adding a dot in the string: 
         resolutions = ['0.3arcsec','0.8arcsec']
     """
-    if outdir is not None:
-        if not os.path.isdir(outdir):
-            os.system('mkdir -p {}'.format(outdir))
     objs_finished = []
     if summary_file is not None:
         if continue_mode:
@@ -2015,16 +2105,15 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
         if not os.path.isfile(summary_file):
             print('Initializing the output file')
             with open(summary_file, 'w+') as f:
-                f.write("obj idx ra dec flux1 snr1 flux2 snr2 flux3 snr3")
+                f.write("obj idx ra dec flux_aperture flux_snr_aperture flux_gaussian flux_snr_gaussian flux_peak flux_snr_peak")
                 f.write('\n')
 
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
-        for band in bands:
-            for item in os.listdir(os.path.join(basedir, band)):
-                if obj_match.match(obj):
-                    objs.append(item)
+        for item in os.listdir(os.path.join(basedir, band)):
+            if obj_match.match(obj):
+                objs.append(item)
         objs = np.unique(objs).tolist()
 
     # star to loop over all the objs
@@ -2035,111 +2124,65 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
                 print("{} already done!".format(obj))
                 continue
             print(obj)
+            obj_sourcefound = {}
             if obj_match.match(obj):
                 print('>>>>> {}'.format(obj))
-                # write into summary file
-                if outdir is not None:
-                    obj_outdir = os.path.join(outdir, obj)
-                    obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
-                    if not os.path.isdir(obj_outdir):
-                        os.system('mkdir -p {}'.format(obj_outdir))
-                    # open the summary file
-                    obj_summary = open(obj_summary_file, 'w+')
-                    summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
-                else:
-                    obj_summary = None
-                    obj_outdir = None
-                    summary_plot = None
-                obj_sourcefound = {}
-                for band in bands:
-                    for res in resolutions:
-                        obj_sourcefound[band+'_'+res] = []
+
                 # make a summary plot
-                fig, ax = plt.subplots(len(bands), len(resolutions), 
-                                       figsize=(4.2*len(resolutions),4*len(bands))) 
+                fig, ax = plt.subplots(1, len(resolutions), 
+                                       figsize=(4.2*len(resolutions),4)) 
                 fig.suptitle(obj)
                 #for img in imgs:
                 # sources_number = {}
-                obj_sourcefound
-                for i,band in enumerate(bands):
-                    obj_band_dir = os.path.join(basedir, band, obj)
-                    for j,res in enumerate(resolutions):
-                        if len(bands) > 1:
-                            ax_select = ax[i,j]
-                        else:
-                            ax_select = ax[max(i,j)]
-                        if res == '':
-                            res_string = ''
-                        else:
-                            res_string = res+'.'
-                        image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
-                        image_fullpath = os.path.join(obj_band_dir, image_name)
-                        print(image_fullpath)
-                        #print('Finding source in:', image_fullpath)
-                        if not os.path.isfile(image_fullpath):
-                            continue
-                        savefile = image_name + '.source_found.txt'
-                        figname = image_name + '.png'
-                        sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                                ax=ax_select, pbcor=True, central_mask_radius=0.0)
-                        ax_select.set_title('{} {}'.format(band, res))
-                        #try:
-                        #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                        #            ax=ax[i,j], pbcor=True)
-                        #except:
-                        #    print("Error found for {}".format(image_name))
-                        #    failed_files.append(image_name)
-                        if len(sources_found) > 0 and obj_summary is not None:
-                            obj_summary.write('# {} {} {}\n'.format(obj, band, res))
-                            obj_sourcefound['{}_{}'.format(band, res)] = sources_found
-                            source_idx = 0
-                            for ra, dec, flux, snr in sources_found:
-                                obj_summary.write('{} {:.6f} {:.6f} '.format(source_idx, ra, dec))
-                                for f_m, f_snr in zip(flux, snr):
-                                    obj_summary.write(" {:.4f} {:.2f} ".format(f_m, f_snr))
-                                obj_summary.write('\n')
-                                source_idx += 1
-                # write into files
-                if obj_summary is not None:
-                    obj_summary.close()
-                found_string = obj
-                for band in bands:
-                    for res in resolutions:
-                        found_string += ' '+str(len(obj_sourcefound[band+'_'+res]))
+                obj_band_dir = os.path.join(basedir, band, obj)
+                for j,res in enumerate(resolutions):
+                    ax_select = ax[j]
+                    if res == '':
+                        res_string = ''
+                    else:
+                        res_string = res+'.'
+                    image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+                    image_fullpath = os.path.join(obj_band_dir, image_name)
+                    print(image_fullpath)
+                    #print('Finding source in:', image_fullpath)
+                    if not os.path.isfile(image_fullpath):
+                        continue
+                    ax_select.set_title('{}'.format(res))
+                    sources_found = source_finder(image_fullpath, 
+                            ax=ax_select, pbcor=True, central_mask_radius=0.0)
+                    obj_sourcefound['{}'.format(res)] = sources_found
+
                 # save figure
-                fig.subplots_adjust(wspace=0.2, hspace=0.2)
-                if summary_plot:
-                    fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
                 if summary_file:
                     detections_summary = open(summary_file, 'a+')
-                    for band in bands:
-                        coords_list = []
-                        is_detection = int(raw_input("Dection in Band:{} (integer, 0/1) [0]?: ".format(band)) or 0)
-                        if is_detection > 0:
-                            for res in resolutions:
-                                detection_idx = str(
-                                        raw_input("The index for the true detections of band{} in reselection:{}\nSeperate with comma: ".format(
-                                                   band, res)))
-                                for idx in detection_idx.split(','):
-                                    if idx == '':
-                                        continue
-                                    ra, dec, flux, snr = obj_sourcefound['{}_{}'.format(band, res)][int(idx)]
-                                    coords_list.append([ra, dec])
-                            coords_unique = combine_sources(coords_list)
-                            selected_image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, selected_resolution)
-                            seleted_image_fullpath = os.path.join(obj_band_dir, image_name)
-                            print("Using {} for flux measurements.\n".format(seleted_image_fullpath))
-                            sources_flux, sources_flux_snr = flux_measure(seleted_image_fullpath, coords_unique, methods=['aperture', 'gaussian', 'peak'])
-                            sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
-                            # print("sources_flux", sources_flux)
-                            # print("sources_flux_snr", sources_flux_snr)
-                            print("Totoal {} sources".format(len(coords_unique)))
-                            for i in range(len(coords_unique)):
-                                detections_summary.write('{} {} {:.6f} {:.6f} {} {} {} {} {} {}'.format(obj, i, coords_unique[i][0], coords_unique[i][1], 
-                                                         sources_flux[i][0], sources_flux_snr[i][0],
-                                                         sources_flux[i][1], sources_flux_snr[i][1],
-                                                         sources_flux[i][2], sources_flux_snr[i][2],))
-                                detections_summary.write('\n')
+                    coords_list = []
+                    is_detection = int(raw_input("Dection in Band:{} (integer, 0/1) [0]?: ".format(band)) or 0)
+                    if is_detection > 0:
+                        for res in resolutions:
+                            detection_idx = str(
+                                    raw_input("The index for the true detections of band{} in reselection:{}\nSeperate with comma: ".format(
+                                               band, res)))
+                            for idx in detection_idx.split(','):
+                                if idx == '':
+                                    continue
+                                ra, dec, flux, snr = obj_sourcefound['{}'.format(res)][int(idx)]
+                                coords_list.append([ra, dec])
+                        coords_unique = combine_sources(coords_list)
+                        selected_image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, selected_resolution)
+                        seleted_image_fullpath = os.path.join(obj_band_dir, selected_image)
+                        print("Using {} for flux measurements.\n".format(seleted_image_fullpath))
+                        sources_flux, sources_flux_snr = flux_measure(seleted_image_fullpath, coords_unique, methods=['aperture', 'gaussian', 'peak'])
+                        sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
+                        # print("sources_flux", sources_flux)
+                        # print("sources_flux_snr", sources_flux_snr)
+                        print(sources_flux)
+                        print("Totoal {} sources".format(len(coords_unique)))
+                        for i in range(len(coords_unique)):
+                            detections_summary.write('{} {} {:.6f} {:.6f} {} {} {} {} {} {}'.format(obj, i, coords_unique[i][0], coords_unique[i][1], 
+                                                     sources_flux[i][0], sources_flux_snr[i][0],
+                                                     sources_flux[i][1], sources_flux_snr[i][1],
+                                                     sources_flux[i][2], sources_flux_snr[i][2],))
+                            detections_summary.write('\n')
                     detections_summary.close()
                     plt.close()
 
@@ -2152,19 +2195,14 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.a
                             continue
                     else:
                         return 0
-                if (outdir is None) and (view_mode == 'multiple'):
+                if not summary_file and (view_mode == 'multiple'):
                     is_close = int(raw_input("Close all windows? (1/0) [1]") or 1)
                     if is_close == 0:
                         return 0
                 plt.close()
     except KeyboardInterrupt:
         return 0
-
-def run_search_bands_detections(basedir=None, objs=None, bands=['B6','B7'], outdir='./', debug=False):
-    for obj in objs:
-        for band in bands:
-            search_band_detection(basedir=os.path.join(basedir, obj), band=band, 
-                                  outdir=os.path.join(outdir, obj, band), debug=debug)
+    print("Failed files:", failed_files)
 
 def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./', 
         resolution='0.3arcsec', repeat=1000, ):
@@ -2182,7 +2220,7 @@ def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./',
     else:
         resolution_string = resolution+'.'
     for obj in objs:
-        obj_imagedir = os.path.join(imagedir, obj)
+        obj_imagedir = os.path.join(imagedir, band, obj)
         imagefile = os.path.join(obj_imagedir,
                 '{}_{}_combine.ms.auto.cont.{}image.fits'.format(obj, band, resolution_string))
         obj_outdir = os.path.join(outdir, obj)
@@ -2193,7 +2231,7 @@ def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./',
                 obj_outdir,'{}_simulation.txt'.format(obj)), plot=False, repeat=repeat, threshold=5, 
                 second_check=False, snr_mode='peak')
 
-def run_calculate_effarea(imagedir=None, flux=np.linspace(0.1, 1, 10),  objs=None, band=None, 
+def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', 
         snr_threshold=5.0, savefile=None):
     """calculate the effecitve area for all the usable fields
@@ -2221,9 +2259,9 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.1, 1, 10),  objs=Non
     if savefile:
         effarea.write(savefile, format='ascii')
 
-def run_number_counts(flist, detections_file=None, band='B6', effective_area_file=None, 
-        simulation_folder=None, ax=None, flux_column='flux_guassian', flux_snr_column='flux_gaussian_snr',
-        default_simulation=None, objs_withdeafultsim=[],):
+def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
+        simulation_folder=None, ax=None, flux_mode='aperture', completeness_mode='peak',
+        default_simulation=None, objs_withdeafultsim=[], n_bootstrap=1000):
     """
 
     flist: flux list, [0.2, 0.6, 1.0]
@@ -2234,23 +2272,33 @@ def run_number_counts(flist, detections_file=None, band='B6', effective_area_fil
     simulation_folder: the folder generated by run_make_simulations
     ax: the plot axes
     """
-    Ni_list = []
     tab = Table.read(detections_file, format='ascii')
+    n_sources = len(tab)
+    Ni_list = []
+    Ni_bootstrap_array = np.zeros((n_sources, 2, n_bootstrap))
+
+    # effective area
     effarea = np.loadtxt(effective_area_file, skiprows=1)
     cs_effarea = CubicSpline(effarea[:, 0], effarea[:,1])
-    for item in tab:
-        flux = item[band]
-        if flux < 0:
-            continue
+    
+    for i in range(n_sources):
+        item = tab[i]
+        flux = item['flux_'+flux_mode]
+        flux_err = 1.2*flux/item['flux_snr_'+flux_mode] 
         obj = item['obj']
-        snr = item[band+'_SNR']
-        print(obj, flux, snr)
+        completeness_snr = item['flux_snr_'+completeness_mode]
+        print(obj, flux, flux_err)
+        
+        flux_bootstrap = flux + np.random.randn(n_bootstrap)*flux_err
+        # define the completeness function
         if obj in objs_withdeafultsim:
             sim_jsonfile = default_simulation
         else:
             sim_jsonfile = os.path.join(simulation_folder, obj, obj+'_simulation.txt')
-        if not os.path.isfile(sim_jsonfile)
-            raise ValueError('No simulation could be found for {}'.format(obj))
+        if not os.path.isfile(sim_jsonfile):
+            # raise ValueError('No simulation could be found for {}'.format(obj))
+            print('Warning: using the default simulation results!')
+            sim_jsonfile = default_simulation
         try:
             snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
                 jsonfile=sim_jsonfile, snr=np.arange(0.2, 10, 0.2), plot=False)
@@ -2265,23 +2313,115 @@ def run_number_counts(flist, detections_file=None, band='B6', effective_area_fil
                 return cs_comp(snr)
             else:
                 return 1.0
-        print('effarea:', cs_effarea(flux)/3600.)
-        print('completeness', cs_comp2(snr))
-        Ni = 1 / (cs_effarea(flux)/3600.) / cs_comp2(snr)
+        # print('effarea:', cs_effarea(flux)/3600.)
+        # print('completeness', cs_comp2(snr))
+        Ni = 1 / (cs_effarea(flux)/3600.) / cs_comp2(completeness_snr)
+        Ni_error = 1/(cs_effarea(flux)**2/3600)/cs_comp2(completeness_snr)*np.sqrt(cs_effarea(flux))
+        Ni_bootstrap = 1/(cs_effarea(flux_bootstrap)/3600.)/cs_comp2(completeness_snr)
         #print(Si, Ni)
-        Ni_list.append([flux, Ni])
+        Ni_list.append([flux, Ni, Ni_error])
+        Ni_bootstrap_array[i] = np.array([flux_bootstrap, Ni_bootstrap])
     Ni_array = np.array(Ni_list)
-    print(Ni_array)
+    print(Ni_array.shape)
+    print(np.sort(Ni_array, axis=0))
+    # print(Ni_bootstrap_array)
 
     # calculation the cumulative number counts
     NN = []
+    NN_number = []
+    NN_err = []
     for f in flist:
-        print('flux:', f)
-        print(flux)
-        NN.append(np.sum(Ni_array[:,1][Ni_array[:,0] >= f]))
-    print(flist, NN)
+        # print('flux:', f)
+        # print(flux)
+        NNi = np.sum(Ni_array[:,1][Ni_array[:,0] >= f])
+        NNi_err2 = np.sum(Ni_array[:,2][Ni_array[:,0] >= f]**2)
+        NN.append(NNi)
+        NN_number.append(np.sum(Ni_array[:,0] >= f))
+        NN_bootstrap = []
+        for j in range(n_bootstrap):
+            NN_bootstrap.append(np.sum(Ni_bootstrap_array[:,1,j][Ni_bootstrap_array[:,0,j] >= f]))
+        NN_err.append(np.sqrt(np.std(NN_bootstrap)**2 + NNi_err2 + NNi))
+    NN_err = (2*np.sqrt(np.array(NN_err)**2 + np.array(NN))).tolist()
+    print(flist, NN_number, NN, NN_err)
+    # print(flist, NN, np.sqrt(NN).tolist())
+    
     if ax is None:
         fig = plt.figure(figsize=(6, 8))
         ax = fig.add_subplot(111)
-    ax.loglog(flist, NN, 'ro')
-    ax.loglog(flist, NN, 'r--')
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+    ax.plot(flist, NN, 'ko')
+    ax.plot(flist, NN, 'k--')
+    ax.errorbar(flist, NN, yerr=NN_err, fmt='k')
+    ax.set_title(band)
+
+    if band == 'B7':
+        flist_oteo2016 = [0.4, 1.0]
+        NN_oteo2016 = [17e3, 3.8e3]
+        NN_oteo2016_error_upper = [14.3e3, 3.2e3]
+        NN_oteo2016_error_lower = [14.0e3, 3.1e3]
+        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al (2016)')
+        ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
+
+    if band == 'B6':
+        flist_oteo2016 = [0.2, 0.8]
+        NN_oteo2016 = [5.6e3, 0.9e3]
+        NN_oteo2016_error_upper = [4.7e3, 0.8e3]
+        NN_oteo2016_error_lower = [4.6e3, 0.7e3]
+        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al. (2016)')
+        ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
+
+    if True:
+        # show ASPECS
+        flist_aspecs_data  = np.array([[31.6, 39.8], [39.8, 50.1], [50.1, 63.1],[63.1, 79.4], [79.4,100.], 
+                         [100., 125.9], [125.9,158.5], [158.5,199.5], [199.5, 251.2], 
+                         [251.2,316.2], [316.2, 398.1], [398.1,501.2], [501.2,631.0],
+                         [631.0,794.3], [794.3,1000.], [1000.,1258.9], [1258.9,1584.9]])
+        flist_aspecs = np.mean(flist_aspecs_data, axis=1) * 1e-3
+        NN_aspecs = [47400, 35100, 30700,26500,26500,19300,14800,10600,8700,7800,5300,4300,1720,1720,
+                     860,860,1600]
+        NN_aspecs_error_lower = [8200,6200,5500,4900,5100,4400,3500,2900,2400,2300,1900,1600,840,840,
+                                 490,490,-1]
+        NN_aspecs_error_upper = [8900, 6900,6200,5600,5600,4700,4000,3400,3000,2700,2400,2100,1250,
+                                 1250,820,820,-1]
+        ax.plot(flist_aspecs, NN_aspecs, 'bo', label='APECS-LP')
+        ax.errorbar(flist_aspecs, NN_aspecs, yerr=NN_aspecs_error_upper, fmt='b')
+
+        # show Fujimoto et al. 2016
+        flist_fujimoto = [0.002, 0.015, 0.027, 0.047, 0.084, 0.150, 0.267, 0.474, 0.843]
+        NN_fujimoto_log = [6.6, 5.5, 5.3, 5.0, 4.8, 4.6, 4.2, 3.7, 2.8]
+        NN_fujimoto_log_error_upper = [0.5, 0.3, 0.2, 0.2, 0.1, 0.1, 0.2, 0.2, 0.6]
+        NN_fujimoto_log_error_lower = [1.1, 0.4, 0.3, 0.2, 0.2, 0.1, 0.2, 0.3, 0.5]
+        NN_fujimoto = np.array(10)**NN_fujimoto_log
+        NN_fujimoto_error_upper = np.array(NN_fujimoto_log_error_upper)*np.array(NN_fujimoto)*np.log(10)
+        NN_fujimoto_error_lower = np.array(10)**NN_fujimoto_log_error_lower
+        ax.plot(flist_fujimoto[1:], NN_fujimoto[1:], 'mo', label='Fujimoto et al. (2016)')
+        ax.errorbar(flist_fujimoto[1:], NN_fujimoto[1:], yerr=NN_fujimoto_error_upper[1:], fmt='m')
+
+        # # show Stach 2018
+        # flist_stach = [4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5]
+        # NN_stach = [385.3, 216.7, 106.2, 53.6, 29.6, 20.0, 10.5, 5.3, 2.1,2.1,1.0]
+        # NN_stach_error_upper = [21.1, 17.3, 11.4, 8.4, 6.5, 5.7, 4.4,3.5, 2.8, 2.8, 2.4]
+        # NN_stach_error_lower = [7.7, 6.6, 3.5, 2.5, 1.9, 1.8, 1.2, 0.9, 0.6, 0.6, 0.5]
+        # ax.plot(flist_stach, NN_stach, 'co', label='Stach et al. (2018)')
+        # ax.errorbar(flist_stach, NN_stach, yerr=NN_stach_error_upper, fmt='c')
+    ax.legend()
+
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#   The pipeeline for number counts       #
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+'''
+run_gen_all_images('/jchen/work/ALMACAL', outdir='gen_all_images', bands=['B8',])
+run_auto_classify_goodimags(imagedir='gen_all_images', outdir='make_classifications', bands=['B8',])
+B8_list = np.loadtxt('B8_ordered.txt', dtype=str)
+run_manual_inspection(classifiedfolder='make_classifications', objlist=B8_list, bands=['B8',])
+run_make_all_goodimags(classifiedfolder='make_classifications', objlist=B8_list, 
+                       basedir='/jchen/work/ALMACAL', outdir='make_good_images')
+run_measure_flux('make_good_images', objs=B8_list, band='B8', summary_file='B8_SMGs.txt')
+run_calculate_effarea(imagedir='make_good_images', flux=np.linspace(0.1, 10, 50), objs=B8_list, 
+                      band='B8', savefile='B8_effarea.txt')
+run_make_simulations(imagedir='make_good_images', objs=B8_dets_uniq, band='B8', outdir='simulations/B8')
+run_number_counts(flist, detections_file='B8_SMGs.txt', effective_area_file='B8_effarea.txt', band='B8'
+                  default_simulation='', simulation_folder='./simulations/B8')
+'''
