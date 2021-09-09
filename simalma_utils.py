@@ -861,7 +861,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         return []
 
 def calculate_image_sensitivity(image, known_sources=None, central_mask_radius=2.0, 
-                                mask_radius=2.0, debug=False, sigma_clip=True):
+                                mask_radius=2.0, debug=False, sigma_clip=False):
     """The united function to calculate the sensitivity of the image
 
     """
@@ -911,9 +911,9 @@ def calculate_image_sensitivity(image, known_sources=None, central_mask_radius=2
     if sigma_clip:
         mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)
     else:
-        mean = np.mean(data_field)
-        median = np.median(data_field)
-        std = np.std(data_field)
+        mean = np.ma.mean(data_field)
+        median = np.ma.median(data_field)
+        std = np.ma.std(data_field)
     return mean, median, std
 
 def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, model_background=False,
@@ -955,7 +955,8 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             aper_mask = aper.to_mask(method='center')
             known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
         data_field = np.ma.array(data_masked, mask=known_mask) 
-        mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
+        # mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
+    mean, median, std = calculate_image_sensitivity(image)  
         
     if pbcor:
         image_path = os.path.dirname(image)

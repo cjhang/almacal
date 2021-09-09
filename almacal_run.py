@@ -1392,7 +1392,7 @@ def calculate_completeness(objfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
-        images_pbcorr=None, fovscale=2.0, central_mask_radius=2.0):
+        images_pbcorr=None, fovscale=2.0, central_mask_radius=1.0):
     """calculate the effective area for given images
 
     rlimit: in arcsec
@@ -1423,6 +1423,7 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
         # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
         mean, median, std = calculate_image_sensitivity(images[i])
+        # std = imstat(images[sigma['sigma'][0]
         pbcor = (data / data_pbcor).reshape(ny, nx)
         if std < 1e-7:
             print("Suspicious image: {}".format(images[i]))
@@ -2405,6 +2406,12 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         # NN_stach_error_lower = [7.7, 6.6, 3.5, 2.5, 1.9, 1.8, 1.2, 0.9, 0.6, 0.6, 0.5]
         # ax.plot(flist_stach, NN_stach, 'co', label='Stach et al. (2018)')
         # ax.errorbar(flist_stach, NN_stach, yerr=NN_stach_error_upper, fmt='c')
+
+        # Plot the model of Lagos
+        flist_Lagos_B8 = 10**np.linspace(-1.0, 1.0, 9)
+        NN_lagos_B8 = np.array([102458.04, 70664.18, 44428.86, 24411.87, 11827.86, 5120.97, 1919.28, 602.10, 164.67])
+        plt.plot(flist_Lagos_B8, NN_lagos_B8)
+
     ax.legend()
 
 
