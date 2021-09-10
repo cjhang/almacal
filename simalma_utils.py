@@ -1386,7 +1386,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
-def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), plot=True,
+def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.2), plot=True,
                      mode='median', text=''):
     if jsonfile:
         with open(jsonfile) as jf:
@@ -1465,18 +1465,21 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
 
 
     if plot:
-        fig = plt.figure(figsize=(12, 3))
-        ax = fig.add_subplot(1,3,1)
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot(2,2,1)
         ax.set_xlabel('SNR')
         ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
-        ax.plot(snr_input, flux_input_aperture/flux_input, 'k.', label='aperture')
-        ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian')
+        ax.plot(snr_input, flux_input_aperture/flux_input, 'k.', label='aperture', alpha=0.2)
+        # ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian')
         aperture_mean = np.array(aperture_mean)
-        gaussian_mean = np.array(gaussian_mean)
-        ax.plot(snr_mid, aperture_mean[:,0], 'ko', label='aperture')
-        ax.errorbar(snr_mid, aperture_mean[:,0], yerr=aperture_mean[:,1], color='k', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
-        ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian')
-        ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
+        # gaussian_mean = np.array(gaussian_mean)
+        ax.plot(snr_mid, aperture_mean[:,0], 'ko', label='aperture', alpha=0.8)
+        ax.errorbar(snr_mid, aperture_mean[:,0], yerr=aperture_mean[:,1], color='k', lw=2, 
+                    capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.4)
+        ax.set_xlim([np.min(snr), np.max(snr)])
+        ax.set_ylim([-1,5])
+        # ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian')
+        # ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.8)
         # for i in range(len(flux_input_list)):
             # if len(snr_input_list[i]>0):
                 # # print(snr_inputfound_list[i])
@@ -1484,8 +1487,19 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
                 # # print(flux_inputfound_list[i])
                 # ax.plot(snr_input_list[i], flux_input_autolist[i][:,0]/flux_input_list[i], 'k.', label='aperture')
                 # ax.plot(snr_input_list[i], flux_input_autolist[i][:,1]/flux_input_list[i], 'r.', label='gaussian')
+
+        ax = fig.add_subplot(2,2,2)
+        ax.set_xlabel('SNR')
+        ax.set_ylabel(r'$S_{\rm out}/S_{\rm in}$')
+        ax.plot(snr_input, flux_input_gaussian/flux_input, 'r.', label='gaussian', alpha=0.2)
+        gaussian_mean = np.array(gaussian_mean)
+        ax.plot(snr_mid, gaussian_mean[:,0], 'ro', label='gaussian', alpha=0.8)
+        ax.errorbar(snr_mid, gaussian_mean[:,0], yerr=gaussian_mean[:,1], color='r', lw=2, 
+                    capsize=5, elinewidth=2, markeredgewidth=2, alpha=0.4)
+        ax.set_xlim([np.min(snr), np.max(snr)])
+        ax.set_ylim([-1,5])
         
-        ax = fig.add_subplot(1,3,2)
+        ax = fig.add_subplot(2,2,3)
         # print('snr', snr)
         # print('completeness_list', completeness_list)
         ax.plot(0.5*(snr[1:]+snr[:-1]), completeness_list, 'o')
@@ -1495,7 +1509,7 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.1), pl
         # ax.set_xlim((0., 8))
         ax.set_ylim((-0.1, 1.2))
 
-        ax = fig.add_subplot(1,3,3)
+        ax = fig.add_subplot(2,2,4)
         ax.plot(0.5*(snr[1:]+snr[:-1]), fake_rate_list, 'o')
         # ax.plot(0.5*(snr[1:]+snr[:-1]), total_found_list, 'ro')
         # ax.plot(0.5*(snr[1:]+snr[:-1]), total_fake_list, 'bo')
@@ -1525,3 +1539,24 @@ def image_sim(image, outdir='./',):
             if os.path.isfile(imagefile):
                 gen_sim_images(imagefile=imagefile, outdir=outdir, snr=(1,20), repeat=1000)
                 calculate_sim_images(outdir, baseimage=imagefile, savefile=os.path.join(outdir,'{}_simulation.txt'.format(obj)), plot=False, repeat=100, threshold=5, second_check=False, snr_mode='peak')
+
+def vis_jackknif(vis, copy=False, outdir=None):
+    """make jackknifed image with only noise"""
+    if copy:
+        if outdir is None:
+            raise ValueError('outdir must be given to do the copy!')
+        if not os.path.isdir(outdir):
+            os.system('mkdir {}'.format(outdir))
+        vis_copied = os.path.join(outdir, os.path.basename(vis) + '.copy')
+        os.system('cp -r {} {}'.format(vis, vis_copied))
+        vis = vis_copied
+    tb.open(vis, nomodify=False)
+
+    for row in range(0, tb.nrows(), 2):
+        key = 'r'+str(row+1)
+        row_data = tb.getvarcol('DATA', row, 1)[key]
+        row_data_inverse = (-1.+0j) * row_data
+        #tb.removecorowkey)
+        tb.putvarcol('DATA', {key:row_data_inverse}, row, 1)
+        tb.flush()
+    return vis
