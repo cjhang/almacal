@@ -983,8 +983,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
     else:
         obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
         for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
-            # if f is None:
-                # continue
+            if not os.path.isfile(f):
+                print("Warning! {} doesn't exist!".format(f))
+                continue
             with open(f+suffix, 'w+') as f:
                 for item in list_updated[desc]:
                     try:

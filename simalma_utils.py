@@ -916,7 +916,8 @@ def calculate_image_sensitivity(image, known_sources=None, central_mask_radius=2
         std = np.ma.std(data_field)
     return mean, median, std
 
-def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, model_background=False,
+def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, 
+                 model_background=False, jackknif=True,
                  subtract_background=False, debug=False, ax=None, fov_scale=2.0):
     """measure the flux from the images by given coordinates
 
@@ -956,7 +957,16 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
         data_field = np.ma.array(data_masked, mask=known_mask) 
         # mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
-    mean, median, std = calculate_image_sensitivity(image)  
+    if jackknif:
+        image_jeckknifed = image.replace('image', 'jackknif_image')
+        if not os.path.isfile(image_jeckknifed):
+            print("Warning: no jackknifed image found {}, use the origin image instead.".format(
+                   image_jeckknifed))
+            mean, median, std = calculate_image_sensitivity(image)  
+        else:
+            mean, median, std = calculate_image_sensitivity(image_jeckknifed)  
+    else:
+        mean, median, std = calculate_image_sensitivity(image)  
         
     if pbcor:
         image_path = os.path.dirname(image)
@@ -1323,7 +1333,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         # print('idxs', idxs)
         
         if len(idxs[0])<1:
-            print("Skip run{}, not sources found".format(run))
+            print("Skip run{}, no sources found".format(run))
             continue
         flux_input_list.append(flux_input)
         flux_input_autolist.append(flux_input_auto)
