@@ -1570,3 +1570,67 @@ def vis_jackknif(vis, copy=False, outdir=None):
         tb.putvarcol('DATA', {key:row_data_inverse}, row, 1)
         tb.flush()
     return vis
+
+def check_restoringbeam(image, npix=20, oversample=100, ax=None):
+    """check the consistance of PSF and gaussian fitting
+    """
+    with fits.open(image) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data[0,0]
+    ra = header['CRVAL1']
+    dec = header['CRVAL2']
+    scale = np.abs(header['CDELT1'])*3600
+    bmaj, bmin = header['BMAJ'], header['BMIN'] # in deg
+    theta = header['BPA']
+    angle = 90 + theta
+    angle_rad = (angle / 180.) * np.pi
+    # print('theta', theta, 'angle', angle)
+    if ra > 0:
+        pix_offset_ra = 1.0
+    else:
+        pix_offset_ra = -1.0
+    if dec > 0:
+        pix_offset_dec = 1.0
+    else:
+        pix_offset_dec = -1.0
+    ny, nx = data.shape[-2:]
+    x_pix_center = nx/2.0     
+    y_pix_center = ny/2.0 
+    x_index = (np.arange(0, nx) - nx/2.0) * scale
+    y_index = (np.arange(0, ny) - ny/2.0) * scale
+    x_map, y_map = np.meshgrid(x_index, y_index)
+    y_npix = npix*np.tan(angle_rad)
+    # print('y_npix', y_npix)
+    
+    
+    x = np.linspace(-npix/2., npix/2., (npix+1)*oversample)    
+    x_pix= x + x_pix_center
+    y = np.linspace(-y_npix/2., y_npix/2., (npix+1)*oversample) 
+    y_pix = y+ y_pix_center
+    l = np.sqrt((npix/2.0)**2+(y_npix/2.)**2)
+
+    # Extract the values along the line, using cubic interpolation
+    dline_x = np.linspace(-l, l, (npix+1)*oversample) * scale
+    dline = ndimage.map_coordinates(np.transpose(data), np.vstack((x_pix,y_pix)))
+
+    # show the sythesized beam shape along the major axis
+    gaussian_sigma = bmaj*3600/2.35482
+    # print('gaussian_sigma', gaussian_sigma)
+    gaussian_x = dline_x
+    d_gaussian = np.exp(-1.*gaussian_x**2/2/gaussian_sigma**2)# / np.sqrt(2*np.pi) / gaussian_sigma
+    # print(d_gaussian)
+
+    if ax is None:
+        fig, ax = plt.subplots(1,2, figsize=(12,4))
+    # ax[0].pcolormesh(x_map, y_map, data)
+    # print([x[0]*scale, x[-1]*scale], [y[0]*scale, y[-1]*scale])
+    ax[0].plot([x[0]*scale, x[-1]*scale], [y[0]*scale, y[-1]*scale], color='yellow')
+    ax[0].imshow(data, origin='lower', extent=[np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)])
+    ax[0].set_title(image)
+
+    ax[1].plot(dline_x, dline, label='PSF')
+    ax[1].plot(gaussian_x, d_gaussian, label='Gaussian Fitting')
+    plt.legend(loc='lower left')
+
+    plt.show()
