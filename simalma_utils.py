@@ -1627,10 +1627,10 @@ def check_restoringbeam(image, npix=20, oversample=100, ax=None):
     # print([x[0]*scale, x[-1]*scale], [y[0]*scale, y[-1]*scale])
     ax[0].plot([x[0]*scale, x[-1]*scale], [y[0]*scale, y[-1]*scale], color='yellow')
     ax[0].imshow(data, origin='lower', extent=[np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)])
-    ax[0].set_title(image)
+    ax[0].set_title(os.path.basename(image), fontsize=4)
 
-    ax[1].plot(dline_x, dline, label='PSF')
-    ax[1].plot(gaussian_x, d_gaussian, label='Gaussian Fitting')
-    plt.legend(loc='lower left')
+    ax[1].plot(dline_x, dline, color='blue', label='PSF')
+    ax[1].plot(gaussian_x, d_gaussian, color='red', label='Gaussian Fitting')
+    # ax[1].legend(loc='lower left', fs=3)
 
     plt.show()
