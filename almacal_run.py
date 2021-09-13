@@ -342,6 +342,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
                     verticalalignment='center')
             ax.set_xlabel('RA [arcsec]')
             ax.set_ylabel('Dec [arcsec]')
+            ax.set_title(os.path.basename(all_files[i+j])[:10])
         # show the image and record the 
         plt.show()
         print('Input the index of images (1-9), seperate with comma:')
@@ -1150,7 +1151,7 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
                     computwt=True, drop_FDM=True, save_psf=True, check_sensitivity=True,
-                    uvtaper_list=[['0.3arcsec'], ['0.6arcsec']], make_jackknif=True,
+                    uvtaper_list=['0.3arcsec', '0.6arcsec'], make_jackknif=True,
                     uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
     """make the final good image with all the good observations
@@ -1246,10 +1247,10 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
 
     if uvtaper_list:
         for uvtaper in uvtaper_list:
-            if uvtaper == []:
+            if uvtaper == '':
                 uvtaper_name = ''
             else:
-                uvtaper_name = '.'+uvtaper[0]
+                uvtaper_name = '.'+uvtaper
             myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
             make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
                           pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
@@ -2329,7 +2330,6 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         flux_err = 1.2*flux/item['flux_snr_'+flux_mode] 
         obj = item['obj']
         completeness_snr = item['flux_snr_'+completeness_mode]
-        print(obj, flux, flux_err)
         
         flux_bootstrap = flux + np.random.randn(n_bootstrap)*flux_err
         # define the completeness function
@@ -2361,19 +2361,14 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         Ni_error = 1/(cs_effarea(flux)**2/3600)/cs_comp2(completeness_snr)*np.sqrt(cs_effarea(flux))
         Ni_bootstrap = 1/(cs_effarea(flux_bootstrap)/3600.)/cs_comp2(completeness_snr)
         #print(Si, Ni)
-        Ni_list.append([flux, Ni, Ni_error])
+        Ni_list.append([flux, Ni, Ni_error, completeness_snr])
         Ni_bootstrap_array[i] = np.array([flux_bootstrap, Ni_bootstrap])
     Ni_array = np.array(Ni_list)
-    print(Ni_array.shape)
-    print(np.sort(Ni_array, axis=0))
-    # print(Ni_bootstrap_array)
-
     # calculation the cumulative number counts
     NN = []
     NN_number = []
     NN_err = []
     for f in flist:
-        # print('flux:', f)
         # print(flux)
         NNi = np.sum(Ni_array[:,1][Ni_array[:,0] >= f])
         NNi_err2 = np.sum(Ni_array[:,2][Ni_array[:,0] >= f]**2)
