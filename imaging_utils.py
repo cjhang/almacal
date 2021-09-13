@@ -38,7 +38,7 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 5.186]):
+def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.3, 5.5]):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
