@@ -1839,8 +1839,15 @@ def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=
         obj_match = re.compile('^J\d*[+-]\d*$')
         for band in bands:
             band_imagedir = os.path.join(imagedir, band)
+            if not os.path.isdir(band_imagedir):
+                print("Warning: no such derectory: {}".format(band_imagedir))
+                continue
             band_outdir = os.path.join(outdir, band)
-            for obj in os.listdir(band_imagedir):
+            os.system('mkdir -p {}'.format(band_outdir))
+            objs_indir = os.listdir(band_imagedir)
+            if len(objs_indir) < 1:
+                contibue
+            for obj in objs_indir:
                 print('obj', obj)
                 if obj_match.match(obj):
                     if objlist is not None:
