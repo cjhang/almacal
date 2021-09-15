@@ -791,7 +791,8 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwri
     elif isinstance(imgs, list):
         all_files = imgs
 
-    p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).*.fits')
+    # p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).*.fits')
+    p_uidimg = re.compile('(?P<obsname>uid___\w*\.ms[\.split\.cal]*\.J\d*[+-]+\d*_B\d+).*\.fits')
 
     good_imgs = []
     bad_imgs = []
