@@ -947,7 +947,9 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         print("list_updated")
         print(list_updated)
     else:
-        obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
+        # obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
+        # fix the problem with naming issue
+        obsname_match = re.compile('(?P<obsname>uid___\w*\.ms[\.split\.cal]*\.J\d*[+-]+\d*_B\d+)')
         for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
             if not os.path.isfile(f):
                 print("Warning! {} doesn't exist!".format(f))
@@ -1213,7 +1215,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             os.system('rm -rf {}'.format(os.path.join(outdir, 'images')))
         print('After sensitivity check, v:', vis_valid)
         vis = vis_valid
-    print(vis_valid)
+    # print(vis_valid)
     with open(concatvis+'.included.txt', 'w') as f:
         f.write('\n'.join(str(item) for item in vis))
     with open(concatvis+'.excluded.txt', 'w') as f:
