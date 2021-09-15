@@ -21,6 +21,7 @@ from astropy.coordinates import SkyCoord
 from scipy.optimize import curve_fit
 from astropy.stats import sigma_clipped_stats, sigma_clip
 
+import multiprocessing as mp
 import analysisUtils as au
 # from analysisUtils import tbtool
 # from imaging_utils import make_cont_img
@@ -110,9 +111,12 @@ def search_obs(basedir, config='main', band='B6', debug=False):
                 filelist.append(obs)
     return filelist
 
-def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, check_calibrator=False, debug=False, update_raw=False, overwrite=False,
-              suffix='.cont.auto', **kwargs):
-    """make images for one calibrator on all or specific band
+def gen_image(vis=None, band=None, outdir='./', niter=0, suffix='.cont.auto',
+              check_validity=False, overwrite=False,
+              check_aca=True, check_sensitivity=True, check_gaussian_noise=True,
+              check_flux=True, minimal_fluxval=0.001,
+              debug=False, **kwargs):
+    """make images for visibility and do the first step checking for the valid
 
     Params:
     objfolder: the folder that contains all the observation of one calibrator
@@ -126,69 +130,68 @@ def gen_image(vis=None, band=None, outdir='./', niter=0, exclude_aca=False, chec
     if not p_obs.search(vis):
         print("Invalid name!")
         return False
-    if band is not None:
-        band_match = re.compile('_(?P<band>B\d{1,2})$')
-        if band_match.search(vis):
-            obs_band = band_match.search(vis).groupdict()['band']
-            if obs_band != band:
-                print("Invalid band!")
-                return False
-
     basename = os.path.basename(vis)
     myimagename = os.path.join(outdir, basename + suffix)
-    if os.path.isfile(myimagename+'.image.fits') and not overwrite:
-        print('{} already existing, return without making new.'.format(myimagename+'.image.fits'))
-        return myimagename+'.image.fits'
+    fitsimage = myimagename+'.image.fits'
 
-    if exclude_aca:
+    is_valid = True
+    if check_validity:
+        if check_aca:
+            try:
+                tb.open(vis + '/ANTENNA')
+                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                tb.close()
+            except:
+                is_valid = False
+            if antenna_diameter < 12.0:
+                if debug:
+                    print("Excuding data from {}".format(antenna_diameter))
+                is_valid = False
+
+        if check_flux:
+            # check the flux value of the subtracted point source
+            p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).cont.auto.fits')
+            if p_uidimg.search(fitsimage):
+                uidname = p_uidimg.search(fitsimage).groupdict()['uidname']
+                fluxval = search_flux(uidname)
+                if debug:
+                    print(uidname)
+                    print("fluxval: {}".format(fluxval))
+                if fluxval > 0:
+                    if fluxval/minimal_fluxval < 1:
+                        is_valid = False
+        # if check_sensitivity:
+            # is_valid = check_vis2image(vis, imagefile=fitsimage)
+        # if check_resolution:
+            # with fits.open(fitsimage) as hdu:
+                # header = hdu[0].header
+    # if not is_valid:
+        # print("Not passing validity check!")
+    if os.path.isfile(fitsimage) and not overwrite:
+        if not is_valid:
+            print("Removing invalid image: {}".format(fitsimage))
+            os.system('rm {}'.format(fitsimage))
+        else:
+            print('Using existing image {}'.format(fitsimage))
+            return fitsimage
+    elif is_valid:
+        # check the intent
+        intent_list = check_intent(vis)
+        intent_list_full = []
+        for i in intent_list:
+            intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
+        intent = ','.join(intent_list_full)
+        if debug:
+            print('intent', intent)
         try:
-            tb.open(vis + '/ANTENNA')
-            antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-            tb.close()
-        except:
-            return False
-        if antenna_diameter < 12.0:
-            if debug:
-                print("Excuding data from {}".format(antenna_diameter))
-            return False
+            make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, niter=niter, intent=intent, **kwargs)
+            exportfits(imagename=myimagename+'.image', fitsimage=fitsimage)
+            rmtables(tablenames=myimagename+'.*')
 
-    intent_list = check_intent(vis)
-    intent_list_full = []
-    for i in intent_list:
-        intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
-    intent = ','.join(intent_list_full)
-    print('intent', intent)
-    try:
-        make_cont_img(vis=vis, clean=True, myimagename=myimagename, outdir=outdir, niter=niter, intent=intent, **kwargs)
-    except:
-        print("Error in imaging {}".format(vis))
-    if check_calibrator:
-        imstat_info = imstat(myimagename+'.image')
-        if imstat_info['flux'][0] > 0.05: #flux/flux density large than 0.05 Jy
-            print("Maybe point source subtraction is failed")
-            outfile = os.path.join(outdir, os.path.basename(vis)+".point.cl")
-            uvmodelfit(vis=vis, niter=5, comptype="P", sourcepar=[1.0, 0.0, 0.0], varypar=[True,False,False], outfile=outfile)
-            # uvmodelfit(vis=vis, niter=5, comptype="G", outfile=outfile,
-                       # sourcepar=[1.0, 0.0, 0.0, 1.0, 0.9, 0], 
-                       # varypar=[True, False, False, True, True, True])
-            ft(vis=vis, complist=outfile)
-            uvsub(vis=vis,reverse=False)
-            outputvis = os.path.join(outdir, 'updated_data', os.path.basename(vis))
-            os.system('mkdir -p {}'.format(os.path.dirname(outputvis)))
-            split(vis=vis, outputvis=outputvis)
-            if update_raw:
-                print('removing', vis)
-                rmtables(vis)
-                print('copying', outputvis, vis)
-                os.system('mv {} {}'.format(outputvis, vis))
-                outputvis = vis
-            rmtables(myimagename+'.*')
-            make_cont_img(vis=outputvis, clean=True, myimagename=myimagename, outdir=outdir, niter=0, only_fits=True, **kwargs)
-            return 0
-            
-    exportfits(imagename=myimagename+'.image', fitsimage=myimagename+'.image.fits')
-    rmtables(tablenames=myimagename+'.*')
-    return myimagename+'.image.fits'
+        except:
+            print("Error in imaging {}".format(vis))
+ 
+    return fitsimage
 
 def gen_images(vis=None, dirname=None, outdir='./', bands=None, exclude_aca=True, 
                   debug=False, **kwargs):
@@ -224,45 +227,20 @@ def gen_images(vis=None, dirname=None, outdir='./', bands=None, exclude_aca=True
                 filelist.append(os.path.join(dirname, obs))
     if debug:
         print('filelist:', filelist)
-    for infile in filelist:
-        if bands is not None:
-            for band in bands:
-                outdir_band = os.path.join(outdir, band)
-                os.system('mkdir -p {}'.format(outdir_band))
-                gen_image(infile, band=band, outdir=outdir_band, exclude_aca=exclude_aca, **kwargs)
-        else:
-            gen_image(infile, outdir=outdir, exclude_aca=exclude_aca, **kwargs)
-
-def check_vis2image(vis, imagefile=None, tmpdir='./_tmp', debug=False):
-    """This function initially used to check weather the visibility have reached the theoretical sensitivity
-    """
-    if imagefile:
-        iminfo = imstat(imagefile)
-    elif tmpdir:
-        # print("\n>>>>>>>Using tmpdir\n")
-        imagefile = gen_image(vis, outdir=tmpdir)
-        iminfo = imstat(imagefile)
-        os.system('rm -rf {}'.format(tmpdir))
+    if bands is not None:
+        band_match = re.compile('_(?P<band>B\d{1,2})$')
+        for infile in filelist:
+            if band_match.search(vis):
+                obs_band = band_match.search(vis).groupdict()['band']
+                if obs_band not in bands:
+                    if debug:
+                        print("Skip {}, mis-match band".format(infile))
+                    continue
+                    os.system('mkdir -p {}'.format(outdir_band))
+                    gen_image(infile, band=band, outdir=outdir_band, **kwargs)
     else:
-        print('vis', vis)
-        raise ValueError('Cannot calculate the statistics of the image')
-    if debug:
-        print('vis', vis)
-        print('iminfo', iminfo)
-    try:
-        sensitivity = calculate_sensitivity(vis)
-        rms = iminfo['rms'][0] # 
-        print('visibility sensitivity:', sensitivity)
-        print('image rms:', rms)
-        if (rms >= sensitivity[0]) and (rms <= sensitivity[1]):
-            return True
-        else:
-            return False
-    except:
-        print("\n!!!Error in check_vis2image")
-        print('vis', vis)
-        print('imagefile', imagefile)
-        raise ValueError('Checking the vis and imagefile!')
+        for infile in filelist:
+            gen_image(infile, outdir=outdir, **kwargs)
 
 def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3, ncol=3, savefile=None, debug=False):
     """show images in an interactive ways, and record the input from inspector
@@ -588,7 +566,7 @@ def copy_ms(basedir=None, outdir=None, selectfile=None, debug=False, time_select
 def gaussian(x, u0, amp, std):
     return amp*np.exp(-0.5*((x-u0)/std)**2)
 
-def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, check_flux=True, 
+def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, 
                 minimal_fluxval=0.001, outlier_frac=0.05, gaussian_deviation=0.02, 
                 central_median_deviation=1.0, central_mean_deviation=1.0, savefig=False, 
                 figname=None, outdir=None, strick_mode=False):
@@ -766,19 +744,6 @@ def check_image(img, plot=False, radius=8, debug=False, sigmaclip=True, check_fl
         if debug:
             print("Fitting failed!")
         return False
-    # check the fluxval
-    if check_flux:
-        # check the flux value of the subtracted point source
-        if uidname:
-            fluxval = search_flux(uidname)
-            if debug:
-                print(uidname)
-                print("fluxval: {}".format(fluxval))
-            if fluxval > 0:
-                if fluxval/minimal_fluxval < 1:
-                    if debug:
-                        print("Rejected, wrong fluxval!")
-                    return False
     if np.abs(median_central) > central_median_deviation*sigma:
         if debug:
             print("Rejected, large central median value!\n")
@@ -1148,11 +1113,48 @@ def check_images_manual_gui(imagedir=None, goodfile=None, badfile=None, debug=Fa
                         print("Error in matching the obs name for filname: {}".format(item))
                         continue
 
+def vis_clone_helper(inp, drop_FDM=True, computwt=True):
+    """helper for make_all_goodimages, make clone visibility in parallel mode"""
+    vis, outdir = inp
+    if not os.path.isdir(outdir):
+        os.system('mkdir -p {}'.format(outdir))
+    spw = ''
+    if drop_FDM:
+        spw_select = []
+        tb.open(os.path.join(vis, 'SPECTRAL_WINDOW'))
+        chan_num = tb.getcol('NUM_CHAN')
+        for s,sn in enumerate(chan_num):
+            if sn > 5:
+                spw_select.append(str(s))
+        spw = ','.join(spw_select)
+
+    v_new = os.path.join(outdir, os.path.basename(vis))
+    if os.path.isdir(v_new):
+        print('Found splitted file: {}'.format(v_new))
+        return
+    # Only use valid data
+    intent_list = check_intent(vis)
+    intent_list_full = []
+    for i in intent_list:
+        intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
+    intent = ','.join(intent_list_full)
+    # os.system('rm -rf {}*'.format(v_new))
+    print('Splitting... {} {}'.format(vis, v_new))
+    #os.system('cp -r {} {}'.format(v, v_new))
+    if not split(vis=vis, outputvis=v_new, spw=spw, datacolumn='corrected', intent=intent):
+        print("No corrected data existing, spliting the data column")
+        if not split(vis=vis, outputvis=v_new, spw=spw, datacolumn='data', intent=intent):
+            print("Data may be corrupted: {}".format(vis))
+            os.system('rm -rf {}'.format(v_new))
+    if computwt:
+        statwt(v_new, datacolumn='data')
+
+
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
                     computwt=True, drop_FDM=True, save_psf=True, check_sensitivity=True,
-                    uvtaper_list=['0.3arcsec', '0.6arcsec'], make_jackknif=True,
-                    uvtaper_scale=None,#[1.5, 2.0], 
+                    uvtaper_list=['0.3arcsec', '0.6arcsec'], make_jackknif=False,
+                    n_core=10, uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
     """make the final good image with all the good observations
 
@@ -1161,6 +1163,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     """
     if len(vis) < 1:
         return False
+    n_select = len(vis)
     if not os.path.isdir(outdir):
         os.system('mkdir -p {}'.format(outdir))
     if basedir:
@@ -1172,45 +1175,64 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         print(vis)
     if concatvis is None:
         concatvis = os.path.join(outdir, basename+'.ms')
-    if computwt:
-        vis_statwt = []
-        for v in vis:
-            spw = ''
-            if drop_FDM:
-                spw_select = []
-                tb.open(os.path.join(v, 'SPECTRAL_WINDOW'))
-                chan_num = tb.getcol('NUM_CHAN')
-                for s,sn in enumerate(chan_num):
-                    if sn > 5:
-                        spw_select.append(str(s))
-                spw = ','.join(spw_select)
+    p = mp.Pool(processes=n_core)
+    p_cycle = n_select // 10
+    # f_helper = lambda v : vis_clone(v, outdir, computwt=computwt, drop_FDM=drop_FDM)
+    # print(f_helper.__dict__())
+    # def f_helper2(v):
+        # f_helper(v)
+    # print('f_helper', f_helper)
+    # print('vis', vis)
+    # print(list(zip(vis, [outdir]*n_select)))
+    map_input = list(zip(vis, [outdir]*n_select))
+    print(map_input)
+    p.map(vis_clone_helper, map_input)
+    # p.map(f_helper, vis)
+    obs_match = re.compile('^uid___')
+    vis_cloned = []
+    for v in os.listdir(outdir):
+        if obs_match.match(v):
+            vis_cloned.append(v)
+    vis = vis_cloned
+    # vis_statwt =[]
+    # for v in vis:
+        # spw = ''
+        # if drop_FDM:
+            # spw_select = []
+            # tb.open(os.path.join(v, 'SPECTRAL_WINDOW'))
+            # chan_num = tb.getcol('NUM_CHAN')
+            # for s,sn in enumerate(chan_num):
+                # if sn > 5:
+                    # spw_select.append(str(s))
+            # spw = ','.join(spw_select)
 
-            v_new = os.path.join(outdir, os.path.basename(v))
-            if os.path.isdir(v_new):
-                print('Found splitted file: {}'.format(v_new))
-                vis_statwt.append(v_new)
-                continue
-            # Only use valid data
-            intent_list = check_intent(v)
-            intent_list_full = []
-            for i in intent_list:
-                intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
-            intent = ','.join(intent_list_full)
-            # os.system('rm -rf {}*'.format(v_new))
-            print('Splitting... {} {}'.format(v, v_new))
-            #os.system('cp -r {} {}'.format(v, v_new))
-            if not split(vis=v, outputvis=v_new, spw=spw, datacolumn='corrected', intent=intent):
-                print("No corrected data existing, spliting the data column")
-                if not split(vis=v, outputvis=v_new, spw=spw, datacolumn='data', intent=intent):
-                    print("Data may be corrupted: {}".format(v))
-                    os.system('rm -rf {}'.format(v_new))
-                    continue
-            statwt(v_new, datacolumn='data')
-            
-            # check the sensitivity
-            vis_statwt.append(v_new)
-        print("After statwt valid vis:", vis_statwt)
-        vis = vis_statwt
+        # v_new = os.path.join(outdir, os.path.basename(v))
+        # if os.path.isdir(v_new):
+            # print('Found splitted file: {}'.format(v_new))
+            # vis_statwt.append(v_new)
+            # continue
+        # # Only use valid data
+        # intent_list = check_intent(v)
+        # intent_list_full = []
+        # for i in intent_list:
+            # intent_list_full.append('CALIBRATE_{}#ON_SOURCE'.format(i))
+        # intent = ','.join(intent_list_full)
+        # # os.system('rm -rf {}*'.format(v_new))
+        # print('Splitting... {} {}'.format(v, v_new))
+        # #os.system('cp -r {} {}'.format(v, v_new))
+        # if not split(vis=v, outputvis=v_new, spw=spw, datacolumn='corrected', intent=intent):
+            # print("No corrected data existing, spliting the data column")
+            # if not split(vis=v, outputvis=v_new, spw=spw, datacolumn='data', intent=intent):
+                # print("Data may be corrupted: {}".format(v))
+                # os.system('rm -rf {}'.format(v_new))
+                # continue
+        # statwt(v_new, datacolumn='data')
+        
+        # check the sensitivity
+        # vis_statwt.append(v_new)
+    # print("After statwt valid vis:", vis_statwt)
+    # vis = vis_statwt
+
     if check_sensitivity:
         vis_valid = []
         vis_excluded = []
@@ -1244,16 +1266,17 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     else:
         concat(vis=vis, concatvis=concatvis)
 
-
     if uvtaper_list:
         for uvtaper in uvtaper_list:
             if uvtaper == '':
                 uvtaper_name = ''
+                myuvtaper = None
             else:
                 uvtaper_name = '.'+uvtaper
+                myuvtaper = uvtaper
             myimagename = concatvis+'.auto.cont{}'.format(uvtaper_name)
             make_cont_img(vis=concatvis, myimagename=myimagename, clean=clean, niter=niter, 
-                          pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
+                          pblimit=pblimit, fov_scale=fov_scale, myuvtaper=myuvtaper, debug=debug, 
                           **kwargs)
     if uvtaper_scale:
             myimagename = concatvis+'.auto.cont'
@@ -1270,13 +1293,15 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
 
         if uvtaper_list:
             for uvtaper in uvtaper_list:
-                if uvtaper == []:
+                if uvtaper == '':
                     uvtaper_name = ''
+                    myuvtaper = None
                 else:
-                    uvtaper_name = '.'+uvtaper[0]
+                    uvtaper_name = '.'+uvtaper
+                    myuvtaper = uvtaper
                 myimagename = concatvis+'.auto.cont{}.jackknif'.format(uvtaper_name)
                 make_cont_img(vis=vis_jackkniffed, myimagename=myimagename, clean=clean, niter=niter, 
-                              pblimit=pblimit, fov_scale=fov_scale, myuvtaper=uvtaper, debug=debug, 
+                              pblimit=pblimit, fov_scale=fov_scale, myuvtaper=myuvtaper, debug=debug, 
                               **kwargs)
     if only_fits:
         for i in glob.glob(concatvis+'*.image'):
@@ -1804,31 +1829,20 @@ def run_gen_all_images(basedir, objlist=None, outdir='./', bands=['B6','B7'], ex
                 if obs_band not in bands:
                     continue
                 outfile_fullpath = os.path.join(outdir, obs_band, obj)
-                os.system('mkdir -p {}'.format(outfile_fullpath))
+                outfile_fullpath_invalid = os.path.join(outfile_fullpath, 'invalid')
+                os.system('mkdir -p {}'.format(outfile_fullpath_invalid))
                 
                 outfile_fullname = os.path.join(outfile_fullpath, obs+'.cont.auto.fits') 
-                if os.path.isfile(outfile_fullname):
-                    if exclude_aca:
-                        tb.open(infile + '/ANTENNA')
-                        antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-                        tb.close()
-                        if antenna_diameter < 12.0:
-                            print("Removing aca image: {}".format(outfile_fullname))
-                            os.system('rm -f {}'.format(outfile_fullname))
-                        else:
-                            print("Keeping existing file: {}".format(outfile_fullname))
-                    else:
-                        if debug:
-                            print(">> {} already exists.".format(outfile_fullname))
-                else:
-                    try:
-                        if gen_image(infile, band=obs_band, outdir=outfile_fullpath, exclude_aca=exclude_aca, 
-                                     debug=debug, niter=niter, **kwargs):
-                            if debug:
-                                print("Adding new image: {}".format(outfile_fullname))
-                    except:
-                        print("Warning:\n Error found in imaging {}\n".format(infile))
-                        continue
+                try:
+                    fitsimage = gen_image(infile, outdir=outfile_fullpath, check_validity=True, 
+                                          debug=debug, niter=niter, **kwargs)
+                    # if is_valid:
+                        # os.system('mv {} {}'.format(outfile_fullname, os.path.join(outfile_fullpath, 'valid')))
+                    # if not is_valid:
+                        # os.system('mv {} {}/'.format(outfile_fullname, outfile_fullpath_invalid))
+                except:
+                    print("Warning:\n Error found in imaging {}\n".format(infile))
+                    continue
 
 def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=[], 
         debug=False, suffix='_good_imgs.txt', plot=True, savefig=True, **kwargs):
@@ -1900,7 +1914,7 @@ def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7']
 def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7'], basedir=None, 
         outdir='./', debug=False, only_fits=True, update=True, imagefile_suffix='combine',
         computwt=True, listfile_suffix='good_imgs.txt.updated', overwrite=False, 
-        jackknif=True, **kwargs):
+        make_jackknif=False, **kwargs):
     """generate the good image with updated list
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./make_good_image') 
@@ -1926,29 +1940,34 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
             if debug:
                 print("good image file: {}\n concatvis_name: {}".format(good_image_file, concatvis))
             
-            make_jackknif = True 
-            if jackknif:
-                good_image_jackknig_fitsfile = concatvis+'.auto.cont.*jackknif.image.fits'
-                if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Jackknif_Done')):
-                    print("Skip {} of {}, delete the 'Jackknif_Done' file to continue...".format(band,obj))
-                    make_jackknif = False
-                elif not overwrite and (len(glob.glob(good_image_jackknig_fitsfile)) > 0):
-                    print("Skip {} of {}, delete the jackknif fits file to continue...".format(band,obj))
-                    make_jackknif = False
             if os.path.isfile(good_image_file):
                 good_image_fitsfile = concatvis+'.auto.cont.*image.fits'
                 # print('good_image_fitsfile: {}'.format(good_image_fitsfile))
-                if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Done')):
-                    print("Skip {} of {}, delete the 'Done' file to continue...".format(band,obj))
-                    continue
-                elif not overwrite and (len(glob.glob(good_image_fitsfile)) > 0):
+                # if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Done')):
+                    # print("Skip {} of {}, delete the 'Done' file to continue...".format(band,obj))
+                    # continue
+                if not overwrite and (len(glob.glob(good_image_fitsfile)) > 0):
                     print("Skip {} of {}, delete the fits file to continue...".format(band,obj))
                     continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
                     make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
-                            outdir=obj_outdir, computwt=computwt, 
+                            outdir=obj_outdir, computwt=computwt, make_jackknif=make_jackknif, 
                             basedir=os.path.join(basedir, obj), **kwargs)
+
+def run_make_all_jeckknifimages():
+    pass
+    if true:
+        # make_jackknif = True 
+        # if jackknif:
+            # good_image_jackknig_fitsfile = concatvis+'.auto.cont.*jackknif.image.fits'
+            # if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Jackknif_Done')):
+                # print("Skip {} of {}, delete the 'Jackknif_Done' file to continue...".format(band,obj))
+                # make_jackknif = False
+            # elif not overwrite and (len(glob.glob(good_image_jackknig_fitsfile)) > 0):
+                # print("Skip {} of {}, delete the jackknif fits file to continue...".format(band,obj))
+                # make_jackknif = False
+        pass
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['0.3arcsec', '0.6arcsec'],

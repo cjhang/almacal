@@ -58,7 +58,7 @@ def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=
     
     antennalist = au.buildConfigurationFile(vis)
     try:
-        time_onsource = au.timeOnSource(vis)
+        time_onsource = au.timeOnSource(vis, verbose=False)
     except:
         print("\n###\nError run au.timeOnSource, set the sensitivity to np.inf\n###\n")
         return np.full_like(pwv, np.inf)
@@ -84,6 +84,38 @@ def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=
     #remove the cfg file
     os.system('rm -f {}.cfg'.format(vis))
     return sensitivity
+
+def check_vis2image(vis, imagefile=None, tmpdir='./_tmp', debug=False):
+    """This function initially used to check weather the visibility have reached the theoretical sensitivity
+    """
+    if imagefile:
+        iminfo = imstat(imagefile)
+    elif tmpdir:
+        # print("\n>>>>>>>Using tmpdir\n")
+        imagefile = gen_image(vis, outdir=tmpdir)
+        iminfo = imstat(imagefile)
+        os.system('rm -rf {}'.format(tmpdir))
+    else:
+        print('vis', vis)
+        raise ValueError('Cannot calculate the statistics of the image')
+    if debug:
+        print('vis', vis)
+        print('iminfo', iminfo)
+    try:
+        sensitivity = calculate_sensitivity(vis)
+        rms = iminfo['rms'][0] # 
+        print('visibility sensitivity:', sensitivity)
+        print('image rms:', rms)
+        if (rms >= sensitivity[0]) and (rms <= sensitivity[1]):
+            return True
+        else:
+            return False
+    except:
+        print("\n!!!Error in check_vis2image")
+        print('vis', vis)
+        print('imagefile', imagefile)
+        raise ValueError('Checking the vis and imagefile!')
+
 
 def get_baselines(vis=None,):
     """calculate the baselines
