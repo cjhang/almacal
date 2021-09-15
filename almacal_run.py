@@ -1816,34 +1816,36 @@ def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=
 
     default run: run_make_all_goodimags(imgs_dir='all_img_dir', basedir='science_ALMACAL', outdir='./') 
     """
-    if imagedir:
-        obj_match = re.compile('^J\d*[+-]\d*$')
-        for band in bands:
-            band_imagedir = os.path.join(imagedir, band)
-            if not os.path.isdir(band_imagedir):
-                print("Warning: no such derectory: {}".format(band_imagedir))
-                continue
-            band_outdir = os.path.join(outdir, band)
-            os.system('mkdir -p {}'.format(band_outdir))
+    if imagedir is None:
+        raise ValueError("imagedir is required!")
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    for band in bands:
+        band_imagedir = os.path.join(imagedir, band)
+        if not os.path.isdir(band_imagedir):
+            print("Warning: no such derectory: {}".format(band_imagedir))
+            continue
+        band_outdir = os.path.join(outdir, band)
+        os.system('mkdir -p {}'.format(band_outdir))
+        if objlist is None:
+            objlist = []
             objs_indir = os.listdir(band_imagedir)
             if len(objs_indir) < 1:
                 contibue
             for obj in objs_indir:
-                print('obj', obj)
                 if obj_match.match(obj):
-                    if objlist is not None:
-                        if obj not in objlist:
-                            continue
-                    obj_dir = os.path.join(band_outdir, obj)
-                    if not os.path.isdir(obj_dir):
-                        os.system('mkdir -p {}'.format(os.path.join(band_outdir, obj)))
-                    obj_path = os.path.join(band_imagedir, obj)
-                    # print(obj_path+'/*.fits')
-                    good_imgs, bad_imgs = check_images(obj_path+'/*.fits', 
-                            outdir=os.path.join(band_outdir, obj), plot=plot, savefig=savefig, 
-                            band=band, basename=obj+'_'+band, debug=debug, **kwargs)
-                    if debug:
-                        print(good_imgs)
+                    objlist.append(obj)
+        for obj in objlist:
+            print('obj', obj)
+            obj_dir = os.path.join(band_outdir, obj)
+            if not os.path.isdir(obj_dir):
+                os.system('mkdir -p {}'.format(os.path.join(band_outdir, obj)))
+            obj_path = os.path.join(band_imagedir, obj)
+            # print(obj_path+'/*.fits')
+            good_imgs, bad_imgs = check_images(obj_path+'/*.fits', 
+                    outdir=os.path.join(band_outdir, obj), plot=plot, savefig=savefig, 
+                    band=band, basename=obj+'_'+band, debug=debug, **kwargs)
+            if debug:
+                print(good_imgs)
 
 def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7'], 
         suffix='imgs.txt'):
