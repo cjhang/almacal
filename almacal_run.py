@@ -792,7 +792,7 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwri
         all_files = imgs
 
     # p_uidimg = re.compile('(?P<uidname>uid___\w+.ms.split.cal.J\d+[+-]\d+_B\d+).*.fits')
-    p_uidimg = re.compile('(?P<obsname>uid___\w*\.ms[\.split\.cal]*\.J\d*[+-]+\d*_B\d+).*\.fits')
+    p_uidimg = re.compile('(?P<uidname>uid___\w*\.ms[\.split\.cal]*\.J\d*[+-]+\d*_B\d+).*\.fits')
 
     good_imgs = []
     bad_imgs = []
@@ -955,6 +955,8 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
             # if not os.path.isfile(f):
                 # print("Warning! {} doesn't exist!".format(f))
                 # continue
+            if len(list_updated[desc]) < 1:
+                continue
             with open(f+suffix, 'w+') as f:
                 for item in list_updated[desc]:
                     try:
@@ -1207,7 +1209,10 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
                 imagefile = gen_image(vis=v, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
                 print("imagefile", imagefile)
                 print('vis', v)
-                is_usable = check_vis2image(vis=v, imagefile=imagefile)
+                try:
+                    is_usable = check_vis2image(vis=v, imagefile=imagefile)
+                except:
+                    print("Warning: error in check {}".format(v))
                 if is_usable:
                    vis_valid.append(v)
                 else:
@@ -2456,7 +2461,7 @@ run_auto_classify_goodimags(imagedir='gen_all_images', outdir='make_classificati
 B8_list = np.loadtxt('B8_ordered.txt', dtype=str)
 run_manual_inspection(classifiedfolder='make_classifications', objlist=B8_list, bands=['B8',])
 run_make_all_goodimags(classifiedfolder='make_classifications', objlist=B8_list, 
-                       basedir='/jchen/work/ALMACAL', outdir='make_good_images')
+                       basedir='/jchen/work/ALMACAL', outdir='make_all_good_images')
 run_measure_flux('make_good_images', objs=B8_list, band='B8', summary_file='B8_SMGs.txt')
 run_calculate_effarea(imagedir='make_good_images', flux=np.linspace(0.1, 10, 50), objs=B8_list, 
                       band='B8', savefile='B8_effarea.txt')

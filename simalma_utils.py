@@ -322,7 +322,6 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
     
     aperture_size = 1.0 # in units of beam size
     """
-    
     ysize, xsize = image.shape
     y_center, x_center = ysize/2., xsize/2.
     flux_list = []
