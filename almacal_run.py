@@ -1206,6 +1206,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             # p.close()
         for v in vis:
             if check_sensitivity:
+                is_usable = False
                 imagefile = gen_image(vis=v, outdir=os.path.join(outdir, 'images'), suffix='.cont.auto')
                 print("imagefile", imagefile)
                 print('vis', v)
@@ -1875,7 +1876,7 @@ def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7']
             goodfile = os.path.join(obj_classified_folder, "{}_{}_good_{}".format(obj, band, suffix))
             badfile = os.path.join(obj_classified_folder, "{}_{}_bad_{}".format(obj, band, suffix))
 
-            if os.path.isfile(goodfile+'.updated'):
+            if os.path.isfile(goodfile+'.updated') or os.path.isfile(badfile+'.updated'):
                 print('{} of {} already done'.format(band, obj))
                 continue
             else:
