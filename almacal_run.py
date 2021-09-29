@@ -320,7 +320,7 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
                     verticalalignment='center')
             ax.set_xlabel('RA [arcsec]')
             ax.set_ylabel('Dec [arcsec]')
-            ax.set_title(os.path.basename(all_files[i+j])[:10])
+            ax.set_title(os.path.basename(all_files[i+j][:15]))
         # show the image and record the 
         plt.show()
         print('Input the index of images (1-9), seperate with comma:')
@@ -1222,11 +1222,11 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
             os.system('rm -rf {}'.format(os.path.join(outdir, 'images')))
         print('After sensitivity check, v:', vis_valid)
         vis = vis_valid
-    # print(vis_valid)
-    with open(concatvis+'.included.txt', 'w') as f:
-        f.write('\n'.join(str(item) for item in vis))
-    with open(concatvis+'.excluded.txt', 'w') as f:
-        f.write('\n'.join(str(item) for item in vis_excluded))
+        # print(vis_valid)
+        with open(concatvis+'.included.txt', 'w') as f:
+            f.write('\n'.join(str(item) for item in vis))
+        with open(concatvis+'.excluded.txt', 'w') as f:
+            f.write('\n'.join(str(item) for item in vis_excluded))
 
     if len(vis) < 1:
         print("No valid visibility left!")
