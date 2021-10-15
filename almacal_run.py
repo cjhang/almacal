@@ -1935,7 +1935,7 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
         band_outdir = os.path.join(outdir, band)
         if objlist is None:
             objlist = []
-            for obj in os.listdir(band_dir):
+            for obj in os.listdir(band_indir):
                 if obj_match.match(obj):
                     objlist.append(obj)
         for obj in objlist:
@@ -1953,6 +1953,14 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
             if os.path.isfile(good_image_file):
                 good_image_fitsfile = concatvis+'.auto.cont.*image.fits'
                 print('good_image_fitsfile: {}'.format(good_image_fitsfile))
+                if os.path.isdir(obj_outdir):
+                    uid_files = glob.glob(os.path.join(obj_outdir,'uid___*'))
+                    if len(uid_files) > 0:
+                        print("Found existing measurements!")
+                        print(uid_files)
+                        print("Pruning folder....")
+                        rmtables(os.path.join(obj_outdir,'uid___*'))
+                        os.system('rm -rf {}'.format(os.path.join(obj_outdir,'uid___*.flagversions')))
                 if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Done')):
                     print("Skip {} of {}, delete the 'Done' file to continue...".format(band,obj))
                     continue
