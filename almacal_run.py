@@ -868,6 +868,8 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         raise ValueError("basedir should be defined along with filelist")
     all_good_files = []
     all_bad_files = []
+    has_goodfile = True
+    has_badfile = True
     if goodfile:
         # if debug:
         print('imagedir', imagedir)
@@ -882,6 +884,7 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                     all_good_files.append(os.path.join(imagedir, pngfile))
             except:
                 print("Failed in open {}".format(goodfile))
+                has_goodfile = False
                 pass
     
     if badfile:
@@ -896,7 +899,10 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
                     all_bad_files.append(os.path.join(imagedir, pngfile))
             except:
                 print("Failed in open {}".format(badfile))
+                has_badfile = False
                 pass
+    if (not has_goodfile) and (not has_badfile):
+        return
 
     list_patches = {}
     for desc,all_files in list(zip(['good', 'bad'], [all_good_files, all_bad_files])):
