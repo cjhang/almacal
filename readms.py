@@ -81,7 +81,8 @@ def read_refdir(vis, return_coord=False):
 
 def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None, 
         bands=['B3','B4','B5', 'B6', 'B7', 'B8','B9','B10'], figname=None, showfig=False,  
-        z=0, lines=None, lines_names=None, debug=False):
+        time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
+        z=0, lines=None, lines_names=None, exclude_aca=True, debug=False):
     """make the statistics about one calibrator
 
     Args:
@@ -137,6 +138,39 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
                 continue
             if band not in bands:
                 continue
+
+            if exclude_aca:
+                try:
+                    tb.open(obs + '/ANTENNA')
+                    antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                    tb.close()
+                except:
+                    continue
+                if antenna_diameter < 12.0:
+                    if debug:
+                        print("Excuding data from {}".format(antenna_diameter))
+                    continue
+
+            if time_select:
+                start_time = Time(start_time)
+                end_time = Time(end_time)
+                try:
+                    tb.open(obs)
+                    obs_time = Time(tb.getcol('TIME').max()/24/3600, format='mjd')
+                    tb.close()
+                except:
+                    if debug:
+                        print("Error in opening the visibility!")
+                    continue
+                if debug:
+                    print('> obs_time', obs_time.iso)
+                    print('> start_time', start_time.iso)
+                    print('> end_time', end_time.iso)
+                if obs_time < start_time or obs_time > end_time:
+                    if debug:
+                        print(">> Skip by wrong observation time: {}".format(obs))
+                    continue
+
             time_on_source = au.timeOnSource(obs, verbose=False, debug=False)
             time_minutes = time_on_source[0]['minutes_on_source']
             if debug:

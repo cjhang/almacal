@@ -38,7 +38,7 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.3, 5.5]):
+def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 5.186]):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
@@ -106,7 +106,7 @@ def check_vis2image(vis, imagefile=None, tmpdir='./_tmp', debug=False):
         rms = iminfo['rms'][0] # 
         print('visibility sensitivity:', sensitivity)
         print('image rms:', rms)
-        if (rms >= sensitivity[0]) and (rms <= sensitivity[1]):
+        if (rms >= sensitivity[0]*0.1) and (rms <= 10.*sensitivity[1]):
             return True
         else:
             return False
@@ -115,7 +115,6 @@ def check_vis2image(vis, imagefile=None, tmpdir='./_tmp', debug=False):
         print('vis', vis)
         print('imagefile', imagefile)
         raise ValueError('Checking the vis and imagefile!')
-
 
 def get_baselines(vis=None,):
     """calculate the baselines

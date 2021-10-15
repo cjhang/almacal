@@ -451,7 +451,7 @@ def read_fitsimage(fitsimage):
 
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
-                  filter_size=None, box_size=None, methods=['aperture', 'gaussian','peak'],
+                  filter_size=None, box_size=None, methods=['aperture','gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
                   return_image_cuts=False, central_mask_radius=2.0, cmap=None,):
@@ -533,10 +533,13 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     if central_mask_radius > 0.0:
         central_aper = CircularAperture([ny/2., nx/2.], central_mask_radius*a)
         central_aper_mask = central_aper.to_mask(method='center')
-        known_mask = np.bitwise_or(known_mask, central_aper_mask[0].to_image((ny,nx)).astype(bool))
+        known_mask_withcenter = np.bitwise_or(known_mask, central_aper_mask[0].to_image((ny,nx)).astype(bool))
+    else:
+        known_mask_withcenter = known_mask
     
-    data_field = np.ma.array(data_masked, mask=known_mask) 
+    data_field = np.ma.array(data_masked, mask=known_mask_withcenter) 
     mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
+    
     if debug:
         print('image shape', ny, nx)
         print("sigma stat:", mean, median, std)
@@ -567,7 +570,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
-        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
+        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=0.8*threshold*std, ratio=ratio, 
                                 theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
         sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
         # if debug:
@@ -638,7 +641,10 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         seg_radius = np.int(a)
         segments = RectangularAperture(sources_found_center_candidates, seg_radius, 
                 seg_radius, theta=0)
-        segments_mask = segments.to_mask(method='center')
+        try:
+            segments_mask = segments.to_mask(method='center')
+        except:
+            segments_mask = []
         for i,s in enumerate(segments_mask):
             if subtract_background:
                 data_cutout = s.cutout(data_masked_sub)

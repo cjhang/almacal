@@ -84,7 +84,8 @@ def savelist(l, filename=None, outdir='./', file_mode='a+'):
         for item in l:
             f.write(item+'\n')
 
-def search_obs(basedir, config='main', band='B6', debug=False):
+def search_obs(basedir, config='main', band='B6', debug=False, config_select=True,
+        time_select=True, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00',):
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obs_match = re.compile('^uid___')
     if config == 'main':
@@ -101,14 +102,37 @@ def search_obs(basedir, config='main', band='B6', debug=False):
                 obs_band = band_match.search(obs).groupdict()['band']
                 if obs_band != band:
                     continue
-            try:
-                tb.open(obs_fullpath + '/ANTENNA')
-                antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
-                tb.close()
-            except:
-                continue
-            if (antenna_diameter - dish_diameter) < 1e-4:
-                filelist.append(obs)
+            if time_select:
+                start_time = Time(start_time)
+                end_time = Time(end_time)
+                try:
+                    tb.open(obs_fullpath)
+                    obs_time = Time(tb.getcol('TIME').max()/24/3600, format='mjd')
+                    tb.close()
+                except:
+                    if debug:
+                        print("Error in opening the visibility!")
+                    continue
+                if debug:
+                    print('> obs_time', obs_time.iso)
+                    print('> start_time', start_time.iso)
+                    print('> end_time', end_time.iso)
+                if obs_time < start_time or obs_time > end_time:
+                    if debug:
+                        print(">> Skip by wrong observation time: {}".format(obs))
+                    continue
+
+            if config_select:
+                try:
+                    tb.open(obs_fullpath + '/ANTENNA')
+                    antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
+                    tb.close()
+                except:
+                    continue
+
+                if np.abs(antenna_diameter - dish_diameter) > 1e-4:
+                    continue
+            filelist.append(obs)
     return filelist
 
 def gen_image(vis=None, band=None, outdir='./', niter=0, suffix='.cont.auto',
@@ -1449,7 +1473,7 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         if fovscale:
             rlimit = 0.5 * fovscale * fov.value
             pbcor[r > rlimit] = 0.0
-        if central_mask_radius > 0.0:
+        if central_mask_radius > 1e-8:
             pbcor[r < central_mask_radius*a] = 0.0
         effarea_list = []
         for f in flux:
@@ -1625,7 +1649,8 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
 
 def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=None, bad_obs=None, 
         bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, 
-        suffix='good_imgs.txt.updated', exclude_aca=True,
+        suffix='good_imgs.txt.updated', exclude_aca=True, 
+        time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
         debug=False, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
        dataset
@@ -1656,7 +1681,8 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
             all_bad_obs[i] = all_bad_obs[i].strip()
 
     band_match = re.compile('_(?P<band>B\d{1,2})$')
-    obj_match = re.compile('J\d{4}[-+]\d{4}')
+    obj_match = re.compile('J\d{3,4}[-+]\d{3,4}')
+
 
     if objs is None:
         objs = []
@@ -1681,16 +1707,17 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
             for band in bands:
                 obj_band_selectfile = os.path.join(listfile_dir, obj, "{}_{}_{}".format(obj, band, suffix))
                 if not os.path.isfile(obj_band_selectfile):
+                    if debug:
+                        print('Warning: {} is not exist'.format(obj_band_selectfile))
                     continue
-                obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname, exclude_aca=exclude_aca)
+                obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname)
                 vis_list.append(obj_band_list)
             vis_list = flatten(vis_list) 
         else:
             vis_list = gen_filenames(dirname=obj_dirname)
-        obj_stat = spw_stat(vis=vis_list, debug=True,
-                            savedata=True,
-                            bands=bands,
-                            filename=obj_output_dir+'/'+ obj+'.json', 
+        obj_stat = spw_stat(vis=vis_list, debug=debug, savedata=True, exclude_aca=exclude_aca,
+                            bands=bands, filename=obj_output_dir+'/'+ obj+'.json', 
+                            time_select=time_select, start_time=start_time, end_time=end_time, 
                             **kwargs)
     
         if info_file is not None:
@@ -1711,7 +1738,7 @@ def run_gen_stats(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'],
     p_obj = re.compile('J\d+[+-]\d')
     p_obs = re.compile('uid___')
     band_match = re.compile('_(?P<band>B\d{1,2})$')
-    obj_match = re.compile('J\d{4}[-+]\d{4}')
+    obj_match = re.compile('J\d{3,4}[-+]\d{3,4}')
 
     if objs is None:
         objs = []
@@ -1944,17 +1971,19 @@ def run_make_all_jeckknifimages():
         pass
 
 def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
-                   resolutions=['0.3arcsec', '0.6arcsec'],
-                   summary_file=None, view_mode='multiple',
-                   interactive=False, outdir=None, continue_mode=True):
+                   resolutions=['0.3arcsec', '0.6arcsec'], ncol=1,
+                   summary_file=None, view_mode='multiple', focus_bands=None,
+                   interactive=True, outdir=None, continue_mode=True, **kwargs):
     """finding sources
     Adding a dot in the string: 
-        resolutions = ['0.3arcsec','0.8arcsec']
+        resolutions = ['0.3arcsec','0.6arcsec']
     """
     if outdir is not None:
         if not os.path.isdir(outdir):
             os.system('mkdir -p {}'.format(outdir))
     objs_finished = []
+    if focus_bands == None:
+        focus_bands = bands
     if summary_file is not None:
         if continue_mode:
             if os.path.isfile(summary_file):
@@ -1966,22 +1995,23 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
             print('Initializing the output file')
             with open(summary_file, 'w+') as f:
                 f.write("obj")
-                for band in bands:
+                for band in focus_bands:
                     for res in resolutions:
                         f.write(' ')
                         f.write(band+'_'+res)
                 for band in bands:
                     f.write(' detection_{} goodfield_{}'.format(band, band))
                 f.write(' is_SMG')
+                f.write(' is_RG')
                 f.write(' is_Jet')
                 f.write('\n')
 
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
-        for band in bands:
+        for band in focus_bands:
             for item in os.listdir(os.path.join(basedir, band)):
-                if obj_match.match(obj):
+                if obj_match.match(item):
                     objs.append(item)
         objs = np.unique(objs).tolist()
 
@@ -2009,37 +2039,44 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     obj_outdir = None
                     summary_plot = None
                 obj_sourcefound = {}
-                for band in bands:
+                obj_validbands = {}
+                for band in focus_bands:
+                    obj_validbands[band] = True
                     for res in resolutions:
                         obj_sourcefound[band+'_'+res] = []
                 # make a summary plot
-                fig, ax = plt.subplots(len(bands), len(resolutions), 
-                                       figsize=(4.2*len(resolutions),4*len(bands))) 
+                nrow = int(1.0 * len(bands) / ncol)
+                fig, ax = plt.subplots(nrow, len(resolutions)*ncol, 
+                                       figsize=(ncol*4.2*len(resolutions),4*nrow)) 
                 fig.suptitle(obj)
                 #for img in imgs:
                 # sources_number = {}
-                obj_sourcefound
+                # obj_sourcefound
                 for i,band in enumerate(bands):
+                    i_ax = i // ncol
                     obj_band_dir = os.path.join(basedir, band, obj)
                     for j,res in enumerate(resolutions):
+                        j_ax = j + i%ncol*ncol
                         if len(bands) > 1:
-                            ax_select = ax[i,j]
+                            ax_select = ax[i_ax,j_ax]
                         else:
-                            ax_select = ax[max(i,j)]
+                            ax_select = ax[max(i_ax,j_ax)]
                         if res == '':
                             res_string = ''
                         else:
                             res_string = res+'.'
                         image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
                         image_fullpath = os.path.join(obj_band_dir, image_name)
-                        print(image_fullpath)
+                        # print(image_fullpath)
                         #print('Finding source in:', image_fullpath)
                         if not os.path.isfile(image_fullpath):
+                            if band in focus_bands:
+                                obj_validbands['{}'.format(band)] = False
                             continue
                         savefile = image_name + '.source_found.txt'
                         figname = image_name + '.png'
                         sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                                ax=ax_select, pbcor=True)
+                                ax=ax_select, pbcor=True, **kwargs)
                         ax_select.set_title('{} {}'.format(band, res))
                         #try:
                         #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
@@ -2061,17 +2098,18 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 if obj_summary is not None:
                     obj_summary.close()
                 found_string = obj
-                for band in bands:
+                for band in focus_bands:
                     for res in resolutions:
-                        print(obj_sourcefound[band+'_'+res])
+                        # print(obj_sourcefound[band+'_'+res])
                         found_string += ' '+str(len(obj_sourcefound[band+'_'+res]))
-                print(found_string)
+                # print(found_string)
                 # save figure
                 fig.subplots_adjust(wspace=0.2, hspace=0.2)
                 if summary_plot:
                     fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
                 if summary_file: 
                     SMG_input = 0
+                    RG_input = 0
                     Jet_input = 0
                     detections = {}
                     goodfields = {}
@@ -2081,23 +2119,28 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                     if interactive:
                         plt.show()
                         print("Single Band:\n") 
-                        print("Detection: 0)None 1)point source 2)Partially 3)enlongated jet -1)Not Sure")
-                        print("Usable: 0)No 1)Full 2)exclude center -1)re-imaging -2)images reselection")
+                        print("Detection: 0)None 1)Both 2)Partially -1)Not Sure")
+                        print("Usable: 0)No 1)Full +2)exclude center -1)re-check")
                         print("General Classification")
-                        print("Is SMG: 0)No 1)Yes 2)Multiple 3)Radio Source -1)Not Sure")
-                        print("Is Jet: 0)No 1)Compact 2)Enlongated -1)Not Sure")
-                        for band in bands:
+                        print("Is SMG: 0)No 1)Yes 2+)Multiple -1)Not Sure")
+                        print("Is RG: 0)No 1)Yes 2+)Multiple -1)Not Sure")
+                        print("Is Jet: 0)No 1)Compact 2+)Enlongated -1)Not Sure")
+                        for band in focus_bands:
+                            if not obj_validbands[band]:
+                                continue
                             detection_input=int(raw_input("Dection in Band:{} (integer, 0,1,2,3,-1) [0]?: ".format(band)) or 0)
                             goodfield_input=int(raw_input("Usable for Band:{} (integer, 0,1,2,-1,-2) [0]?: ".format(band)) or 0)
                             detections[band] = detection_input
                             goodfields[band] = goodfield_input
                         if bands > 0:
-                            SMG_input = int(raw_input("Is SMG? (integer, 0,1,2,3,-1) [0]: ") or 0)
+                            SMG_input = int(raw_input("Is SMG? (integer, 0,1,2,-1) [0]: ") or 0)
+                            RG_input = int(raw_input("Is RG? (integer, 0,1,2,-1) [0]: ") or 0)
                             Jet_input = int(raw_input("Is Jet? (integer, 0,1,2,-1) [0]: ") or 0)
                         plt.close()
-                    for band in bands:
+                    for band in focus_bands:
                         found_string += ' {} {}'.format(detections[band], goodfields[band])
                     found_string += ' {}'.format(SMG_input)
+                    found_string += ' {}'.format(RG_input)
                     found_string += ' {}'.format(Jet_input)
                     with open(summary_file, 'a+') as f:
                         f.write("{}\n".format(found_string)) 
@@ -2118,13 +2161,14 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
     except KeyboardInterrupt:
         return 0
 
-def run_measure_flux(basedir, objs=None, band='B6', suffix='combine.ms.auto.cont', 
-                   resolutions=['0.3arcsec', '0.6arcsec'], selected_resolution='0.3arcsec',
+def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
+                   suffix='combine.ms.auto.cont', resolutions=['0.3arcsec', '0.6arcsec'], 
+                   selected_resolution='0.3arcsec', ncol=1,
                    summary_file=None, view_mode='multiple',
-                   continue_mode=True):
+                   continue_mode=True, **kwargs):
     """finding sources
     Adding a dot in the string: 
-        resolutions = ['0.3arcsec','0.8arcsec']
+        resolutions = ['0.3arcsec','0.6arcsec']
     """
     objs_finished = []
     if summary_file is not None:
@@ -2143,7 +2187,7 @@ def run_measure_flux(basedir, objs=None, band='B6', suffix='combine.ms.auto.cont
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
-        for item in os.listdir(os.path.join(basedir, band)):
+        for item in os.listdir(os.path.join(basedir, focus_band)):
             if obj_match.match(obj):
                 objs.append(item)
         objs = np.unique(objs).tolist()
@@ -2156,58 +2200,68 @@ def run_measure_flux(basedir, objs=None, band='B6', suffix='combine.ms.auto.cont
                 print("{} already done!".format(obj))
                 continue
             print(obj)
+            obj_focus_band_dir = os.path.join(basedir, focus_band, obj)
             obj_sourcefound = {}
             if obj_match.match(obj):
                 print('>>>>> {}'.format(obj))
 
                 # make a summary plot
-                fig, ax = plt.subplots(1, len(resolutions), 
-                                       figsize=(4.2*len(resolutions),4)) 
+                nrow = int(1.0 * len(bands) / ncol)
+                fig, ax = plt.subplots(nrow, len(resolutions)*ncol, 
+                                       figsize=(ncol*4.2*len(resolutions),4*nrow)) 
                 fig.suptitle(obj)
                 #for img in imgs:
                 # sources_number = {}
-                obj_band_dir = os.path.join(basedir, band, obj)
-                for j,res in enumerate(resolutions):
-                    ax_select = ax[j]
-                    if res == '':
-                        res_string = ''
-                    else:
-                        res_string = res+'.'
-                    image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
-                    image_fullpath = os.path.join(obj_band_dir, image_name)
-                    print(image_fullpath)
-                    #print('Finding source in:', image_fullpath)
-                    if not os.path.isfile(image_fullpath):
-                        continue
-                    ax_select.set_title('{}'.format(res))
-                    sources_found = source_finder(image_fullpath, 
-                            ax=ax_select, pbcor=True, central_mask_radius=0.0)
-                    obj_sourcefound['{}'.format(res)] = sources_found
+                for i,band in enumerate(bands):
+                    i_ax = i // ncol
+                    obj_band_dir = os.path.join(basedir, band, obj)
+                    for j,res in enumerate(resolutions):
+                        j_ax = j + i%ncol*ncol
+                        if len(bands) > 1:
+                            ax_select = ax[i_ax,j_ax]
+                        else:
+                            ax_select = ax[max(i_ax,j_ax)]
+                        if res == '':
+                            res_string = ''
+                        else:
+                            res_string = res+'.'
+                        image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+                        image_fullpath = os.path.join(obj_band_dir, image_name)
+                        print(image_fullpath)
+                        #print('Finding source in:', image_fullpath)
+                        if not os.path.isfile(image_fullpath):
+                            continue
+                        ax_select.set_title('{}'.format(res))
+                        sources_found = source_finder(image_fullpath, 
+                                ax=ax_select, pbcor=True, central_mask_radius=2.0, **kwargs)
+                        if band == focus_band:
+                            obj_sourcefound['{}'.format(res)] = sources_found
 
-                # save figure
+                # interactive selecting sources
                 if summary_file:
                     detections_summary = open(summary_file, 'a+')
                     coords_list = []
-                    is_detection = int(raw_input("Dection in Band:{} (integer, 0/1) [0]?: ".format(band)) or 0)
+                    is_detection = int(raw_input("Dection in band: {} (integer, 0/1) [1]?: ".format(focus_band)) or 1)
+                    # is_detection = 1
                     if is_detection > 0:
                         for res in resolutions:
                             detection_idx = str(
-                                    raw_input("The index for the true detections of band{} in reselection:{}\nSeperate with comma: ".format(
-                                               band, res)))
+                                    raw_input("The index for the true detections of band {} in reselection:{}\nSeperate with comma: ".format(
+                                               focus_band, res)))
                             for idx in detection_idx.split(','):
                                 if idx == '':
                                     continue
                                 ra, dec, flux, snr = obj_sourcefound['{}'.format(res)][int(idx)]
                                 coords_list.append([ra, dec])
                         coords_unique = combine_sources(coords_list)
-                        selected_image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, selected_resolution)
-                        seleted_image_fullpath = os.path.join(obj_band_dir, selected_image)
+                        selected_image = "{}_{}_{}.{}.image.fits".format(obj, focus_band, suffix, selected_resolution)
+                        seleted_image_fullpath = os.path.join(obj_focus_band_dir, selected_image)
                         print("Using {} for flux measurements.\n".format(seleted_image_fullpath))
                         sources_flux, sources_flux_snr = flux_measure(seleted_image_fullpath, coords_unique, methods=['aperture', 'gaussian', 'peak'])
                         sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
                         # print("sources_flux", sources_flux)
                         # print("sources_flux_snr", sources_flux_snr)
-                        print(sources_flux)
+                        #print(sources_flux)
                         print("Totoal {} sources".format(len(coords_unique)))
                         for i in range(len(coords_unique)):
                             detections_summary.write('{} {} {:.6f} {:.6f} {} {} {} {} {} {}'.format(obj, i, coords_unique[i][0], coords_unique[i][1], 
@@ -2268,7 +2322,7 @@ def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./',
                 second_check=False, snr_mode='peak')
 
 def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
-        suffix='combine.ms.auto.cont', resolution='0.3arcsec', 
+        suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
         snr_threshold=5.0, savefile=None):
     """calculate the effecitve area for all the usable fields
     """
@@ -2289,8 +2343,14 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
         image_pbcorr = image.replace('image', 'pbcor.image')
         image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
         if os.path.isfile(image_fullpath):
-            _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
-                            images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,])
+            if obj in objs_nocenter:
+                _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
+                            images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,],
+                            central_mask_radius=2.0,)
+            else:
+                _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
+                            images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,],
+                            central_mask_radius=0.0,)
             effarea[band] += objarea
     if savefile:
         effarea.write(savefile, format='ascii')
@@ -2336,15 +2396,15 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
             sim_jsonfile = default_simulation
         try:
             snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
-                jsonfile=sim_jsonfile, snr=np.arange(0.2, 10, 0.2), plot=False)
+                jsonfile=sim_jsonfile, snr=np.arange(0.2, 11, 0.2), plot=False)
         except:
             snr_list, apert_boost_list, comp_list, fake_rate_list = plot_sim_results(
-                jsonfile=default_simulation, snr=np.arange(0.2, 10, 0.2), plot=False)
+                jsonfile=default_simulation, snr=np.arange(0.2, 11, 0.2), plot=False)
             print("Using default simulations: {}".format(default_simulation))
 
         cs_comp = scipy.interpolate.interp1d(snr_list, comp_list)
         def cs_comp2(snr):
-            if snr<10:
+            if snr<10.0:
                 return cs_comp(snr)
             else:
                 return 1.0
@@ -2380,9 +2440,11 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         ax = fig.add_subplot(111)
         ax.set_xscale("log")
         ax.set_yscale("log")
-    ax.plot(flist, NN, 'ko')
+    ax.plot(flist, NN, 'ko',label='ALMACAL')
     ax.plot(flist, NN, 'k--')
     ax.errorbar(flist, NN, yerr=NN_err, fmt='k')
+    ax.set_xlabel('Flux [mJy]')
+    ax.set_ylabel('N [deg$^{-2}$]')
     ax.set_title(band)
 
     if band == 'B7':
@@ -2390,7 +2452,7 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         NN_oteo2016 = [17e3, 3.8e3]
         NN_oteo2016_error_upper = [14.3e3, 3.2e3]
         NN_oteo2016_error_lower = [14.0e3, 3.1e3]
-        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al (2016)')
+        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al (2016) B7')
         ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
 
     if band == 'B6':
@@ -2398,7 +2460,7 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         NN_oteo2016 = [5.6e3, 0.9e3]
         NN_oteo2016_error_upper = [4.7e3, 0.8e3]
         NN_oteo2016_error_lower = [4.6e3, 0.7e3]
-        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al. (2016)')
+        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al. (2016) B6')
         ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
 
     if band == 'B8':
@@ -2407,7 +2469,7 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         NN_anne2020_log_error = [4.7, 3.9]
         NN_anne2020 = np.array(10)**np.array(NN_anne2020_log)
         NN_anne2020_error = np.array(NN_anne2020_log_error)*np.array(NN_anne2020)*np.log(10)
-        ax.plot(flist_anne2020, NN_anne2020, 'yo', label='Klitsh et al. (2020)')
+        ax.plot(flist_anne2020, NN_anne2020, 'yo', label='Klitsch et al. (2020)')
         ax.errorbar(flist_anne2020, NN_anne2020, yerr=NN_anne2020_error, fmt='y')
         # Plot the model of Lagos
         flist_Lagos_B8 = 10**np.linspace(-1.0, 1.0, 9)
@@ -2427,7 +2489,7 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
                                  490,490,-1]
         NN_aspecs_error_upper = [8900, 6900,6200,5600,5600,4700,4000,3400,3000,2700,2400,2100,1250,
                                  1250,820,820,-1]
-        ax.plot(flist_aspecs, NN_aspecs, 'bo', label='APECS-LP')
+        ax.plot(flist_aspecs, NN_aspecs, 'bo', label='ASPECS-LP 1.2mm')
         ax.errorbar(flist_aspecs, NN_aspecs, yerr=NN_aspecs_error_upper, fmt='b')
 
         # show Fujimoto et al. 2016
@@ -2438,7 +2500,7 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         NN_fujimoto = np.array(10)**NN_fujimoto_log
         NN_fujimoto_error_upper = np.array(NN_fujimoto_log_error_upper)*np.array(NN_fujimoto)*np.log(10)
         NN_fujimoto_error_lower = np.array(10)**NN_fujimoto_log_error_lower
-        ax.plot(flist_fujimoto[1:], NN_fujimoto[1:], 'mo', label='Fujimoto et al. (2016)')
+        ax.plot(flist_fujimoto[1:], NN_fujimoto[1:], 'mo', label='Fujimoto et al. (2016) 1.2mm')
         ax.errorbar(flist_fujimoto[1:], NN_fujimoto[1:], yerr=NN_fujimoto_error_upper[1:], fmt='m')
 
         # # show Stach 2018
