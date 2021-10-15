@@ -1261,6 +1261,9 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     if len(vis) < 1:
         print("No valid visibility left!")
         os.system('touch {}'.format(os.path.join(outdir, 'Done')))
+        # clean the folder
+        rmtables(os.path.join(outdir,'uid___*'))
+        os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
         return 0
 
     if os.path.isdir(concatvis):
