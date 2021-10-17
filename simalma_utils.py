@@ -638,7 +638,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         #flux_aper_found = (phot_table_found['aperture_sum'] / beamsize * 1000).tolist() # convert mJy
 
         # automatically aperture photometry
-        seg_radius = np.int(a)
+        seg_radius = 2.0*np.int(a)
         segments = RectangularAperture(sources_found_center_candidates, seg_radius, 
                 seg_radius, theta=0)
         try:
@@ -1014,8 +1014,8 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
     print("known_sources_coords", known_sources_coords)
     print("known_sources_pixel", known_sources_pixel)
     print("known_sources_center", known_sources_center)
-    seg_radius = np.int(a)
-    segments = RectangularAperture(known_sources_center, 2.*a, 2.0*a, theta=0)
+    seg_radius = 2.0*np.int(a)
+    segments = RectangularAperture(known_sources_center, 2*seg_radius, 2*seg_radius, theta=0)
     segments_mask = segments.to_mask(method='center')
     
     flux_auto = []
