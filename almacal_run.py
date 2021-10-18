@@ -2373,8 +2373,9 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
         effarea.write(savefile, format='ascii')
 
 def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
-        simulation_folder=None, ax=None, flux_mode='aperture', completeness_mode='peak',
-        default_simulation=None, objs_withdeafultsim=[], n_bootstrap=1000):
+        simulation_folder=None, ax=None, flux_mode=['aperture', 'gaussian'], completeness_mode='peak',
+        default_simulation=None, objs_withdeafultsim=[], n_bootstrap=1000, savefile=None,
+        plot=True,):
     """
 
     flist: flux list, [0.2, 0.6, 1.0]
@@ -2396,8 +2397,17 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
     
     for i in range(n_sources):
         item = tab[i]
-        flux = item['flux_'+flux_mode]
-        flux_err = 1.2*flux/item['flux_snr_'+flux_mode] 
+        if isinstance(flux_mode, (list, tuple)):
+            flux1 = item['flux_'+flux_mode[0]]
+            flux2 = item['flux_'+flux_mode[1]]
+            print(flux1, flux2)
+            flux = 0.5*(flux1 + flux2)
+            flux_err = 0.5*(item['flux_'+flux_mode[0]]/item['flux_snr_'+flux_mode[0]]
+                            + item['flux_'+flux_mode[1]]/item['flux_snr_'+flux_mode[1]]) \
+                            + np.diff([flux1, flux2])
+        else:
+            flux = item['flux_'+flux_mode]
+            flux_err = 1.2*flux/item['flux_snr_'+flux_mode] 
         obj = item['obj']
         completeness_snr = item['flux_snr_'+completeness_mode]
         
@@ -2451,85 +2461,117 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
     NN_err = (2*np.sqrt(np.array(NN_err)**2 + np.array(NN))).tolist()
     print(flist, NN_number, NN, NN_err)
     # print(flist, NN, np.sqrt(NN).tolist())
-    
+    if savefile:
+        with open(savefile, 'w+') as sf:
+            sf.write('flist NN_number NN NN_err\n')
+            for i in range(len(flist)):
+                sf.write("{} {} {} {}\n".format(flist[i], NN_number[i], NN[i], NN_err[i]))
+    if plot:
+        plot_number_counts(flist=flist, NN=NN, NN_err=NN_err, ax=ax, band=band)
+
+
+
+def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None, band=None,
+        model_dir=None, show_models=True):
     if ax is None:
         fig = plt.figure(figsize=(6, 8))
         ax = fig.add_subplot(111)
         ax.set_xscale("log")
         ax.set_yscale("log")
-    ax.plot(flist, NN, 'ko',label='ALMACAL')
-    ax.plot(flist, NN, 'k--')
-    ax.errorbar(flist, NN, yerr=NN_err, fmt='k')
-    ax.set_xlabel('Flux [mJy]')
-    ax.set_ylabel('N [deg$^{-2}$]')
-    ax.set_title(band)
+    if datafile:
+        if isinstance(datafile, str):
+            tab = Table.read(datafile, format='ascii')
+            flist = tab['flist']
+            NN = tab['NN']
+            NN_err = tab['NN_err']
+        elif isinstance(datafile, (list, tuple)):
+            for dfile, dband in zip(datafile, band):
+                plot_number_counts(dfile, ax=ax, band=dband, show_models=False,model_dir=model_dir)
+    if True:
+        ax.plot(flist, NN, 'ko',label='ALMACAL')
+        ax.plot(flist, NN, 'k--')
+        ax.errorbar(flist, NN, yerr=NN_err, fmt='k')
+        ax.set_xlabel('Flux [mJy]')
+        ax.set_ylabel('N [deg$^{-2}$]')
+        ax.set_title(band)
 
-    if band == 'B7':
-        flist_oteo2016 = [0.4, 1.0]
-        NN_oteo2016 = [17e3, 3.8e3]
-        NN_oteo2016_error_upper = [14.3e3, 3.2e3]
-        NN_oteo2016_error_lower = [14.0e3, 3.1e3]
-        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al (2016) B7')
-        ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
+        if band == 'B7':
+            flist_oteo2016 = [0.4, 1.0]
+            NN_oteo2016 = [17e3, 3.8e3]
+            NN_oteo2016_error_upper = [14.3e3, 3.2e3]
+            NN_oteo2016_error_lower = [14.0e3, 3.1e3]
+            ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al (2016) B7')
+            ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
 
-    if band == 'B6':
-        flist_oteo2016 = [0.2, 0.8]
-        NN_oteo2016 = [5.6e3, 0.9e3]
-        NN_oteo2016_error_upper = [4.7e3, 0.8e3]
-        NN_oteo2016_error_lower = [4.6e3, 0.7e3]
-        ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al. (2016) B6')
-        ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
+        if band == 'B6':
+            flist_oteo2016 = [0.2, 0.8]
+            NN_oteo2016 = [5.6e3, 0.9e3]
+            NN_oteo2016_error_upper = [4.7e3, 0.8e3]
+            NN_oteo2016_error_lower = [4.6e3, 0.7e3]
+            ax.plot(flist_oteo2016, NN_oteo2016, 'yo', label='Oteo et al. (2016) B6')
+            ax.errorbar(flist_oteo2016, NN_oteo2016, yerr=NN_oteo2016_error_upper, fmt='y')
 
-    if band == 'B8':
-        flist_anne2020 = [0.67, 2.50]
-        NN_anne2020_log = [4.8, 4.1]
-        NN_anne2020_log_error = [4.7, 3.9]
-        NN_anne2020 = np.array(10)**np.array(NN_anne2020_log)
-        NN_anne2020_error = np.array(NN_anne2020_log_error)*np.array(NN_anne2020)*np.log(10)
-        ax.plot(flist_anne2020, NN_anne2020, 'yo', label='Klitsch et al. (2020)')
-        ax.errorbar(flist_anne2020, NN_anne2020, yerr=NN_anne2020_error, fmt='y')
-        # Plot the model of Lagos
-        flist_Lagos_B8 = 10**np.linspace(-1.0, 1.0, 9)
-        NN_lagos_B8 = np.array([102458.04, 70664.18, 44428.86, 24411.87, 11827.86, 5120.97, 1919.28, 602.10, 164.67])
-        plt.plot(flist_Lagos_B8, NN_lagos_B8)
+        if band == 'B8':
+            flist_anne2020 = [0.67, 2.50]
+            NN_anne2020_log = [4.8, 4.1]
+            NN_anne2020_log_error = [4.7, 3.9]
+            NN_anne2020 = np.array(10)**np.array(NN_anne2020_log)
+            NN_anne2020_error = np.array(NN_anne2020_log_error)*np.array(NN_anne2020)*np.log(10)
+            ax.plot(flist_anne2020, NN_anne2020, 'yo', label='Klitsch et al. (2020)')
+            ax.errorbar(flist_anne2020, NN_anne2020, yerr=NN_anne2020_error, fmt='y')
+            # Plot the model of Lagos
+            # flist_Lagos_B8 = 10**np.linspace(-1.0, 1.0, 9)
+            # NN_lagos_B8 = np.array([102458.04, 70664.18, 44428.86, 24411.87, 11827.86, 5120.97, 1919.28, 602.10, 164.67])
+            # plt.plot(flist_Lagos_B8, NN_lagos_B8)
 
-    if band == 'B6' or band == 'B7':
-        # show ASPECS
-        flist_aspecs_data  = np.array([[31.6, 39.8], [39.8, 50.1], [50.1, 63.1],[63.1, 79.4], [79.4,100.], 
-                         [100., 125.9], [125.9,158.5], [158.5,199.5], [199.5, 251.2], 
-                         [251.2,316.2], [316.2, 398.1], [398.1,501.2], [501.2,631.0],
-                         [631.0,794.3], [794.3,1000.], [1000.,1258.9], [1258.9,1584.9]])
-        flist_aspecs = np.mean(flist_aspecs_data, axis=1) * 1e-3
-        NN_aspecs = [47400, 35100, 30700,26500,26500,19300,14800,10600,8700,7800,5300,4300,1720,1720,
-                     860,860,1600]
-        NN_aspecs_error_lower = [8200,6200,5500,4900,5100,4400,3500,2900,2400,2300,1900,1600,840,840,
-                                 490,490,-1]
-        NN_aspecs_error_upper = [8900, 6900,6200,5600,5600,4700,4000,3400,3000,2700,2400,2100,1250,
-                                 1250,820,820,-1]
-        ax.plot(flist_aspecs, NN_aspecs, 'bo', label='ASPECS-LP 1.2mm')
-        ax.errorbar(flist_aspecs, NN_aspecs, yerr=NN_aspecs_error_upper, fmt='b')
+        if band == 'B6':
+            # show ASPECS
+            flist_aspecs_data  = np.array([[31.6, 39.8], [39.8, 50.1], [50.1, 63.1],[63.1, 79.4], [79.4,100.], 
+                             [100., 125.9], [125.9,158.5], [158.5,199.5], [199.5, 251.2], 
+                             [251.2,316.2], [316.2, 398.1], [398.1,501.2], [501.2,631.0],
+                             [631.0,794.3], [794.3,1000.], [1000.,1258.9], [1258.9,1584.9]])
+            flist_aspecs = np.mean(flist_aspecs_data, axis=1) * 1e-3
+            NN_aspecs = [47400, 35100, 30700,26500,26500,19300,14800,10600,8700,7800,5300,4300,1720,1720,
+                         860,860,1600]
+            NN_aspecs_error_lower = [8200,6200,5500,4900,5100,4400,3500,2900,2400,2300,1900,1600,840,840,
+                                     490,490,-1]
+            NN_aspecs_error_upper = [8900, 6900,6200,5600,5600,4700,4000,3400,3000,2700,2400,2100,1250,
+                                     1250,820,820,-1]
+            ax.plot(flist_aspecs, NN_aspecs, 'bs', label='ASPECS-LP 1.2mm')
+            ax.errorbar(flist_aspecs, NN_aspecs, yerr=NN_aspecs_error_upper, fmt='b', linestyle='..')
 
-        # show Fujimoto et al. 2016
-        flist_fujimoto = [0.002, 0.015, 0.027, 0.047, 0.084, 0.150, 0.267, 0.474, 0.843]
-        NN_fujimoto_log = [6.6, 5.5, 5.3, 5.0, 4.8, 4.6, 4.2, 3.7, 2.8]
-        NN_fujimoto_log_error_upper = [0.5, 0.3, 0.2, 0.2, 0.1, 0.1, 0.2, 0.2, 0.6]
-        NN_fujimoto_log_error_lower = [1.1, 0.4, 0.3, 0.2, 0.2, 0.1, 0.2, 0.3, 0.5]
-        NN_fujimoto = np.array(10)**NN_fujimoto_log
-        NN_fujimoto_error_upper = np.array(NN_fujimoto_log_error_upper)*np.array(NN_fujimoto)*np.log(10)
-        NN_fujimoto_error_lower = np.array(10)**NN_fujimoto_log_error_lower
-        ax.plot(flist_fujimoto[1:], NN_fujimoto[1:], 'mo', label='Fujimoto et al. (2016) 1.2mm')
-        ax.errorbar(flist_fujimoto[1:], NN_fujimoto[1:], yerr=NN_fujimoto_error_upper[1:], fmt='m')
+            # show Fujimoto et al. 2016
+            flist_fujimoto = [0.002, 0.015, 0.027, 0.047, 0.084, 0.150, 0.267, 0.474, 0.843]
+            NN_fujimoto_log = [6.6, 5.5, 5.3, 5.0, 4.8, 4.6, 4.2, 3.7, 2.8]
+            NN_fujimoto_log_error_upper = [0.5, 0.3, 0.2, 0.2, 0.1, 0.1, 0.2, 0.2, 0.6]
+            NN_fujimoto_log_error_lower = [1.1, 0.4, 0.3, 0.2, 0.2, 0.1, 0.2, 0.3, 0.5]
+            NN_fujimoto = np.array(10)**NN_fujimoto_log
+            NN_fujimoto_error_upper = np.array(NN_fujimoto_log_error_upper)*np.array(NN_fujimoto)*np.log(10)
+            NN_fujimoto_error_lower = np.array(10)**NN_fujimoto_log_error_lower
+            ax.plot(flist_fujimoto[1:], NN_fujimoto[1:], 'm>', label='Fujimoto et al. (2016) 1.2mm')
+            ax.errorbar(flist_fujimoto[1:], NN_fujimoto[1:], yerr=NN_fujimoto_error_upper[1:], fmt='m', linestyle='-.')
 
-        # # show Stach 2018
-        # flist_stach = [4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5]
-        # NN_stach = [385.3, 216.7, 106.2, 53.6, 29.6, 20.0, 10.5, 5.3, 2.1,2.1,1.0]
-        # NN_stach_error_upper = [21.1, 17.3, 11.4, 8.4, 6.5, 5.7, 4.4,3.5, 2.8, 2.8, 2.4]
-        # NN_stach_error_lower = [7.7, 6.6, 3.5, 2.5, 1.9, 1.8, 1.2, 0.9, 0.6, 0.6, 0.5]
-        # ax.plot(flist_stach, NN_stach, 'co', label='Stach et al. (2018)')
-        # ax.errorbar(flist_stach, NN_stach, yerr=NN_stach_error_upper, fmt='c')
+            # # show Stach 2018
+            # flist_stach = [4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5]
+            # NN_stach = [385.3, 216.7, 106.2, 53.6, 29.6, 20.0, 10.5, 5.3, 2.1,2.1,1.0]
+            # NN_stach_error_upper = [21.1, 17.3, 11.4, 8.4, 6.5, 5.7, 4.4,3.5, 2.8, 2.8, 2.4]
+            # NN_stach_error_lower = [7.7, 6.6, 3.5, 2.5, 1.9, 1.8, 1.2, 0.9, 0.6, 0.6, 0.5]
+            # ax.plot(flist_stach, NN_stach, 'co', label='Stach et al. (2018)')
+            # ax.errorbar(flist_stach, NN_stach, yerr=NN_stach_error_upper, fmt='c')
+        if show_models:
+            # show the theoretical model
+            Lagos_model_dir = os.path.join(model_dir, 'ModelsLagos')
+            Lagos_B6 = np.loadtxt(os.path.join(Lagos_model_dir,'Band6.txt'))
+            Lagos_B7 = np.loadtxt(os.path.join(Lagos_model_dir,'Band7.txt'))
+            Lagos_B8 = np.loadtxt(os.path.join(Lagos_model_dir,'Band8.txt'))
+            Lagos_B9 = np.loadtxt(os.path.join(Lagos_model_dir,'Band9.txt'))
+            ax.plot(10**Lagos_B6[:,0], Lagos_B6[:,1], 'r--', label='Lagos et al. (2019)')
+            ax.plot(10**Lagos_B7[:,0], Lagos_B7[:,1], 'r--', )
+            ax.plot(10**Lagos_B8[:,0], Lagos_B8[:,1], 'r--', )
+            ax.plot(10**Lagos_B9[:,0], Lagos_B9[:,1], 'r--', )
 
 
-    ax.legend()
+        ax.legend()
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
