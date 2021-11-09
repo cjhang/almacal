@@ -1973,11 +1973,10 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
                     if len(glob.glob(good_image_fitsfile)) > 0:
                         print("Skip {} of {}, delete the fits file to recreate...".format(band,obj))
                         continue
-                else:
-                    combined_vis = gen_filenames(listfile=good_image_file)
-                    make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
-                            outdir=obj_outdir, computwt=computwt, make_jackknif=make_jackknif, 
-                            basedir=os.path.join(basedir, obj), **kwargs)
+                combined_vis = gen_filenames(listfile=good_image_file)
+                make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
+                        outdir=obj_outdir, computwt=computwt, make_jackknif=make_jackknif, 
+                        basedir=os.path.join(basedir, obj), **kwargs)
 
 def run_make_all_jeckknifimages():
     pass
