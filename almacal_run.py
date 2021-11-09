@@ -1966,12 +1966,13 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
                         print("Pruning folder....")
                         rmtables(os.path.join(obj_outdir,'uid___*'))
                         os.system('rm -rf {}'.format(os.path.join(obj_outdir,'uid___*.flagversions')))
-                if not overwrite and os.path.isfile(os.path.join(obj_outdir, 'Done')):
-                    print("Skip {} of {}, delete the 'Done' file to continue...".format(band,obj))
-                    continue
-                if not overwrite and (len(glob.glob(good_image_fitsfile)) > 0):
-                    print("Skip {} of {}, delete the fits file to continue...".format(band,obj))
-                    continue
+                if not overwrite:
+                    if os.path.isfile(os.path.join(obj_outdir, 'Done')):
+                        print("Skip {} of {}, delete the 'Done' file to recreate...".format(band,obj))
+                        continue
+                    if len(glob.glob(good_image_fitsfile)) > 0:
+                        print("Skip {} of {}, delete the fits file to recreate...".format(band,obj))
+                        continue
                 else:
                     combined_vis = gen_filenames(listfile=good_image_file)
                     make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
