@@ -1219,9 +1219,14 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
     # return
     vis_cloned = []
     for v in vis:
-        v_cloned = vis_clone(v, outdir=outdir, computwt=computwt, drop_FDM=drop_FDM)
-        if v_cloned is not None:
-            vis_cloned.append(v_cloned)
+        try:
+            v_cloned = vis_clone(v, outdir=outdir, computwt=computwt, drop_FDM=drop_FDM)
+            if v_cloned is not None:
+                vis_cloned.append(v_cloned)
+        except:
+            if debug:
+                print("Error in clone: {}".format(v))
+            continue
     vis = vis_cloned
         
     if check_sensitivity:
