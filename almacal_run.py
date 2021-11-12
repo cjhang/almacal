@@ -1906,9 +1906,11 @@ def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7']
     else:
         objlist = []
         obj_match = re.compile('^J\d*[+-]\d*$')
-        for obj in os.listdir(classifiedfolder):
-            if obj_match.match(obj):
-                objlist.append(obj)
+        for band in bands:
+            for obj in os.listdir(os.path.join(classifiedfolder, band)):
+                if obj_match.match(obj):
+                    objlist.append(obj)
+        objlist = np.unique(objlist)
         #raise ValueError("Unsupported objlist!")
     for obj in objlist:
         for band in bands:
@@ -2473,8 +2475,6 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
                 sf.write("{} {} {} {}\n".format(flist[i], NN_number[i], NN[i], NN_err[i]))
     if plot:
         plot_number_counts(flist=flist, NN=NN, NN_err=NN_err, ax=ax, band=band)
-
-
 
 def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None, band=None,
         model_dir=None, show_models=True):

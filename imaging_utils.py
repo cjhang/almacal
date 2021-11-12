@@ -497,7 +497,7 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
     if not threshold:
         if has_analysisUtils:
             threshold = "{}mJy".format(1000.0*auto_threshold*calculate_sensitivity(vis, 
-                band_width=mychanwidth))
+                band_width=mychanwidth, pwv=1.5))
         else:
             print("Warning: no analysisUtils found, set threshold to 0.0!")
             threshold = 0.0
