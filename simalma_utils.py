@@ -1054,6 +1054,8 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
         flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                     theta=theta/180*np.pi, debug=False, methods=methods,
                                     aperture_correction=aperture_correction)
+        flux_snr = flux_list / std
+        flux_snr_list.append(flux_snr)
         if target_wave:
             flux_list = flux_interpolate(lam, flux_list, target_wave) 
         if pbcor:
@@ -1062,8 +1064,6 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             flux_auto.append(np.array(flux_list) * 1000. / pbcor_pixel)
         else:
             flux_auto.append(np.array(flux_list) * 1000.)
-        flux_snr = flux_list / std
-        flux_snr_list.append(flux_snr)
     
     if calculate_radial_distance:
         radial_distance = []
