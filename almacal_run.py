@@ -2294,9 +2294,12 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                         n_uniq = len(coords_unique)
                         source_type = []
                         print("Classify the detections: 0)not sure 1)SMG; 2)radio:")
-                        for s in range(n_uniq):
-                            print("For source: flux(:.2f) snr(:.2f) dist(:.2f)".format(sources_flux[i][0], sources_flux_snr[i][0], radial_distance[i])
-                            source_type.append(int(raw_input("Source type: {} (integer, 0/1/2) [1]?: ".format(focus_band)) or 1))
+                        for si in range(n_uniq):
+                            print("For selected source: {}: flux={:.2f} snr={:.2f} dist={:.2f}".format(si, sources_flux[si][0], sources_flux_snr[si][0], 
+                                                                                       sources_radial_distance[si]))
+                        for si in range(n_uniq):
+                            s_type = int(raw_input("Selected source: {} type:(integer, 0/1/2) [1]?: ".format(si)) or 1)
+                            source_type.append(s_type)
                         print("Totoal {} sources".format(n_uniq))
                         for i in range(n_uniq):
                             detections_summary.write('{} {} {} {:.6f} {:.6f} {} {} {} {} {} {} {}'.format(obj,
