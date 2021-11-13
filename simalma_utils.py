@@ -2,6 +2,7 @@
 import numpy as np
 from scipy import signal, ndimage 
 from scipy.interpolate import CubicSpline
+from scipy import interpolate
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
@@ -454,7 +455,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                   filter_size=None, box_size=None, methods=['aperture','gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
-                  return_image_cuts=False, central_mask_radius=2.0, cmap=None,):
+                  return_image_cuts=False, central_mask_radius=2.0, cmap=None, return_flux=True):
     """finding point source in the image
 
     This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
@@ -860,8 +861,13 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     if sources_file:
         return np.array(flux_input), np.array(flux_input_auto), np.array(flux_auto), idxs    
     if len(flux_auto)>0:
-        return list(zip(sources_found_coords.ra.to(u.arcsec).value, 
-                        sources_found_coords.dec.to(u.arcsec).value, flux_auto, flux_snr_list))
+        if return_flux:
+            return list(zip(sources_found_coords.ra.to(u.arcsec).value, 
+                            sources_found_coords.dec.to(u.arcsec).value, flux_auto, flux_snr_list))
+        else:
+            return list(zip(sources_found_coords.ra.to(u.arcsec).value, 
+                            sources_found_coords.dec.to(u.arcsec).value))
+
     else:
         return []
 
@@ -921,9 +927,29 @@ def calculate_image_sensitivity(image, known_sources=None, central_mask_radius=2
         std = np.ma.std(data_field)
     return mean, median, std
 
+def flux_interpolate(wavelength, flux, target_wavelength, redshift=2.6,
+                     SED_template=os.path.join(ROOT_DIR_CODE, 'data/composite_sed_Lir_01_09.dat'),
+                     debug=False):
+    """interpolate the flux at a specified wavelength
+
+    wavelnegth in um
+    flux in mJy
+    """
+    flux = np.array(flux)
+    SED = np.loadtxt(SED_template)
+    f_SED = interpolate.interp1d(SED[:,0]*(1.0+redshift), SED[:,1]/(1+redshift)**4)
+    scale_factor = flux / f_SED(wavelength)
+    if debug:
+        print("flux at {}: {}".format(wavelength, f_SED(wavelength)))
+        print("flux at {}: {}".format(target_wavelength, f_SED(target_wavelength)))
+        print("scale_factor: {}".format(scale_factor))
+        print("flux difference: {}".format(f_SED(wavelength)/f_SED(target_wavelength)))
+    return scale_factor * f_SED(target_wavelength)
+
 def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, 
-                 model_background=False, jackknif=True,
-                 subtract_background=False, debug=False, ax=None, fov_scale=2.0):
+                 model_background=False, jackknif=True, target_wave=None,
+                 subtract_background=False, debug=False, ax=None, fov_scale=2.0,
+                 calculate_radial_distance=False):
     """measure the flux from the images by given coordinates
 
     the images can be multiple images on the same field but with different resolutions
@@ -1028,7 +1054,8 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
         flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                     theta=theta/180*np.pi, debug=False, methods=methods,
                                     aperture_correction=aperture_correction)
-        # if pbcor:
+        if target_wave:
+            flux_list = flux_interpolate(lam, flux_list, target_wave) 
         if pbcor:
             pbcor_pixel = pbcor_map[np.ceil(known_sources_center[i][0]), 
                                     np.ceil(known_sources_center[i][1])]
@@ -1037,7 +1064,14 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             flux_auto.append(np.array(flux_list) * 1000.)
         flux_snr = flux_list / std
         flux_snr_list.append(flux_snr)
-
+    
+    if calculate_radial_distance:
+        radial_distance = []
+        for coord_pixel in known_sources_center:
+            pixel_dist = np.sqrt((coord_pixel[0] - nx/2.0)**2+
+                                 (coord_pixel[1] - ny/2.0)**2)
+            ang_dist = pixel_dist / deg2pixel * 3600 # in arcsec
+            radial_distance.append(ang_dist)
     if debug:
         # visualize the results
         if ax is None:
@@ -1077,6 +1111,8 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
     print('flux_auto', flux_auto)
     print('flux_snr_list', flux_snr_list)
 
+    if calculate_radial_distance:
+        return flux_auto, flux_snr_list, radial_distance
     return flux_auto, flux_snr_list
  
 def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 

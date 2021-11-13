@@ -2205,7 +2205,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
         if not os.path.isfile(summary_file):
             print('Initializing the output file')
             with open(summary_file, 'w+') as f:
-                f.write("obj idx ra dec flux_aperture flux_snr_aperture flux_gaussian flux_snr_gaussian flux_peak flux_snr_peak")
+                f.write("obj idx ra dec flux_aperture flux_snr_aperture flux_gaussian flux_snr_gaussian flux_peak flux_snr_peak radial_distance")
                 f.write('\n')
 
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -2256,7 +2256,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                         if not os.path.isfile(image_fullpath):
                             continue
                         ax_select.set_title('{}'.format(res))
-                        sources_found = source_finder(image_fullpath, 
+                        sources_found = source_finder(image_fullpath,
                                 ax=ax_select, pbcor=True, central_mask_radius=2.0, **kwargs)
                         if band == focus_band:
                             obj_sourcefound['{}'.format(res)] = sources_found
@@ -2281,17 +2281,21 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                         selected_image = "{}_{}_{}.{}.image.fits".format(obj, focus_band, suffix, selected_resolution)
                         seleted_image_fullpath = os.path.join(obj_focus_band_dir, selected_image)
                         print("Using {} for flux measurements.\n".format(seleted_image_fullpath))
-                        sources_flux, sources_flux_snr = flux_measure(seleted_image_fullpath, coords_unique, methods=['aperture', 'gaussian', 'peak'])
-                        sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
+                        sources_flux, sources_flux_snr, sources_radial_distance = flux_measure(
+                                seleted_image_fullpath, coords_unique, 
+                                methods=['aperture', 'gaussian', 'peak'], calculate_radial_distance=True)
+                        # sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
                         # print("sources_flux", sources_flux)
                         # print("sources_flux_snr", sources_flux_snr)
                         #print(sources_flux)
                         print("Totoal {} sources".format(len(coords_unique)))
                         for i in range(len(coords_unique)):
-                            detections_summary.write('{} {} {:.6f} {:.6f} {} {} {} {} {} {}'.format(obj, i, coords_unique[i][0], coords_unique[i][1], 
+                            detections_summary.write('{} {} {:.6f} {:.6f} {} {} {} {} {} {} {}'.format(obj,
+                                                     i, coords_unique[i][0], coords_unique[i][1],
                                                      sources_flux[i][0], sources_flux_snr[i][0],
                                                      sources_flux[i][1], sources_flux_snr[i][1],
-                                                     sources_flux[i][2], sources_flux_snr[i][2],))
+                                                     sources_flux[i][2], sources_flux_snr[i][2],
+                                                     sources_radial_distance[i]))
                             detections_summary.write('\n')
                     detections_summary.close()
                     plt.close()

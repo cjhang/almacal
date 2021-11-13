@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.table import Table
+plt.style.use('dark_background')
 
 # timeOnSource_all = '../data/make_all_goodimages.txt'
 # data_all = np.loadtxt(timeOnSource_all, skiprows=0,
@@ -115,17 +116,19 @@ if True:
     data_oteo2016_valid = data_oteo2016[band][data_oteo2016[band] > 0.1] / 60.
     data_select_valid = data_select[band][band][data_select[band][band] > 0.1]
     # im = plt.hist(np.log10(data_all_valid), bins=20, label='All (main+ACA)', alpha=0.5)
-    im = plt.hist(np.log10(data_main_valid), bins=20, label='Main', alpha=0.7)
+    im = plt.hist(np.log10(data_main_valid), bins=20, label='All data', alpha=0.7)
     im = plt.hist(np.log10(data_oteo2016_valid), bins=20, label='Oteo et al. (2016)', alpha=0.9)
-    im = plt.hist(np.log10(data_select_valid), bins=20, label='Selected', alpha=0.5)
-    ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
-    ax.set_ylabel('Number')
+    im = plt.hist(np.log10(data_select_valid), bins=20, label='Final Sample', alpha=0.5)
+    ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$', fontsize=16)
+    ax.set_ylabel('Number', fontsize=16)
     # for 1000 minutes, 43 antenna, at 243GHz
     # ax.axvline(x=3, color='b', linestyle='-.', alpha=0.5)
     # ax.text(3.1, 60, r'$4\,\mu$Jy', color='b', alpha=0.5)
     # for 50 minutes, 30 antenna, at 243GHz
     ax.axvline(x=2.25, color='b', linestyle='-.', alpha=0.5)
     ax.text(2.25, 60, r'ASPEC $10\,\mu$Jy', color='b', alpha=0.5)
+    ax.axvline(x=0.7, color='r', linestyle='--', alpha=0.5)
+    ax.text(0.7, 60, r'GOODS-ALMA $68.4\,\mu$Jy', color='r', alpha=0.5)
     ax.set_xlim(0, 3.7)
     ax.set_ylim(0, 95)
     # locs, labels = plt.xticks()
@@ -147,8 +150,8 @@ if True:
     im = plt.hist(np.log10(data_main_valid), bins=20, label='Main', alpha=0.7)
     im = plt.hist(np.log10(data_oteo2016_valid), bins=20, label='Oteo et al. (2016)', alpha=0.9)
     im = plt.hist(np.log10(data_select_valid), bins=20, label='Selected', alpha=0.5)
-    ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$')
-    ax.set_ylabel('Number')
+    ax.set_xlabel(r'$\log (t_{\rm obs}[{\rm Minutes}])$', fontsize=16)
+    ax.set_ylabel('Number', fontsize=16)
     # for 1000 minutes, 43 antenna, at 243GHz
     # ax.axvline(x=3, color='b', linestyle='-.', alpha=0.5)
     # ax.text(3.1, 60, r'$4\,\mu$Jy', color='b', alpha=0.5)
@@ -160,7 +163,7 @@ if True:
     # locs, labels = plt.xticks()
     plt.xticks([0, 1, 2, 3], [r'$1$', r'$10$', r'$10^2$', r'$10^3$'])
     # print(locs, labels)
-    ax.legend()
+    ax.legend(fontsize=12)
     plt.show()
 
     #fig.savefig('../results/comparison.pdf')
