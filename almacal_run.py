@@ -2186,8 +2186,9 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
         return 0
 
 def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
-                   suffix='combine.ms.auto.cont', resolutions=['0.3arcsec', '0.6arcsec'], 
-                   selected_resolution='0.3arcsec', ncol=1,
+                   suffix='combine.ms.auto.cont', target_wave=None,
+                   resolutions=['0.3arcsec', '0.6arcsec'], 
+                   selected_resolution='0.3arcsec', ncol=1, 
                    summary_file=None, view_mode='multiple',
                    continue_mode=True, **kwargs):
     """finding sources
@@ -2282,7 +2283,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                         seleted_image_fullpath = os.path.join(obj_focus_band_dir, selected_image)
                         print("Using {} for flux measurements.\n".format(seleted_image_fullpath))
                         sources_flux, sources_flux_snr, sources_radial_distance = flux_measure(
-                                seleted_image_fullpath, coords_unique, 
+                                seleted_image_fullpath, coords_unique, target_wave=target_wave,
                                 methods=['aperture', 'gaussian', 'peak'], calculate_radial_distance=True)
                         # sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
                         # print("sources_flux", sources_flux)
