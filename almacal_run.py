@@ -2206,7 +2206,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
         if not os.path.isfile(summary_file):
             print('Initializing the output file')
             with open(summary_file, 'w+') as f:
-                f.write("obj idx ra dec flux_aperture flux_snr_aperture flux_gaussian flux_snr_gaussian flux_peak flux_snr_peak radial_distance")
+                f.write("obj idx type ra dec flux_aperture flux_snr_aperture flux_gaussian flux_snr_gaussian flux_peak flux_snr_peak radial_distance")
                 f.write('\n')
 
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -2289,10 +2289,18 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                         # print("sources_flux", sources_flux)
                         # print("sources_flux_snr", sources_flux_snr)
                         #print(sources_flux)
-                        print("Totoal {} sources".format(len(coords_unique)))
-                        for i in range(len(coords_unique)):
-                            detections_summary.write('{} {} {:.6f} {:.6f} {} {} {} {} {} {} {}'.format(obj,
-                                                     i, coords_unique[i][0], coords_unique[i][1],
+                        
+                        # classify the detections: 0)not sure 1)SMG; 2)radio;
+                        n_uniq = len(coords_unique)
+                        source_type = []
+                        print("Classify the detections: 0)not sure 1)SMG; 2)radio:")
+                        for s in range(n_uniq):
+                            print("For source: flux(:.2f) snr(:.2f) dist(:.2f)".format(sources_flux[i][0], sources_flux_snr[i][0], radial_distance[i])
+                            source_type.append(int(raw_input("Source type: {} (integer, 0/1/2) [1]?: ".format(focus_band)) or 1))
+                        print("Totoal {} sources".format(n_uniq))
+                        for i in range(n_uniq):
+                            detections_summary.write('{} {} {} {:.6f} {:.6f} {} {} {} {} {} {} {}'.format(obj,
+                                                     i, source_type[i], coords_unique[i][0], coords_unique[i][1],
                                                      sources_flux[i][0], sources_flux_snr[i][0],
                                                      sources_flux[i][1], sources_flux_snr[i][1],
                                                      sources_flux[i][2], sources_flux_snr[i][2],
