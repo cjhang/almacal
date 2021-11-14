@@ -1566,16 +1566,18 @@ def combine_sources(coords_list, units=u.arcsec, tolerance=0.3*u.arcsec):
             coords_unique.append(coord1)
     return coords_unique
 
-def mock_observation(radius=np.linspace(1, 15, 15), images=None, fNN=None, snr_threshold=5.0,
-        fovscale=2.0, central_mask_radius=1.0):
+def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, step=1.0,
+        fNN=None, snr_threshold=5.0, fovscale=2.0, central_mask_radius=1.0):
     """
     images: the real images accounting primary beam response
     fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
     """
-    with fits.open(images) as hdu:
+    if radius is None:
+        radius = np.arange(central_mask_radius, max_radius, step)
+    with fits.open(image) as hdu:
         data = hdu[0].data
         header = hdu[0].header
-    with fits.open(images_pbcorr) as hdu_pbcor:
+    with fits.open(image_pbcorr) as hdu_pbcor:
         data_pbcor = hdu_pbcor[0].data
     pixel2arcsec = np.abs(header['CDELT1'])*3600
     pix2area = pixel2arcsec**2  # pixel to arcsec^2
@@ -1592,11 +1594,11 @@ def mock_observation(radius=np.linspace(1, 15, 15), images=None, fNN=None, snr_t
     # print('a',a,'b',b)
     data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
     # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
-    mean, median, std = calculate_image_sensitivity(images[i])
+    mean, median, std = calculate_image_sensitivity(image)
     # std = imstat(images[sigma['sigma'][0]
     pbcor = (data / data_pbcor).reshape(ny, nx)
     if std < 1e-7:
-        print("Suspicious image: {}".format(images[i]))
+        print("Suspicious image: {}".format(image))
     mask = data_masked.mask & (data_masked.data >= 5.0*std)
     pbcor[mask] = 0.0
     if fovscale:
@@ -1605,10 +1607,20 @@ def mock_observation(radius=np.linspace(1, 15, 15), images=None, fNN=None, snr_t
     if central_mask_radius > 1e-8:
         pbcor[r < central_mask_radius*a] = 0.0
     Nr = []
-    for rd in radius:
-        area = np.sum((rd < r) & (rd))* pix2area
-        N += fNN(std*i/2.0, area)
-    return N
+    std_map = std / pbcor
+    for i in range(len(radius)-1):
+        r_lower = radius[i]
+        r_upper = radius[i+1]
+        r_select = (r < r_upper) & (r > r_lower)
+        area = np.sum(r_select) * pix2area
+        pb_select = r_select & (pbcor > 1e-8)
+        if len(pbcor[pb_select]) > 0:
+            pb_median = np.median(pbcor[pb_select])
+        else:
+            pb_median = 1e-8
+        flux = snr_threshold * std / pb_median 
+        Nr.append(fNN(flux, area))
+    return Nr
 
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -2439,12 +2451,37 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
     if savefile:
         effarea.write(savefile, format='ascii')
 
-def run_mock_observation(imagedir, fNN):
+def run_mock_observation(radius=np.arange(1.0, 16.,1.0), imagedir=None, fNN=None, objs=None, band=None,
+        suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
+        snr_threshold=5.0, savefile=None):
     """
     images: the real images accounting primary beam response
     fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
     """
-    pass
+    max_radius = np.max(radius)
+    step = radius[1] - radius[0]
+    central_mask_radius = radius[0]
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    if objs is None:
+        objs = []
+        for item in os.listdir(imagedir):
+            if obj_match.match(obj):
+                objs.append(item)
+    Nr_list = []
+    radius_mean = 0.5*(radius[:-1] + radius[1:])
+    for obj in objs:
+        obj_dir = os.path.join(imagedir, obj)
+        image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
+        image_fullpath = os.path.join(obj_dir, image)
+        image_pbcorr = image.replace('image', 'pbcor.image')
+        image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
+        if os.path.isfile(image_fullpath):
+            if obj in objs_nocenter:
+                Nr = mock_observation(image=image_fullpath, 
+                        image_pbcorr=image_pbcorr_fullpath, fNN=fNN, snr_threshold=snr_threshold,
+                        max_radius=max_radius, step=step, central_mask_radius=central_mask_radius)
+    return radius_mean, Nr_list
+
 
 def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
         simulation_folder=None, ax=None, flux_mode=['aperture', 'gaussian'], completeness_mode='peak',
