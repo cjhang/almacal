@@ -2547,8 +2547,8 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
         else:
             poisson_err_lower = np.sqrt(n)
             poisson_err_upper = np.sqrt(n)
-        NN_err_upper.append(np.sqrt(err**2 + poisson_err_upper**2) 
-        NN_err_lower.append(np.sqrt(err**2 + poisson_err_lower**2) 
+        NN_err_upper.append(np.sqrt(err**2 + poisson_err_upper**2)) 
+        NN_err_lower.append(np.sqrt(err**2 + poisson_err_lower**2))
     if savefile:
         with open(savefile, 'w+') as sf:
             sf.write('flist NN_number NN NN_err_lower NN_err_upper\n')
