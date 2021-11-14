@@ -1618,7 +1618,7 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
             pb_median = np.median(pbcor[pb_select])
         else:
             pb_median = 1e-8
-        flux = snr_threshold * std / pb_median 
+        flux = snr_threshold * std * 1000 / pb_median #change to mJy
         Nr.append(fNN(flux, area))
     return Nr
 
@@ -2458,17 +2458,17 @@ def run_mock_observation(radius=np.arange(1.0, 16.,1.0), imagedir=None, fNN=None
     images: the real images accounting primary beam response
     fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
     """
-    max_radius = np.max(radius)
-    step = radius[1] - radius[0]
-    central_mask_radius = radius[0]
+    # max_radius = np.max(radius)
+    # step = radius[1] - radius[0]
+    # central_mask_radius = radius[0]
     obj_match = re.compile('^J\d*[+-]\d*$')
     if objs is None:
         objs = []
         for item in os.listdir(imagedir):
             if obj_match.match(obj):
                 objs.append(item)
-    Nr_list = []
     radius_mean = 0.5*(radius[:-1] + radius[1:])
+    Nr_array = np.zeros_like(radius_mean)
     for obj in objs:
         obj_dir = os.path.join(imagedir, obj)
         image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
@@ -2476,11 +2476,10 @@ def run_mock_observation(radius=np.arange(1.0, 16.,1.0), imagedir=None, fNN=None
         image_pbcorr = image.replace('image', 'pbcor.image')
         image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
         if os.path.isfile(image_fullpath):
-            if obj in objs_nocenter:
-                Nr = mock_observation(image=image_fullpath, 
-                        image_pbcorr=image_pbcorr_fullpath, fNN=fNN, snr_threshold=snr_threshold,
-                        max_radius=max_radius, step=step, central_mask_radius=central_mask_radius)
-    return radius_mean, Nr_list
+            Nr = mock_observation(radius=radius, image=image_fullpath, 
+                    image_pbcorr=image_pbcorr_fullpath, fNN=fNN, snr_threshold=snr_threshold,)
+            Nr_array = Nr_array + np.array(Nr) 
+    return radius_mean, Nr_array.tolist()
 
 
 def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
