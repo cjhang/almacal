@@ -1566,6 +1566,50 @@ def combine_sources(coords_list, units=u.arcsec, tolerance=0.3*u.arcsec):
             coords_unique.append(coord1)
     return coords_unique
 
+def mock_observation(radius=np.linspace(1, 15, 15), images=None, fNN=None, snr_threshold=5.0,
+        fovscale=2.0, central_mask_radius=1.0):
+    """
+    images: the real images accounting primary beam response
+    fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
+    """
+    with fits.open(images) as hdu:
+        data = hdu[0].data
+        header = hdu[0].header
+    with fits.open(images_pbcorr) as hdu_pbcor:
+        data_pbcor = hdu_pbcor[0].data
+    pixel2arcsec = np.abs(header['CDELT1'])*3600
+    pix2area = pixel2arcsec**2  # pixel to arcsec^2
+    freq = header['CRVAL3']
+    lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+    fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+    ny, nx = data.shape[-2:]
+    x = (np.arange(0, nx) - nx/2.0) * pixel2arcsec
+    y = (np.arange(0, ny) - ny/2.0) * pixel2arcsec
+    r = np.sqrt(x**2 + y**2)
+    a, b = header['BMAJ']*3600, header['BMIN']*3600
+    # print('pixel2arcsec', pixel2arcsec)
+    # print('r range', np.min(r), np.max(r))
+    # print('a',a,'b',b)
+    data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+    # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+    mean, median, std = calculate_image_sensitivity(images[i])
+    # std = imstat(images[sigma['sigma'][0]
+    pbcor = (data / data_pbcor).reshape(ny, nx)
+    if std < 1e-7:
+        print("Suspicious image: {}".format(images[i]))
+    mask = data_masked.mask & (data_masked.data >= 5.0*std)
+    pbcor[mask] = 0.0
+    if fovscale:
+        rlimit = 0.5 * fovscale * fov.value
+        pbcor[r > rlimit] = 0.0
+    if central_mask_radius > 1e-8:
+        pbcor[r < central_mask_radius*a] = 0.0
+    Nr = []
+    for rd in radius:
+        area = np.sum((rd < r) & (rd))* pix2area
+        N += fNN(std*i/2.0, area)
+    return N
+
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
@@ -2395,6 +2439,13 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
     if savefile:
         effarea.write(savefile, format='ascii')
 
+def run_mock_observation(imagedir, fNN):
+    """
+    images: the real images accounting primary beam response
+    fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
+    """
+    pass
+
 def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
         simulation_folder=None, ax=None, flux_mode=['aperture', 'gaussian'], completeness_mode='peak',
         default_simulation=None, objs_withdeafultsim=[], n_bootstrap=1000, savefile=None,
@@ -2484,13 +2535,28 @@ def run_number_counts(flist, detections_file=None, effective_area_file=None, ban
     NN_err = (2*np.sqrt(np.array(NN_err)**2 + np.array(NN))).tolist()
     print(flist, NN_number, NN, NN_err)
     # print(flist, NN, np.sqrt(NN).tolist())
+    NN_err_upper = []
+    NN_err_lower = []
+    poisson_error_table = Table.read(os.path.join(ROOT_DIR, 'code/data/Poisson_error.txt'), 
+            format='ascii')
+    for err, n in zip(NN_err, NN_number):
+        if n<=30:
+            poisson_select = poisson_error_table['n'] == n
+            poisson_err_upper = poisson_error_table['upper'][poisson_select] - n
+            poisson_err_lower = poisson_error_table['lower'][poisson_select] - n
+        else:
+            poisson_err_lower = np.sqrt(n)
+            poisson_err_upper = np.sqrt(n)
+        NN_err_upper.append(np.sqrt(err**2 + poisson_err_upper**2) 
+        NN_err_lower.append(np.sqrt(err**2 + poisson_err_lower**2) 
     if savefile:
         with open(savefile, 'w+') as sf:
-            sf.write('flist NN_number NN NN_err\n')
+            sf.write('flist NN_number NN NN_err_lower NN_err_upper\n')
             for i in range(len(flist)):
-                sf.write("{} {} {} {}\n".format(flist[i], NN_number[i], NN[i], NN_err[i]))
+                sf.write("{} {} {} {} {}\n".format(flist[i], NN_number[i], NN[i], 
+                                                   NN_err_lower[i], NN_err_upper[i]))
     if plot:
-        plot_number_counts(flist=flist, NN=NN, NN_err=NN_err, ax=ax, band=band)
+        plot_number_counts(flist=flist, NN=NN, NN_err=[NN_err_lower, NN_err_upper], ax=ax, band=band)
 
 def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None, band=None,
         model_dir=None, show_models=True):
@@ -2504,7 +2570,9 @@ def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None,
             tab = Table.read(datafile, format='ascii')
             flist = tab['flist']
             NN = tab['NN']
-            NN_err = tab['NN_err']
+            NN_err_upper = tab['NN_err_upper']
+            NN_err_lower = tab['NN_err_lower']
+            NN_err = [NN_err_lower, NN_err_upper]
         elif isinstance(datafile, (list, tuple)):
             for dfile, dband in zip(datafile, band):
                 plot_number_counts(dfile, ax=ax, band=dband, show_models=False,model_dir=model_dir)
@@ -2579,7 +2647,7 @@ def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None,
             # NN_stach_error_lower = [7.7, 6.6, 3.5, 2.5, 1.9, 1.8, 1.2, 0.9, 0.6, 0.6, 0.5]
             # ax.plot(flist_stach, NN_stach, 'co', label='Stach et al. (2018)')
             # ax.errorbar(flist_stach, NN_stach, yerr=NN_stach_error_upper, fmt='c')
-        if show_models:
+        if False:
             # show the theoretical model
             Lagos_model_dir = os.path.join(model_dir, 'ModelsLagos')
             Lagos_B6 = np.loadtxt(os.path.join(Lagos_model_dir,'Band6.txt'))
