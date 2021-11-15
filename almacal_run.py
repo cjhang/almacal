@@ -1590,15 +1590,13 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
     ny, nx = data.shape[-2:]
     x = (np.arange(0, nx) - nx/2.0) * pixel2arcsec
     y = (np.arange(0, ny) - ny/2.0) * pixel2arcsec
+    x_map, y_map = np.meshgrid(x, y)
     #print(np.min(x), np.max(x))
-    r = np.sqrt(x**2 + y**2)
+    r = np.sqrt(x_map**2 + y_map**2)
     #a, b = header['BMAJ']*3600, header['BMIN']*3600
     a, b = header['BMAJ']*deg2pixel, header['BMIN']*deg2pixel
     beamsize = np.pi*a*b/(4*np.log(2))
-    # print('beamsize', beamsize)
-    # print('pixel2arcsec', pixel2arcsec)
-    # print('r range', np.min(r), np.max(r))
-    # print('a',a,'b',b)
+ 
     data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
     # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
     mean, median, std = calculate_image_sensitivity(image)
@@ -1614,6 +1612,9 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
     if central_mask_radius > 1e-8:
         pbcor[r < central_mask_radius*a] = 0.0
     Nr = []
+    # std_map = std / (pbcor + 1e-8)
+    # print('r map shape:', r.shape)
+    # print('totally pixels:', np.sum(r > 0))
     for i in range(len(radius)-1):
         r_lower = radius[i]
         r_upper = radius[i+1]
