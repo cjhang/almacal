@@ -1493,9 +1493,10 @@ def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, ima
         for f in flux:
             snr = f / (std * 1000) # from Jy to mJy
             snr_map = snr * pbcor
+            #print('selected number of pixels', np.sum(snr_map > snr_threshold))
             area = np.sum(snr_map > snr_threshold) * pix2area
             effarea_list.append(area)
-        effarea = effarea + np.array(effarea_list) / 3600. # convert to deg^2
+        effarea = effarea + np.array(effarea_list) / 3600. # convert to arcmin^2
     return np.array([flux, effarea])
 
 def read_fluxsummary(basedir, obj, band, resolution,):
@@ -1582,12 +1583,14 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
     pixel2arcsec = np.abs(header['CDELT1'])*3600
     pix2area = pixel2arcsec**2  # pixel to arcsec^2
     deg2pixel = 1/np.abs(header['CDELT1'])
+    #print('pixel2arcsec', pixel2arcsec)
     freq = header['CRVAL3']
     lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
     fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
     ny, nx = data.shape[-2:]
     x = (np.arange(0, nx) - nx/2.0) * pixel2arcsec
     y = (np.arange(0, ny) - ny/2.0) * pixel2arcsec
+    #print(np.min(x), np.max(x))
     r = np.sqrt(x**2 + y**2)
     #a, b = header['BMAJ']*3600, header['BMIN']*3600
     a, b = header['BMAJ']*deg2pixel, header['BMIN']*deg2pixel
@@ -1614,17 +1617,20 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
     for i in range(len(radius)-1):
         r_lower = radius[i]
         r_upper = radius[i+1]
-        r_select = (r < r_upper) & (r > r_lower)
-        area = np.sum(r_select) * pix2area
+        r_select = (r > r_lower) & (r < r_upper) 
+        #r_select = r < r_upper 
+        area = np.pi*(r_upper**2-r_lower**2)
+        #area = np.sum(r_select) * pix2area
+        #print('pixels:', np.sum(r_select))
         pb_select = r_select & (pbcor > 1e-8)
         if len(pbcor[pb_select]) > 0:
-            pb_median = np.median(pbcor[pb_select])
+            pb_mean = np.mean(pbcor[pb_select])
         else:
-            pb_median = 1e-8
-        flux = snr_threshold * std * 1000 / beamsize / pb_median #change to mJy
-        Nr.append(fNN(flux, area))
-        # print('std', std, 'pb_median', pb_median)
-        # print('flux', flux, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area)
+            pb_mean = 1e-8
+        flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
+        Nr.append(fNN(flux_sensitivity, area))
+        #print('std', std, 'pb_median', pb_mean)
+        #print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
     return Nr
 
 
