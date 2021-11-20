@@ -1620,8 +1620,8 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         r_upper = radius[i+1]
         r_select = (r > r_lower) & (r < r_upper) 
         #r_select = r < r_upper 
-        area = np.pi*(r_upper**2-r_lower**2)
-        #area = np.sum(r_select) * pix2area
+        #area = np.pi*(r_upper**2-r_lower**2)
+        area = np.sum(r_select) * pix2area
         #print('pixels:', np.sum(r_select))
         pb_select = r_select & (pbcor > 1e-8)
         if len(pbcor[pb_select]) > 0:
@@ -1630,8 +1630,8 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
             pb_mean = 1e-8
         flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
         Nr.append(fNN(flux_sensitivity, area))
-        #print('std', std, 'pb_median', pb_mean)
-        #print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
+        # print('std', std, 'pb_median', pb_mean)
+        # print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
     return Nr
 
 
