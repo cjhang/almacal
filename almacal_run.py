@@ -1633,8 +1633,8 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         # flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
         flux_sensitivity = snr_threshold * std * 1000 / pb_mean #change to mJy
         Nr.append(fNN(flux_sensitivity, area))
-        #print('std', std, 'pb_median', pb_mean)
-        #print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
+        # print('std', std, 'pb_median', pb_mean)
+        # print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
     return Nr
 
 
