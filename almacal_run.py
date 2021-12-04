@@ -1582,11 +1582,11 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         data_pbcor = hdu_pbcor[0].data
     pixel2arcsec = np.abs(header['CDELT1'])*3600
     pix2area = pixel2arcsec**2  # pixel to arcsec^2
-    deg2pixel = 1/np.abs(header['CDELT1'])
+    deg2pixel = 1.0/np.abs(header['CDELT1'])
     #print('pixel2arcsec', pixel2arcsec)
     freq = header['CRVAL3']
     lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
-    fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+    fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806 # to arcsec2
     ny, nx = data.shape[-2:]
     x = (np.arange(0, nx) - nx/2.0) * pixel2arcsec
     y = (np.arange(0, ny) - ny/2.0) * pixel2arcsec
@@ -1598,13 +1598,11 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
     beamsize = np.pi*a*b/(4*np.log(2))
  
     data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
-    # mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
     mean, median, std = calculate_image_sensitivity(image)
-    # std = imstat(images[sigma['sigma'][0]
     pbcor = (data / data_pbcor).reshape(ny, nx)
     if std < 1e-7:
         print("Suspicious image: {}".format(image))
-    mask = data_masked.mask & (data_masked.data >= 5.0*std)
+    mask = data_masked.mask #& (data_masked.data >= 5.0*std)
     pbcor[mask] = 0.0
     if fovscale:
         rlimit = 0.5 * fovscale * fov.value
@@ -1615,20 +1613,25 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
     # std_map = std / (pbcor + 1e-8)
     # print('r map shape:', r.shape)
     # print('totally pixels:', np.sum(r > 0))
-    for i in range(len(radius)-1):
+    n_radii = len(radius)
+    for i in range(n_radii - 1):
         r_lower = radius[i]
         r_upper = radius[i+1]
         r_select = (r > r_lower) & (r < r_upper) 
         #r_select = r < r_upper 
         area = np.pi*(r_upper**2-r_lower**2)
-        #area = np.sum(r_select) * pix2area
+        area2 = np.sum(r_select) * pix2area
+        print('area1:', area, "area2:", area2)
         #print('pixels:', np.sum(r_select))
         pb_select = r_select & (pbcor > 1e-8)
         if len(pbcor[pb_select]) > 0:
             pb_mean = np.mean(pbcor[pb_select])
         else:
             pb_mean = 1e-8
-        flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
+        print("pb_mean", pb_mean)
+        print('beam size', beamsize)
+        # flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
+        flux_sensitivity = snr_threshold * std * 1000 / pb_mean #change to mJy
         Nr.append(fNN(flux_sensitivity, area))
         #print('std', std, 'pb_median', pb_mean)
         #print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
@@ -2492,7 +2495,6 @@ def run_mock_observation(radius=np.arange(1.0, 16.,1.0), imagedir=None, fNN=None
                     image_pbcorr=image_pbcorr_fullpath, fNN=fNN, snr_threshold=snr_threshold,)
             Nr_array = Nr_array + np.array(Nr) 
     return radius_mean, Nr_array.tolist()
-
 
 def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
         simulation_folder=None, ax=None, flux_mode=['aperture', 'gaussian'], completeness_mode='peak',
