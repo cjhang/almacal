@@ -1621,15 +1621,15 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         #r_select = r < r_upper 
         area = np.pi*(r_upper**2-r_lower**2)
         area2 = np.sum(r_select) * pix2area
-        print('area1:', area, "area2:", area2)
+        # print('area1:', area, "area2:", area2)
         #print('pixels:', np.sum(r_select))
         pb_select = r_select & (pbcor > 1e-8)
         if len(pbcor[pb_select]) > 0:
             pb_mean = np.mean(pbcor[pb_select])
         else:
             pb_mean = 1e-8
-        print("pb_mean", pb_mean)
-        print('beam size', beamsize)
+        # print("pb_mean", pb_mean)
+        # print('beam size', beamsize)
         # flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
         flux_sensitivity = snr_threshold * std * 1000 / pb_mean #change to mJy
         Nr.append(fNN(flux_sensitivity, area))
@@ -2466,7 +2466,7 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
     if savefile:
         effarea.write(savefile, format='ascii')
 
-def run_mock_observation(radius=np.arange(1.0, 16.,1.0), imagedir=None, fNN=None, objs=None, band=None,
+def run_mock_observation(radius=np.arange(1.0, 22.,1.5), imagedir=None, fNN=None, objs=None, band=None,
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
         snr_threshold=5.0, savefile=None):
     """
@@ -2494,7 +2494,12 @@ def run_mock_observation(radius=np.arange(1.0, 16.,1.0), imagedir=None, fNN=None
             Nr = mock_observation(radius=radius, image=image_fullpath, 
                     image_pbcorr=image_pbcorr_fullpath, fNN=fNN, snr_threshold=snr_threshold,)
             Nr_array = Nr_array + np.array(Nr) 
-    return radius_mean, Nr_array.tolist()
+    if savefile:
+        with open(savefile, 'w+') as f:
+            for i in range(len(radius_mean)):
+                f.write("{} {}\n".format(radius_mean[i], Nr_array[i]))
+    else:
+        return radius_mean, Nr_array.tolist()
 
 def run_number_counts(flist, detections_file=None, effective_area_file=None, band='B6',
         simulation_folder=None, ax=None, flux_mode=['aperture', 'gaussian'], completeness_mode='peak',
