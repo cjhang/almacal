@@ -333,7 +333,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
     if 'aperture' in methods:
         aperture_size=1.0
         aperture = EllipticalAperture((x_center, y_center), aperture_size*bmaj, aperture_size*bmin, theta)
-        extract_area = lambda x: x.area()
+        # extract_area = lambda x: x.area()
         # area_apers = np.array(list(map(extract_area, apertures)))
         
         phot_table = aperture_photometry(image, aperture)

@@ -15,3 +15,5 @@ execfile(os.path.join(ROOT_DIR_CODE, 'imaging_utils.py'))
 execfile(os.path.join(ROOT_DIR_CODE, 'simalma_utils.py'))
 execfile(os.path.join(ROOT_DIR_CODE, 'readms.py'))
 execfile(os.path.join(ROOT_DIR_CODE, 'almacal_run.py'))
+# for test
+execfile(os.path.join(ROOT_DIR_CODE, 'imagetools.py'))
