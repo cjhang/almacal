@@ -3,7 +3,313 @@
 # Author: Jianhang Chen
 # Email: cjhastro@gmail.com
 import numpy as np
+from scipy import signal, ndimage 
+from scipy.interpolate import CubicSpline
+from scipy import interpolate
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 
+from astropy.io import fits
+from astropy.stats import sigma_clipped_stats, sigma_clip, SigmaClip
+from astropy.wcs import WCS
+from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
+from photutils import (DAOStarFinder, EllipticalAperture, aperture_photometry, CircularAperture,
+        RectangularAperture, find_peaks, Background2D, MedianBackground, SExtractorBackground)
+import matplotlib.pyplot as plt
+from matplotlib import patches
+from astropy.modeling import models, fitting
+from astropy.convolution import Gaussian2DKernel, convolve
+
+
+def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True, 
+                  threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
+                  filter_size=None, box_size=None, methods=['aperture','gaussian','peak'],
+                  subtract_background=False, figname=None, ax=None, pbfile=True,
+                  fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
+                  cmap=None, return_flux=True):
+    """finding point source in the image
+
+    This is a two stage source finding algorithm. First, DAOStarFinder or find_peak will be used to find
+    the sources. Then, additional total and peak SNR checking is used to confirm the detection. The 
+    second stage can be configured by 
+
+    mask_threshold: the mask size of known_sources
+    central_mask: central mask radius in units of FWHM of final synthesised beam
+    """
+    with fits.open(fitsimage) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fcenter = [header['CRVAL1'], header['CRVAL2']] # in degrees
+        pixel_center = [nx/2., ny/2.]
+    if pbfile:
+        fitsimage_path = os.path.dirname(fitsimage)
+        fitsimage_basename = os.path.basename(fitsimage)
+        fitsimage_pbcor = os.path.join(fitsimage_path, fitsimage_basename.replace('pbcor.fits', 
+                                       'pb.fits.gz'))
+        if not os.path.isfile(fitsimage_pbcor):
+            print("No primary beam corrected data found, the final flux can be wrong!")
+            pbcor = False
+        # load the pbcorred data
+        with fits.open(fitsimage_pbcor) as hdu_pbcor:
+            pbcor_map = hdu_pbcor[0].data.reshape(ny,nx)
+     
+    data_masked = np.ma.masked_invalid(data.reshape(ny, nx) * pbcor_map)
+    # for DAOStarFinder, in pixel space
+    pixel_scale = 1/np.abs(header['CDELT1'])
+    fov_pixel = fov / 3600. * pixel_scale
+    fwhm = header['BMAJ']*3600*u.arcsec
+    fwhm_pixel = header['BMAJ']*pixel_scale
+    bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+    a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+    ratio = header['BMIN'] / header['BMAJ']
+    theta = header['BPA']
+    beamsize = np.pi*a*b/(4*np.log(2))
+
+    mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+    
+    if debug:
+        print('image shape', ny, nx)
+        print("sigma stat:", mean, median, std)
+        print('fwhm_pixel:', fwhm_pixel)
+        print('a, b, theta', a, b, theta)
+        print('beamsize', beamsize)
+
+    if model_background:
+        if filter_size is None:
+            filter_size = 3#max(int(fwhm_pixel/1.5), 6)
+        if box_size is None:
+            box_size = int(fwhm_pixel*2)
+        if debug:
+            print('filter_size', filter_size)
+            print('box_size', box_size)
+        sigma_clip = SigmaClip(sigma=3.)
+        # bkg_estimator = MedianBackground()
+        bkg_estimator = SExtractorBackground() 
+        bkg = Background2D(data_masked.data, (box_size, box_size), 
+                filter_size=(filter_size, filter_size),
+                mask=data_masked.mask,
+                sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
+        background = bkg.background
+    else:
+        background = median
+    data_masked_sub = data_masked - background
+    
+    # find stars
+    if algorithm == 'DAOStarFinder': # DAOStarFinder
+        daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=0.8*threshold*std, ratio=ratio, 
+                                theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
+        sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
+        # if debug:
+            # print("candidates:", sources_found_candidates)
+        if len(sources_found_candidates) < 1:
+            print("No point source!")
+            # return 0
+            sources_found_candidates = None
+        else:
+            sources_found_x_candidates = sources_found_candidates['xcentroid'] 
+            sources_found_y_candidates = sources_found_candidates['ycentroid']
+            # sources_found_candidates_peak = sources_found_candidates['peak']
+            # peak_select = sources_found_candidates_peak > 0.5*threshold*std #two stage source finding
+            # sources_found_candidates = sources_found_candidates[peak_select]
+            # sources_found_x_candidates = sources_found_x_candidates[peak_select]
+            # sources_found_y_candidates = sources_found_y_candidates[peak_select]
+        
+    elif algorithm == 'find_peak': # find_peak
+        sources_found_candidates = find_peaks(data_masked_sub, threshold=threshold*std, 
+                box_size=fwhm_pixel)
+        # if debug:
+            # print("candidates:", sources_found_candidates)
+        if len(sources_found_candidates) < 1:
+            print("No point source!")
+            # return 0
+            sources_found_candidates = None
+        else:
+            sources_found_x_candidates = sources_found_candidates['x_peak'].data 
+            sources_found_y_candidates = sources_found_candidates['y_peak'].data
+            #source_found_peak = sources_found['peak_value']
+
+    else:
+        raise ValueError("Unsurport algorithm: {}!".format(algorithm))
+   
+    # numerical aperture correction
+    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
+                offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
+                theta=theta/180.*np.pi) 
+    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+                             methods='aperture', debug=False, aperture_correction=1.0,
+                             beamsize=1.0)
+    aperture_correction = 1/flux_g[0]
+    if debug:
+        print('aperture correction', aperture_correction)
+
+    # flux measurements
+    flux_auto = []
+    flux_snr_list = []
+    sources_found = False
+    if sources_found_candidates:
+        # print('source_found_peak',source_found_peak)
+        sources_found_center_candidates = list(zip(sources_found_x_candidates, 
+                                                   sources_found_y_candidates))
+        #sources_found_coords_candidates = pixel_to_skycoord(sources_found_x, sources_found_y, wcs)
+        sources_found_x = []
+        sources_found_y = []
+        # sources_found_coords = []
+
+
+        # aperture photometry based on source finding coordinates
+        ## simple aperture flux
+        #aper_found = EllipticalAperture(sources_found_center_candidates, 1*a, 1*b, 
+        #                                theta=theta+90/180*np.pi)
+        #phot_table_found = aperture_photometry(data_masked, aper_found)
+        #flux_aper_found = (phot_table_found['aperture_sum'] / beamsize * 1000).tolist() # convert mJy
+
+        # automatically aperture photometry
+        seg_radius = 2.0*np.int(a)
+        segments = RectangularAperture(sources_found_center_candidates, seg_radius, 
+                seg_radius, theta=0)
+        try:
+            segments_mask = segments.to_mask(method='center')
+        except:
+            segments_mask = []
+        for i,s in enumerate(segments_mask):
+            if subtract_background:
+                data_cutout = s.cutout(data_masked_sub)
+            else:
+                data_cutout = s.cutout(data_masked)
+            flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+                                        theta=theta/180*np.pi, debug=False, methods=methods,
+                                        aperture_correction=aperture_correction)
+            # if pbcor:
+                # data_pbcor_cutout = s.cutout(data_pbcor_masked)
+                # flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
+                        # beamsize=beamsize, theta=theta/180*np.pi, debug=False, methods=methods)
+            #print("flux_list", flux_list)
+            is_true = True
+            if second_check:
+                if 'aperture' in methods:
+                    if flux_list[methods.index('aperture')] < threshold*std:
+                        is_true = False
+                if 'gaussian' in methods:
+                    if flux_list[methods.index('gaussian')] < threshold*std:
+                        is_true = False
+                if 'peak' in methods:
+                    if flux_list[methods.index('peak')] < threshold*std:
+                        is_true = False
+                # checking whether within the designed fov
+                if ((sources_found_x_candidates[i]-pixel_center[0])**2 
+                    + (sources_found_y_candidates[i]-pixel_center[1])**2) >\
+                            (fov_scale*fov_pixel*0.5)**2:
+                    is_true = False
+
+            if is_true: 
+                sources_found_x.append(sources_found_x_candidates[i])
+                sources_found_y.append(sources_found_y_candidates[i])
+                flux_snr = np.array(flux_list) / std
+                if pbfile:
+                    pbcor_pixel = pbcor_map[sources_found_y_candidates[i], 
+                                            sources_found_x_candidates[i]]
+                    flux_auto.append(np.array(flux_list) * 1000. / pbcor_pixel)
+
+                else:
+                    flux_auto.append(np.array(flux_list) * 1000.)
+                flux_snr_list.append(flux_snr)
+
+        if len(flux_auto)>0:
+            sources_found = True
+        sources_found_center = list(zip(sources_found_x, sources_found_y))
+        sources_found_coords = pixel_to_skycoord(sources_found_x, sources_found_y, wcs)
+        # return segments_mask
+    if debug:
+        if sources_found:
+            print("sources_found_center", sources_found_center)
+            print("sources_found_coords", sources_found_coords)
+            print('auto_photometry:', flux_auto)
+
+
+    if debug or figname or ax:
+        # visualize the results
+        if ax is None:
+            fig= plt.figure()
+            ax = fig.add_subplot(111)
+        ny, nx = data_masked.shape[-2:]
+        scale = np.abs(header['CDELT1'])*3600
+        x_index = (np.arange(0, nx) - nx/2.0) * scale
+        y_index = (np.arange(0, ny) - ny/2.0) * scale
+        #x_map, y_map = np.meshgrid(x_index, y_index)
+        #ax.pcolormesh(x_map, y_map, data_masked)
+        extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
+        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none', vmax=10.*std, 
+                  vmin=-3.0*std, cmap=cmap)
+        
+        ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+                verticalalignment='center')
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
+                                  angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
+        ax.add_patch(ellipse)
+        if debug:
+            ellipse = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
+                                      angle=0, fill=False, facecolor=None, edgecolor='grey', 
+                                      alpha=0.8)
+            ax.add_patch(ellipse)
+        ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
+                color='white', fontsize=10, horizontalalignment='center', verticalalignment='center')
+        
+        if sources_found:
+            for i,e in enumerate(sources_found_center):
+                yy = scale*(e[0]-ny/2.)
+                xx = scale*(e[1]-ny/2.)
+                ellipse = patches.Ellipse((yy, xx), width=3*b*scale, 
+                                          height=3*a*scale, angle=theta, facecolor=None, fill=False, 
+                                          edgecolor='white', alpha=0.8, linewidth=2)
+                ax.add_patch(ellipse)
+                ax.text(1.0*yy+1, 1.0*xx, 
+                        "[{}]{:.2f}mJy".format(i, flux_auto[i][0]), 
+                        color='white', fontsize=10, horizontalalignment='left', 
+                        verticalalignment='center')
+                        #bbox=dict(boxstyle="round", ec=(1,0.5,0.5), fc=(1,0.8,0.8), alpha=0.3))
+                # plt.figure()
+                # plt.imshow(data_masked_sub)
+                # ellipse_aper = EllipticalAperture(e, 2.*a, 2.*a, theta=0)
+                # ap_patch = ellipse_aper.plot(color='white', lw=2)
+
+
+        if figname:
+            ax.set_title(figname)
+            fig.savefig(os.path.join(outdir, figname+'.png'), dpi=200)
+        if debug:
+            plt.show()
+
+
+    if savefile and sources_found:
+        savefile_fullpath = os.path.join(outdir, savefile)
+        with open(savefile_fullpath, 'w+') as sfile:
+            sfile.write('# ra[arcsec]  dec[arcsec] ')
+            for m in methods:
+                sfile.write(' '+m+'[mJy] ')
+            sfile.write('\n')
+            for ra, dec, flux in zip(sources_found_coords.ra, sources_found_coords.dec, flux_auto):
+                sfile.write('{:.6f}  {:.6f} '.format(ra.to(u.arcsec).value,
+                    dec.to(u.arcsec).value))
+                for f_m in flux:
+                    sfile.write(" {:.8f} ".format(f_m))
+                sfile.write('\n')
+    if len(flux_auto)>0:
+        if return_flux:
+            return list(zip(sources_found_coords.ra.to(u.arcsec).value, 
+                            sources_found_coords.dec.to(u.arcsec).value, flux_auto, flux_snr_list))
+        else:
+            return list(zip(sources_found_coords.ra.to(u.arcsec).value, 
+                            sources_found_coords.dec.to(u.arcsec).value))
+
+    else:
+        return []
+
+ 
 def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
                     methods=['aperture','gaussian', 'peak'], aperture_correction=1.068,
                     rms=None):
