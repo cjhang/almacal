@@ -20,7 +20,6 @@ from matplotlib import patches
 from astropy.modeling import models, fitting
 from astropy.convolution import Gaussian2DKernel, convolve
 
-
 def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, methods=['aperture','gaussian','peak'],
@@ -308,7 +307,6 @@ def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True,
 
     else:
         return []
-
  
 def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
                     methods=['aperture','gaussian', 'peak'], aperture_correction=1.068,
@@ -393,7 +391,7 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         # else:
         flux_list.append(np.max(image))
         flux_error.append(rms)
-    if 'aperture_auto' in methods:
+    if 'adaptive_aperture' in methods:
         radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
 
         apertures = [EllipticalAperture((x_center, y_center), a, a*bmin/bmaj, theta) for a in radii]
