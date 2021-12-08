@@ -1138,7 +1138,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
             header = hdu[0].header
         freq = header['CRVAL3']
         lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
-        fov = 1.02 * (lam / (12*u.m)).decompose().value * 206264.806
+        fov = fov_scale * 1.02 * (lam / (12*u.m)).decompose().value * 206264.806
         ny, nx = data.shape[-2:]
         data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
         mean, median, std = calculate_image_sensitivity(imagefile)  
@@ -1200,7 +1200,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         tb.close()
         antenna_diameter = np.max(antenna_diameter_list) * u.m
         wavelength = const.c / (freq_mean * u.GHz) # in um
-        fov = (fov_scale * 1.22 * wavelength / antenna_diameter * 206265).decompose().value
+        fov = (fov_scale * 1.02 * wavelength / antenna_diameter * 206265).decompose().value
         if debug:
             print('fov', fov)
             print('radius', 0.45*fov)
