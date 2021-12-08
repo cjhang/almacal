@@ -2039,6 +2039,7 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
                         print("Pruning folder....")
                         rmtables(os.path.join(obj_outdir,'uid___*'))
                         os.system('rm -rf {}'.format(os.path.join(obj_outdir,'uid___*.flagversions')))
+                        os.system('rm -rf {}'.format(os.path.join(obj_outdir,'uid___*.cfg')))
                 if not overwrite:
                     if os.path.isfile(os.path.join(obj_outdir, 'Done')):
                         print("Skip {} of {}, delete the 'Done' file to recreate...".format(band,obj))
