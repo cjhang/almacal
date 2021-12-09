@@ -311,7 +311,7 @@ def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True,
         return []
  
 def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
-                    methods=['aperture','gaussian', 'peak'], aperture_correction=1.068,
+                    methods=['adaptive_aperture','gaussian', 'peak'], aperture_correction=1.068,
                     rms=None):
     """autoumatically measure the flux with different methods
     
@@ -349,52 +349,7 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
             flux_list.append(flux_in_aper)
             flux_error_list.append(rms * np.sqrt(aperture.area()))
         # print('aperture.area;',aperture.area())
-    if 'gaussian' in methods:
-        yidx, xidx = np.indices((ysize, xsize))
-        yrad, xrad = yidx-ysize/2., xidx-xsize/2.
 
-        image_scale = np.max(image)
-        image_norm = image / image_scale
-        p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, 
-                theta=theta, bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
-                                     "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
-        fit_p = fitting.LevMarLSQFitter()
-        p = fit_p(p_init, xrad, yrad, image_norm, 
-                  weights=1/(yrad**2+xrad**2+(0.25*bmaj)**2+(0.25*bmin)**2))
-        flux_fitted = 2*image_scale*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
-        # calculate the area with amplitude < rms
-        gaussian_area = np.sum(p(xrad, yrad) > rms/image_scale)
-        if debug:
-            print("Initial guess:", p_init)
-            print("Fitting:", p)
-            print("Flux:", flux_fitted)
-            fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
-            im0 = ax[0].imshow(image_norm, origin='lower', interpolation='none')
-            plt.colorbar(im0, ax=ax[0], fraction=0.046, pad=0.04)
-            gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
-                    width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
-                    linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
-            ax[0].add_patch(gaussian_init)
-            ax[0].set_title("Data")
-            im1 = ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
-            plt.colorbar(im1, ax=ax[1], fraction=0.046, pad=0.04)
-            ax[1].set_title("Model")
-            im2 = ax[2].imshow(image_norm - p(xrad, yrad), origin='lower', interpolation='none')
-            plt.colorbar(im2, ax=ax[2], fraction=0.046, pad=0.04)
-            ax[2].set_title("Residual")
-        if beamsize:
-            flux_list.append(1.0*flux_fitted/beamsize)
-            flux_error_list.append(rms*np.sqrt(gaussian_area)/beamsize)
-        else:
-            flux_list.append(flux_fitted)
-            flux_error_list.append(rms*np.sqrt(gaussian_area))
-    if 'peak' in methods:
-        # the peak value has the same units of one pixel
-        # if beamsize:
-            # flux_list.append(np.max(image))#)#/beamsize)
-        # else:
-        flux_list.append(np.max(image))
-        flux_error_list.append(rms)
     if 'adaptive_aperture' in methods:
         radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
 
@@ -442,6 +397,53 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         print('stable:', flux_apers_stable, flux_error_stable)
         flux_list.append(flux_apers_stable)
         flux_error_list.append(flux_error_stable)
+
+    if 'gaussian' in methods:
+        yidx, xidx = np.indices((ysize, xsize))
+        yrad, xrad = yidx-ysize/2., xidx-xsize/2.
+
+        image_scale = np.max(image)
+        image_norm = image / image_scale
+        p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, 
+                theta=theta, bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
+                                     "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
+        fit_p = fitting.LevMarLSQFitter()
+        p = fit_p(p_init, xrad, yrad, image_norm, 
+                  weights=1/(yrad**2+xrad**2+(0.25*bmaj)**2+(0.25*bmin)**2))
+        flux_fitted = 2*image_scale*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
+        # calculate the area with amplitude < rms
+        gaussian_area = np.sum(p(xrad, yrad) > rms/image_scale)
+        if debug:
+            print("Initial guess:", p_init)
+            print("Fitting:", p)
+            print("Flux:", flux_fitted)
+            fig, ax = plt.subplots(1, 3, figsize=(8, 3.5))
+            im0 = ax[0].imshow(image_norm, origin='lower', interpolation='none')
+            plt.colorbar(im0, ax=ax[0], fraction=0.046, pad=0.04)
+            gaussian_init = patches.Ellipse((ysize/2., xsize/2.), height=p_init.y_stddev.value, 
+                    width=p_init.x_stddev.value, angle=p_init.theta.value/np.pi*180,
+                    linewidth=2, facecolor=None, fill=None, edgecolor='orange', alpha=0.8)
+            ax[0].add_patch(gaussian_init)
+            ax[0].set_title("Data")
+            im1 = ax[1].imshow(p(xrad, yrad), origin='lower', interpolation='none')
+            plt.colorbar(im1, ax=ax[1], fraction=0.046, pad=0.04)
+            ax[1].set_title("Model")
+            im2 = ax[2].imshow(image_norm - p(xrad, yrad), origin='lower', interpolation='none')
+            plt.colorbar(im2, ax=ax[2], fraction=0.046, pad=0.04)
+            ax[2].set_title("Residual")
+        if beamsize:
+            flux_list.append(1.0*flux_fitted/beamsize)
+            flux_error_list.append(rms*np.sqrt(gaussian_area)/beamsize)
+        else:
+            flux_list.append(flux_fitted)
+            flux_error_list.append(rms*np.sqrt(gaussian_area))
+    if 'peak' in methods:
+        # the peak value has the same units of one pixel
+        # if beamsize:
+            # flux_list.append(np.max(image))#)#/beamsize)
+        # else:
+        flux_list.append(np.max(image))
+        flux_error_list.append(rms)
     return flux_list, flux_error_list
 
 
@@ -613,5 +615,35 @@ def flux_measure2(image, coords_list, methods=['aperture', 'gaussian','peak'], p
 
     if calculate_radial_distance:
         return flux_auto, flux_snr_list, radial_distance
-    return flux_auto, flux_snr_list
+    # return flux_auto, flux_snr_list
+    return flux_auto, flux_err_auto
  
+
+def run_flux_measure_almared(fitsimages, summary_file=None):
+    if os.path.isdir(fitsimages):
+        fitsimages = glob.glob(os.path.join(fitsimages, "*.pbcor.fits"))
+    
+    if not os.path.isfile(summary_file):
+        print('Initializing the output file')
+        with open(summary_file, 'w+') as f:
+            f.write("obj ra dec flux_aperture flux_err_aperture flux_gaussian flux_err_gaussian flux_peak flux_err_peak")
+            f.write('\n')
+    name_match = re.compile('uid___[\w]+\.(?P<name>[\w\.]+)_sci.spw')
+    for image in fitsimages:
+        obj = name_match.search(image).groupdict()['name']
+        sf = source_finder2(image, threshold=5.0, return_flux=False)
+        targets_coords = []
+        for target in sf:
+            targets_coords.append([target[0], target[1]])
+        sources_flux, sources_flux_err = flux_measure2(image, targets_coords)
+            
+        if summary_file:
+            detections_summary = open(summary_file, 'a+')
+            for i in range(len(sf)):
+                detections_summary.write('{} {:.6f} {:.6f} {} {} {} {} {} {}'.format(obj,
+                                         targets_coords[i][0], targets_coords[i][1],
+                                         sources_flux[i][0], sources_flux_err[i][0],
+                                         sources_flux[i][1], sources_flux_err[i][1],
+                                         sources_flux[i][2], sources_flux_err[i][2]))
+                detections_summary.write('\n')
+            detections_summary.close()
