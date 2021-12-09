@@ -213,7 +213,7 @@ def make_random_source(direction, direction_units='deg',freq=None, n=None, radiu
         return [ra_random, dec_random, flux_input]
 
 def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./', 
-        make_image=True, outname=None, debug=False, uvtaper_scale=None,
+        make_image=True, outname=None, debug=False, uvtaper_scale=None, fov_scale=1.5,
         **kwargs):
     """
     The sources will be injected to the original file, so only pass in the copied data!
@@ -233,10 +233,10 @@ def add_random_sources(vis=None, fitsimage=None, mycomplist=None, outdir='./',
     if vis:
         ft(vis=vis, complist=mycomplist)
         uvsub(vis=vis, reverse=True)
-        suffix = '.cont.auto'
         make_cont_img(vis, outdir=outdir, clean=True, niter=1000, 
                       only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
-                      fov_scale=2.0, basename=outname, suffix='')
+                      fov_scale=fov_scale, basename=outname, suffix='', 
+                      pbcor=False, save_pb=False)
         delmod(vis=vis)
         clearcal(vis=vis)
     if fitsimage:
@@ -1116,7 +1116,7 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
     return flux_auto, flux_snr_list
  
 def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 
-                    snr=(0.1,20), fov_scale=1.5, outdir='./', basename=None,
+                    snr=(0.1,20), fov_scale=2.0, outdir='./', basename=None,
                     uvtaper_scale=None, budget=None,
                     debug=False, **kwargs):
     """generate the fake images with man-made sources
@@ -1129,10 +1129,17 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         os.system('mkdir -p {}'.format(outdir))
 
     if mode == 'image':
+        if not imagefile:
+            # raise ValueError("The image file must be given!")
+            imagefile = os.path.join(outdir, os.path.basename(vis)+'.image.fits')
+            if os.path.isfile(imagefile):
+                print("Using existing fits image: {}".format(imagefile))
+            else:
+                make_cont_img(vis, outdir=outdir, clean=True, niter=1000, suffix='',
+                          only_fits=True, uvtaper_scale=uvtaper_scale, pblimit=-0.01,
+                          fov_scale=fov_scale)
         if basename is None:
             basename = os.path.basename(imagefile)
-        if not imagefile:
-            raise ValueError("The image file must be given!")
         with fits.open(imagefile) as hdu:
             data = hdu[0].data
             header = hdu[0].header
@@ -1167,10 +1174,11 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
             basename_repeat = basename + '.run{}'.format(i)
             complist_file = os.path.join(outdir, basename_repeat+'.txt')
             mycomplist = make_random_source(mydirection, freq=myfreq, 
-                    radius=0.9*0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
+                    radius=0.9*0.5*fov, # 0.9 is to aviod puting source to the edge 
                     debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
                     sampler=np.random.uniform, sampler_params={},
                     known_sources=known_sources, budget=budget, **kwargs) 
+            print("imagefile",imagefile)
             add_random_sources(fitsimage=imagefile, mycomplist=mycomplist,
                     outdir=outdir, outname=basename_repeat, debug=debug, **kwargs)
     # adding source in uv has not been test for new scheme
@@ -1252,12 +1260,11 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
                 print('basename_repeat', basename_repeat)
                 print('complist_file', complist_file)
             mycomplist = make_random_source(mydirection, freq=myfreq, 
-                    radius=[0.45*fov_scale*fov, 0.45*fov*fov_scale], 
-                    # radius=0.9*0.5*fov_scale*fov, # 0.9 is to compensate the optimal imsize 
+                    radius=0.5*0.9*fov, # 0.9 is used to aviod add source to the edge 
                     debug=debug, fluxrange=fluxrange, savefile=complist_file, n=n, 
                     sampler=np.random.uniform, sampler_params={}, clname=clname_fullpath,
                     known_sources=known_sources, budget=budget, **kwargs) 
-            add_random_sources(vis=vis, mycomplist=mycomplist,
+            add_random_sources(vis=vis, mycomplist=mycomplist, fov_scale=fov_scale,
                     outdir=outdir, outname=basename_repeat, debug=debug, **kwargs)
             rmtables(clname_fullpath)
     # if budget:
@@ -1286,7 +1293,8 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
 
 def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
         basename=None, savefile=None, fov_scale=1.5, second_check=False,
-        threshold=5.0, plot=False, snr_mode='peak', debug=False, **kwargs):
+        threshold=5.0, plot=False, snr_mode='peak', debug=False, 
+        mode='image', **kwargs):
     """simulation the completeness of source finding algorithm
 
     mode:
@@ -1351,10 +1359,15 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         # flux_input_list.append(flux)
         #print('SNR: {}, RUN:{}'.format(s, run))
         #print('flux:', flux)
-        simimage = "{basename}.run{run}.fits".format(basename=basename, run=run)
+        if mode == 'image':
+            simimage = "{basename}.run{run}.fits".format(basename=basename, run=run)
+        elif mode == 'uv':
+            simimage = "{basename}.run{run}.image.fits".format(basename=basename, run=run)
         simimage_sourcefile = "{basename}.run{run}.txt".format(basename=basename, run=run)
         simimage_fullpath = os.path.join(simfolder, simimage)
         simimage_sourcefile_fullpath = os.path.join(simfolder, simimage_sourcefile)
+        print("simulated image:", simimage_fullpath)
+        print("simulated sources:", simimage_sourcefile_fullpath)
         simimage_sources_input = np.loadtxt(simimage_sourcefile_fullpath, skiprows=1)
         if len(simimage_sources_input.shape) == 1:
             print("Skip run{}, too few sources.".format(run))
