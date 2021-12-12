@@ -318,7 +318,8 @@ def make_gaussian_image(shape, fwhm=None, sigma=None, area=1., offset=(0,0), the
     return flux
 
 def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
-                    methods=['aperture','gaussian', 'peak'], aperture_correction=1.068):
+                    methods=['aperture','gaussian', 'peak'], aperture_correction=1.068,
+                    rms=None):
     """automatically measure the flux with different methods
     
     aperture_size = 1.0 # in units of beam size
@@ -327,6 +328,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
     y_center, x_center = ysize/2., xsize/2.
     flux_list = []
     flux_error_list = []
+    # print('rms:', rms)
     if beamsize is None:
         print("Warning: Unit the sum and maximum, without dividing the beam size.")
     sigma2FWHM = 2.35482
@@ -381,7 +383,6 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         # print('slopes', slopes)
         slope_selection = slopes < 1.0e-3
         if len(flux_apers[slope_selection])<3:
-            print()
             flux_apers_stable = flux_apers[-2]
             area_apers_stable = area_apers[-2]
             slope_selection_index = -1
@@ -416,7 +417,8 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         yidx, xidx = np.indices((ysize, xsize))
         yrad, xrad = yidx-ysize/2., xidx-xsize/2.
 
-        image_norm = image / np.max(image)
+        image_scale = np.max(image)
+        image_norm = image / image_scale
         p_init = models.Gaussian2D(amplitude=1, x_stddev=bmaj/sigma2FWHM, y_stddev=bmin/sigma2FWHM, 
                 theta=theta, bounds={"x_mean":(-2.,2.), "y_mean":(-2.,2.), 
                                      "x_stddev":(0., xsize), "y_stddev":(0., ysize)})
@@ -424,6 +426,8 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         p = fit_p(p_init, xrad, yrad, image_norm, 
                   weights=1/(yrad**2+xrad**2+(0.25*bmaj)**2+(0.25*bmin)**2))
         flux_fitted = 2*np.max(image)*np.pi*p.x_stddev.value*p.y_stddev.value*p.amplitude.value
+        # calculate the area with amplitude < rms
+        gaussian_area = np.sum(p(xrad, yrad) > rms/image_scale)
 
         if debug:
             print("Initial guess:", p_init)
@@ -486,7 +490,7 @@ def read_fitsimage(fitsimage):
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, 
-                  methods=['aperture','adaptive_aperture','gaussian','peak'],
+                  methods=['adaptive_aperture','gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
                   return_image_cuts=False, central_mask_radius=2.0, cmap=None, return_flux=True):
@@ -644,9 +648,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
                 offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
                 theta=theta/180.*np.pi) 
-    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+    flux_g, flux_err_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
                              methods='aperture', debug=False, aperture_correction=1.0,
-                             beamsize=1.0)
+                             beamsize=1.0, rms=std)
     aperture_correction = 1/flux_g[0]
     if debug:
         print('aperture correction', aperture_correction)
@@ -685,9 +689,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 data_cutout = s.cutout(data_masked_sub)
             else:
                 data_cutout = s.cutout(data_masked)
-            flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+            flux_list, flux_err_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods,
-                                        aperture_correction=aperture_correction)
+                                        aperture_correction=aperture_correction, rms=std)
             # if pbcor:
                 # data_pbcor_cutout = s.cutout(data_pbcor_masked)
                 # flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
@@ -770,7 +774,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 data_cutout = s.cutout(data_masked)
             flux_list, flux_err_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods,
-                                        aperture_correction=aperture_correction)
+                                        aperture_correction=aperture_correction, rms=std)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
 
         if sources_found:
@@ -1066,9 +1070,9 @@ def flux_measure(image, coords_list, methods=['aperture', 'adaptive_aperture', '
     image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
                 offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
                 theta=theta/180.*np.pi) 
-    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+    flux_g, flux_err_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
                              methods='aperture', debug=False, aperture_correction=1.0,
-                             beamsize=1.0)
+                             beamsize=1.0, rms=std)
     aperture_correction = 1/flux_g[0]
     
     # print("known_sources_coords", known_sources_coords)
@@ -1087,7 +1091,7 @@ def flux_measure(image, coords_list, methods=['aperture', 'adaptive_aperture', '
             data_cutout = s.cutout(data_masked)
         flux_list, flux_err_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                     theta=theta/180*np.pi, debug=False, methods=methods,
-                                    aperture_correction=aperture_correction)
+                                    aperture_correction=aperture_correction, rms=std)
         flux_snr = flux_list / flux_err_list
         flux_snr_list.append(flux_snr)
         if target_wave:
@@ -1151,7 +1155,7 @@ def flux_measure(image, coords_list, methods=['aperture', 'adaptive_aperture', '
  
 def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1, 
                     snr=(0.1,20), fov_scale=2.0, outdir='./', basename=None,
-                    uvtaper_scale=None, budget=None,
+                    uvtaper_scale=None, budget=None, start=0,
                     debug=False, **kwargs):
     """generate the fake images with man-made sources
 
@@ -1204,6 +1208,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         fluxrange = np.array(snr) * sensitivity
         known_sources = source_finder(imagefile, fov_scale=fov_scale)
         for i in range(repeat):
+            i = i + start
             print('run {}'.format(i))
             basename_repeat = basename + '.run{}'.format(i)
             complist_file = os.path.join(outdir, basename_repeat+'.txt')
@@ -1287,6 +1292,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
         known_sources = source_finder(imagefile, fov_scale=fov_scale)
         clname_fullpath = os.path.join(outdir, basename+'.cl')
         for i in range(repeat):
+            i = i + start
             print('run {}'.format(i))
             basename_repeat = basename + '.run{}'.format(i)
             complist_file = os.path.join(outdir, basename_repeat+'.txt')
@@ -1374,7 +1380,10 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_match = re.compile('(?P<obj>J\d*[+-]\d*)_(?P<band>B\d+)\w*.snr(?P<snr>\d+.\d+).run(?P<run>\d+)')
     # print('baseimage', baseimage)
     if basename is None:
-        basename = os.path.basename(baseimage)
+        if mode == 'image':
+            basename = os.path.basename(baseimage)
+        if mode == 'uv':
+            basename = os.path.basename(vis)
         print('basename', basename)
     # all_fake_images = glob.glob(basename+'*{}.fits'.format(suffix))
 
@@ -1387,6 +1396,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     detection_input_array = np.array([[0., 0.]])
     detection_found_array = np.array([[0., 0.]])
     for run in np.arange(repeat):
+        print("calculating run: {}".format(run))
         n_input = 0
         n_found = 0
         # flux = s*sensitivity
@@ -1400,8 +1410,8 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         simimage_sourcefile = "{basename}.run{run}.txt".format(basename=basename, run=run)
         simimage_fullpath = os.path.join(simfolder, simimage)
         simimage_sourcefile_fullpath = os.path.join(simfolder, simimage_sourcefile)
-        print("simulated image:", simimage_fullpath)
-        print("simulated sources:", simimage_sourcefile_fullpath)
+        # print("simulated image:", simimage_fullpath)
+        # print("simulated sources:", simimage_sourcefile_fullpath)
         simimage_sources_input = np.loadtxt(simimage_sourcefile_fullpath, skiprows=1)
         if len(simimage_sources_input.shape) == 1:
             print("Skip run{}, too few sources.".format(run))
