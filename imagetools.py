@@ -351,35 +351,44 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         # print('aperture.area;',aperture.area())
 
     if 'adaptive_aperture' in methods:
-        radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
+        # print("Starting adaptive_aperture...")
+        # print("theta", theta)
+        radii = np.arange(0.2*bmaj/2, 0.9*ysize/2., 0.5)
 
-        apertures = [EllipticalAperture((x_center, y_center), a, a*bmin/bmaj, theta) for a in radii]
+        apertures = [EllipticalAperture((x_center, y_center), b*bmaj/bmin, b, theta) for b in radii]
+        # print(apertures)
         extract_area = lambda x: x.area()
         area_apers = np.array(list(map(extract_area, apertures)))
+        # print(area_apers)
         
         phot_table = aperture_photometry(image, apertures)
         extract_qtable = lambda x: x.data[0]
         flux_apers = np.array(list(map(extract_qtable, phot_table.columns[3:].values())))
+        # flux_noise_ratio = flux_apers / (rms*area_apers)
         snr_apers = flux_apers / (rms*np.sqrt(area_apers))
-        print("flux_apers:", 1000*flux_apers/beamsize)
-        print("snr_apers:", snr_apers)
+        # print("flux_apers:", 1000*flux_apers/beamsize)
+        # print("snr_apers:", snr_apers)
 
         slopes = np.ones_like(snr_apers)
-        #slopes[1:] = np.diff(flux_apers)/np.max(flux_apers)/np.diff(area_apers) #Normalized slope
-        slopes[1:] = np.diff(snr_apers)/np.max(snr_apers)/np.diff(area_apers) #Normalized slope
-        print('slopes', slopes)
-        slope_selection = slopes < 1e-8
-        if debug:
-            print('position:{}/{}'.format(np.min(np.where(slope_selection)[0]), len(radii)))
-            # print('slopes', slopes)
+        slopes[1:] = np.diff(flux_apers)/np.max(flux_apers)/np.diff(area_apers) #Normalized slope
+        # slopes[1:] = np.diff(snr_apers)/np.max(snr_apers)/np.diff(area_apers) #Normalized slope
+        # slopes[1:] = np.diff(flux_noise_ratio)/np.max(flux_noise_ratio)/np.diff(area_apers) #Normalized slope
+        # print('slopes', slopes)
+        slope_selection = slopes < 1.0e-3
         if len(flux_apers[slope_selection])<3:
+            print()
             flux_apers_stable = flux_apers[-2]
             area_apers_stable = area_apers[-2]
+            slope_selection_index = -1
         else:
             flux_apers_stable = flux_apers[slope_selection][0]
             area_apers_stable = area_apers[slope_selection][0]
-        slope_selection_index = np.where(slope_selection == 1)[0][0]
+            slope_selection_index = np.where(slope_selection == 1)[0][0]
         if debug:
+            print("xsize, ysize: {},{}".format(xsize, ysize))
+            print("radii: {}".format(radii))
+            print('position:{}/{}'.format(slope_selection_index, len(radii)))
+            print('slopes', slopes)
             fig = plt.figure()
             ax = fig.add_subplot(111)
             im = ax.imshow(image, origin='lower', interpolation='none')
@@ -394,7 +403,7 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         else:
             flux_apers_stable = flux_apers_stable
             flux_error_stable = rms*np.sqrt(area_apers_stable)
-        print('stable:', flux_apers_stable, flux_error_stable)
+        # print('stable:', flux_apers_stable, flux_error_stable)
         flux_list.append(flux_apers_stable)
         flux_error_list.append(flux_error_stable)
 
@@ -446,8 +455,7 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         flux_error_list.append(rms)
     return flux_list, flux_error_list
 
-
-def flux_measure2(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, 
+def flux_measure_old(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, 
                  model_background=False, jackknif=True, target_wave=None,
                  subtract_background=False, debug=False, ax=None, fov_scale=2.0,
                  calculate_radial_distance=False):
@@ -457,6 +465,7 @@ def flux_measure2(image, coords_list, methods=['aperture', 'gaussian','peak'], p
     It also offers the validatiy check bettween the sythesized beam and the PSF
     """
     # convert the coordinates list to array
+    print(coords_list)
     coords_array = np.array(coords_list)
     known_sources_coords = SkyCoord(ra=coords_array[:,0]*u.arcsec, dec=coords_array[:,1]*u.arcsec)
 
@@ -535,9 +544,9 @@ def flux_measure2(image, coords_list, methods=['aperture', 'gaussian','peak'], p
                              beamsize=1.0)
     aperture_correction = 1/flux_g[0]
     
-    print("known_sources_coords", known_sources_coords)
-    print("known_sources_pixel", known_sources_pixel)
-    print("known_sources_center", known_sources_center)
+    # print("known_sources_coords", known_sources_coords)
+    # print("known_sources_pixel", known_sources_pixel)
+    # print("known_sources_center", known_sources_center)
     seg_radius = 2.0*np.int(a)
     segments = RectangularAperture(known_sources_center, 2*seg_radius, 2*seg_radius, theta=0)
     segments_mask = segments.to_mask(method='center')
@@ -618,6 +627,174 @@ def flux_measure2(image, coords_list, methods=['aperture', 'gaussian','peak'], p
     # return flux_auto, flux_snr_list
     return flux_auto, flux_err_auto
  
+def flux_measure2(image, coords_list, methods=['adaptive_aperture', 'gaussian','peak'], pbcor=True, 
+                 model_background=False, jackknif=True, target_wave=None,
+                 subtract_background=False, debug=False, ax=None, fov_scale=2.0,
+                 calculate_radial_distance=False):
+    """measure the flux from the images by given coordinates
+    the images can be multiple images on the same field but with different resolutions
+    the flux from the coarser resolution will be preferred
+    It also offers the validatiy check bettween the sythesized beam and the PSF
+    """
+    # convert the coordinates list to array
+    # print(coords_list)
+    coords_array = np.array(coords_list)
+    known_sources_coords = SkyCoord(ra=coords_array[:,0]*u.arcsec, dec=coords_array[:,1]*u.arcsec)
+
+    # read the images
+    with fits.open(image) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        deg2pixel = 1/np.abs(header['CDELT1'])
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fov_pixel = fov / 3600. * deg2pixel
+        a, b = header['BMAJ']*deg2pixel, header['BMIN']*deg2pixel
+        theta = header['BPA']
+        bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+        beamsize = np.pi*a*b/(4*np.log(2))
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        known_mask = data_masked.mask
+       
+    if pbcor:
+        fitsimage_path = os.path.dirname(image)
+        fitsimage_basename = os.path.basename(image)
+        fitsimage_pbcor = os.path.join(fitsimage_path, fitsimage_basename.replace('pbcor.fits', 
+                                       'pb.fits.gz'))
+        if not os.path.isfile(fitsimage_pbcor):
+            print("No primary beam corrected data found, the final flux can be wrong!")
+            pbcor = False
+        # load the pbcorred data
+        with fits.open(fitsimage_pbcor) as hdu_pbcor:
+            pbcor_map = hdu_pbcor[0].data.reshape(ny,nx)
+     
+    data_masked = np.ma.masked_invalid(data.reshape(ny, nx) * pbcor_map)
+
+    # mask the known data to calculate the sensitivity of the map
+    known_sources_pixel = skycoord_to_pixel(known_sources_coords, wcs)
+    known_sources_center = list(zip(known_sources_pixel[0], known_sources_pixel[1]))
+    for p in known_sources_center:
+        aper = CircularAperture(p, 2.0*a)
+        aper_mask = aper.to_mask(method='center')
+        known_mask = np.bitwise_or(known_mask, aper_mask[0].to_image((ny,nx)).astype(bool))
+    data_field = np.ma.array(data_masked, mask=known_mask) 
+    mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)  
+
+    if model_background:
+        if filter_size is None:
+            filter_size = 3#max(int(fwhm_pixel/1.5), 6)
+        if box_size is None:
+            box_size = int(fwhm_pixel*2)
+        if debug:
+            print('filter_size', filter_size)
+            print('box_size', box_size)
+        sigma_clip = SigmaClip(sigma=3.)
+        # bkg_estimator = MedianBackground()
+        bkg_estimator = SExtractorBackground() 
+        bkg = Background2D(data_masked.data, (box_size, box_size), 
+                filter_size=(filter_size, filter_size),
+                mask=data_masked.mask,
+                sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
+        background = bkg.background
+    else:
+        background = median
+    data_masked_sub = data_masked - background
+
+    # numerical aperture correction
+    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
+                offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
+                theta=theta/180.*np.pi) 
+    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+                             methods='aperture', debug=False, aperture_correction=1.0,
+                             beamsize=1.0)
+    aperture_correction = 1/flux_g[0]
+    
+    # print("known_sources_coords", known_sources_coords)
+    # print("known_sources_pixel", known_sources_pixel)
+    # print("known_sources_center", known_sources_center)
+    seg_radius = 2.5*np.int(a)
+    segments = RectangularAperture(known_sources_center, 2*seg_radius, 2*seg_radius, theta=0)
+    segments_mask = segments.to_mask(method='center')
+    
+    flux_auto = []
+    flux_err_auto = []
+    # flux_snr_list = []
+    for i,s in enumerate(segments_mask):
+        if subtract_background:
+            data_cutout = s.cutout(data_masked_sub)
+        else:
+            data_cutout = s.cutout(data_masked)
+        print('Measuring source #{}'.format(i))
+        flux_list, flux_err_list = auto_photometry2(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+                                    theta=theta/180*np.pi, debug=debug, methods=methods,
+                                    aperture_correction=aperture_correction, rms=std)
+        #flux_err_list.append(flux_snr)
+        #flux_snr = flux_list / std
+        if target_wave:
+            flux_list = flux_interpolate(lam, flux_list, target_wave) 
+        if pbcor:
+            pbcor_pixel = pbcor_map[np.ceil(known_sources_center[i][0]), 
+                                    np.ceil(known_sources_center[i][1])]
+            flux_auto.append(np.array(flux_list) * 1000. / pbcor_pixel)
+            flux_err_auto.append(np.array(flux_err_list) * 1000. / pbcor_pixel)
+        else:
+            flux_auto.append(np.array(flux_list) * 1000.)
+            flux_err_auto.append(np.array(flux_err_list) * 1000.)
+        flux_snr_list = np.array(flux_auto) / np.array(flux_err_auto)
+    
+    if calculate_radial_distance:
+        radial_distance = []
+        for coord_pixel in known_sources_center:
+            pixel_dist = np.sqrt((coord_pixel[0] - nx/2.0)**2+
+                                 (coord_pixel[1] - ny/2.0)**2)
+            ang_dist = pixel_dist / deg2pixel * 3600 # in arcsec
+            radial_distance.append(ang_dist)
+    if debug:
+        # visualize the results
+        if ax is None:
+            fig= plt.figure()
+            ax = fig.add_subplot(111)
+        ny, nx = data_masked.shape[-2:]
+        scale = np.abs(header['CDELT1'])*3600
+        x_index = (np.arange(0, nx) - nx/2.0) * scale
+        y_index = (np.arange(0, ny) - ny/2.0) * scale
+        #x_map, y_map = np.meshgrid(x_index, y_index)
+        #ax.pcolormesh(x_map, y_map, data_masked)
+        extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
+        ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none', vmax=10.*std, 
+                  vmin=-3.0*std)
+        
+        ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+                verticalalignment='center')
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
+                                  angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
+        ax.add_patch(ellipse)
+        if debug:
+            ellipse = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
+                                      angle=0, fill=False, facecolor=None, edgecolor='grey', 
+                                      alpha=0.8)
+            ax.add_patch(ellipse)
+        ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
+                color='white', fontsize=10, horizontalalignment='center', verticalalignment='center')
+        for i,e in enumerate(zip(*known_sources_pixel)):
+            yy = scale*(e[0]-ny/2.)
+            xx = scale*(e[1]-ny/2.)
+            ellipse = patches.Ellipse((yy, xx), width=2*b*scale, 
+                                      height=2*a*scale, angle=theta, facecolor=None, fill=False, 
+                                      edgecolor='black', alpha=0.8, linewidth=2)
+            ax.add_patch(ellipse)
+        plt.show()
+
+    # print('flux_auto', flux_auto)
+    # print('flux_snr_list', flux_snr_list)
+
+    if calculate_radial_distance:
+        return flux_auto, flux_snr_list, radial_distance
+    # return flux_auto, flux_snr_list
+    return flux_auto, flux_err_auto
 
 def run_flux_measure_almared(fitsimages, summary_file=None):
     if os.path.isdir(fitsimages):
@@ -629,9 +806,18 @@ def run_flux_measure_almared(fitsimages, summary_file=None):
             f.write("obj ra dec flux_aperture flux_err_aperture flux_gaussian flux_err_gaussian flux_peak flux_err_peak")
             f.write('\n')
     name_match = re.compile('uid___[\w]+\.(?P<name>[\w\.]+)_sci.spw')
+    failed_files = []
     for image in fitsimages:
+        print(">>>>>>>\nfitsimage={}\n".format(image))
         obj = name_match.search(image).groupdict()['name']
-        sf = source_finder2(image, threshold=5.0, return_flux=False)
+        try:
+            sf = source_finder2(image, threshold=5.0, return_flux=False, algorithm='find_peak', 
+                second_check=True)
+        except:
+            failed_files.append(image)
+            continue
+        if len(sf) < 1:
+            continue
         targets_coords = []
         for target in sf:
             targets_coords.append([target[0], target[1]])
@@ -647,3 +833,4 @@ def run_flux_measure_almared(fitsimages, summary_file=None):
                                          sources_flux[i][2], sources_flux_err[i][2]))
                 detections_summary.write('\n')
             detections_summary.close()
+    print("failed_files:", failed_files)

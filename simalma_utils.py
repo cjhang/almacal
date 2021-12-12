@@ -326,6 +326,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
     ysize, xsize = image.shape
     y_center, x_center = ysize/2., xsize/2.
     flux_list = []
+    flux_error_list = []
     if beamsize is None:
         print("Warning: Unit the sum and maximum, without dividing the beam size.")
     sigma2FWHM = 2.35482
@@ -349,8 +350,68 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
             aperture.plot(color='gray', lw=2)
         if beamsize:
             flux_list.append(1.0*flux_in_aper/beamsize)
+            flux_error_list.append(rms * np.sqrt(aperture.area())/beamsize)
         else:
             flux_list.append(flux_in_aper)
+            flux_error_list.append(rms * np.sqrt(aperture.area()))
+
+    if 'adaptive_aperture' in methods:
+        # print("Starting adaptive_aperture...")
+        # print("theta", theta)
+        radii = np.arange(0.2*bmaj/2, 0.9*ysize/2., 0.5)
+
+        apertures = [EllipticalAperture((x_center, y_center), b*bmaj/bmin, b, theta) for b in radii]
+        # print(apertures)
+        extract_area = lambda x: x.area()
+        area_apers = np.array(list(map(extract_area, apertures)))
+        # print(area_apers)
+        
+        phot_table = aperture_photometry(image, apertures)
+        extract_qtable = lambda x: x.data[0]
+        flux_apers = np.array(list(map(extract_qtable, phot_table.columns[3:].values())))
+        # flux_noise_ratio = flux_apers / (rms*area_apers)
+        snr_apers = flux_apers / (rms*np.sqrt(area_apers))
+        # print("flux_apers:", 1000*flux_apers/beamsize)
+        # print("snr_apers:", snr_apers)
+
+        slopes = np.ones_like(snr_apers)
+        slopes[1:] = np.diff(flux_apers)/np.max(flux_apers)/np.diff(area_apers) #Normalized slope
+        # slopes[1:] = np.diff(snr_apers)/np.max(snr_apers)/np.diff(area_apers) #Normalized slope
+        # slopes[1:] = np.diff(flux_noise_ratio)/np.max(flux_noise_ratio)/np.diff(area_apers) #Normalized slope
+        # print('slopes', slopes)
+        slope_selection = slopes < 1.0e-3
+        if len(flux_apers[slope_selection])<3:
+            print()
+            flux_apers_stable = flux_apers[-2]
+            area_apers_stable = area_apers[-2]
+            slope_selection_index = -1
+        else:
+            flux_apers_stable = flux_apers[slope_selection][0]
+            area_apers_stable = area_apers[slope_selection][0]
+            slope_selection_index = np.where(slope_selection == 1)[0][0]
+        if debug:
+            print("xsize, ysize: {},{}".format(xsize, ysize))
+            print("radii: {}".format(radii))
+            print('position:{}/{}'.format(slope_selection_index, len(radii)))
+            print('slopes', slopes)
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            im = ax.imshow(image, origin='lower', interpolation='none')
+            plt.colorbar(im, fraction=0.046, pad=0.04)
+            for ap in apertures:
+                im = ap.plot(color='gray', lw=2)
+            im = apertures[slope_selection_index].plot(color='black', lw=4)
+
+        if beamsize:
+            flux_apers_stable = 1.0*flux_apers_stable/beamsize
+            flux_error_stable = rms*np.sqrt(area_apers_stable)/beamsize
+        else:
+            flux_apers_stable = flux_apers_stable
+            flux_error_stable = rms*np.sqrt(area_apers_stable)
+        # print('stable:', flux_apers_stable, flux_error_stable)
+        flux_list.append(flux_apers_stable)
+        flux_error_list.append(flux_error_stable)
+
     if 'gaussian' in methods:
         yidx, xidx = np.indices((ysize, xsize))
         yrad, xrad = yidx-ysize/2., xidx-xsize/2.
@@ -384,47 +445,19 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
             ax[2].set_title("Residual")
         if beamsize:
             flux_list.append(1.0*flux_fitted/beamsize)
+            flux_error_list.append(rms*np.sqrt(gaussian_area)/beamsize)
         else:
             flux_list.append(flux_fitted)
+            flux_error_list.append(rms*np.sqrt(gaussian_area))
     if 'peak' in methods:
         # the peak value has the same units of one pixel
         # if beamsize:
             # flux_list.append(np.max(image))#)#/beamsize)
         # else:
         flux_list.append(np.max(image))
-    if 'aperture_auto' in methods:
-        radii = np.arange(0.2*bmaj/2, ysize/2./np.cos(theta), 0.5/np.cos(theta))
+        flux_error_list.append(rms)
 
-        apertures = [EllipticalAperture((x_center, y_center), a, a*bmin/bmaj, theta) for a in radii]
-        extract_area = lambda x: x.area()
-        area_apers = np.array(list(map(extract_area, apertures)))
-        
-        phot_table = aperture_photometry(image, apertures)
-        extract_qtable = lambda x: x.data[0]
-        flux_apers = np.array(list(map(extract_qtable, phot_table.columns[3:].values())))
-
-        slopes = np.ones_like(area_apers)
-        slopes[1:] = np.diff(flux_apers)/np.max(flux_apers)/np.diff(area_apers) #Normalized slope
-        slope_selection = slopes < 0.001
-        if debug:
-            print('position:{}/{}'.format(np.min(np.where(slope_selection)[0]), len(radii)))
-            # print('slopes', slopes)
-        if len(flux_apers[slope_selection])<3:
-            flux_apers_stable = flux_apers[-2]
-        else:
-            flux_apers_stable = flux_apers[slope_selection][0]
-        if debug:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            im = ax.imshow(image, origin='lower', interpolation='none')
-            plt.colorbar(im, fraction=0.046, pad=0.04)
-            for ap in apertures:
-                im = ap.plot(color='gray', lw=2)
-        if beamsize:
-            flux_list.append(1.0*flux_apers_stable/beamsize)
-        else:
-            flux_list.append(flux_apers_stable)
-    return flux_list
+    return flux_list, flux_error_list
 
 def read_fitsimage(fitsimage):
     with fits.open(fitsimage) as hdu:
@@ -452,7 +485,8 @@ def read_fitsimage(fitsimage):
 
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
-                  filter_size=None, box_size=None, methods=['aperture','gaussian','peak'],
+                  filter_size=None, box_size=None, 
+                  methods=['aperture','adaptive_aperture','gaussian','peak'],
                   subtract_background=False, known_sources=None, figname=None, ax=None, pbcor=False,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
                   return_image_cuts=False, central_mask_radius=2.0, cmap=None, return_flux=True):
@@ -734,7 +768,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 data_cutout = s.cutout(data_masked_sub)
             else:
                 data_cutout = s.cutout(data_masked)
-            flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+            flux_list, flux_err_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                         theta=theta/180*np.pi, debug=False, methods=methods,
                                         aperture_correction=aperture_correction)
             flux_input_auto.append(np.array(flux_list) * 1000) #change to mJy
@@ -946,7 +980,7 @@ def flux_interpolate(wavelength, flux, target_wavelength, redshift=2.6,
         print("flux difference: {}".format(f_SED(wavelength)/f_SED(target_wavelength)))
     return scale_factor * f_SED(target_wavelength)
 
-def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pbcor=True, 
+def flux_measure(image, coords_list, methods=['aperture', 'adaptive_aperture', 'gaussian','peak'], pbcor=True, 
                  model_background=False, jackknif=True, target_wave=None,
                  subtract_background=False, debug=False, ax=None, fov_scale=2.0,
                  calculate_radial_distance=False):
@@ -1037,10 +1071,10 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
                              beamsize=1.0)
     aperture_correction = 1/flux_g[0]
     
-    print("known_sources_coords", known_sources_coords)
-    print("known_sources_pixel", known_sources_pixel)
-    print("known_sources_center", known_sources_center)
-    seg_radius = 2.0*np.int(a)
+    # print("known_sources_coords", known_sources_coords)
+    # print("known_sources_pixel", known_sources_pixel)
+    # print("known_sources_center", known_sources_center)
+    seg_radius = 2.5*np.int(a)
     segments = RectangularAperture(known_sources_center, 2*seg_radius, 2*seg_radius, theta=0)
     segments_mask = segments.to_mask(method='center')
     
@@ -1051,10 +1085,10 @@ def flux_measure(image, coords_list, methods=['aperture', 'gaussian','peak'], pb
             data_cutout = s.cutout(data_masked_sub)
         else:
             data_cutout = s.cutout(data_masked)
-        flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+        flux_list, flux_err_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                     theta=theta/180*np.pi, debug=False, methods=methods,
                                     aperture_correction=aperture_correction)
-        flux_snr = flux_list / std
+        flux_snr = flux_list / flux_err_list
         flux_snr_list.append(flux_snr)
         if target_wave:
             flux_list = flux_interpolate(lam, flux_list, target_wave) 
