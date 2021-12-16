@@ -816,9 +816,9 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
         ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
                                   angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
         ax.add_patch(ellipse)
-        if debug:
+        if True:
             ellipse = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
-                                      angle=0, fill=False, facecolor=None, edgecolor='grey', 
+                                      angle=0, fill=False, facecolor=None, edgecolor='white', 
                                       alpha=0.8)
             ax.add_patch(ellipse)
         ax.text(0.7*np.max(x_index), 0.9*np.min(y_index), 'std: {:.2f}mJy'.format(std*1000.), 
@@ -1092,7 +1092,7 @@ def flux_measure(image, coords_list, methods=['aperture', 'adaptive_aperture', '
         flux_list, flux_err_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
                                     theta=theta/180*np.pi, debug=False, methods=methods,
                                     aperture_correction=aperture_correction, rms=std)
-        flux_snr = flux_list / flux_err_list
+        flux_snr = np.array(flux_list) / np.array(flux_err_list)
         flux_snr_list.append(flux_snr)
         if target_wave:
             flux_list = flux_interpolate(lam, flux_list, target_wave) 
