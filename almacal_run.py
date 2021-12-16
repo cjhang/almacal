@@ -2209,6 +2209,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                             continue
                         ax_select.set_title('{}'.format(res))
                         sources_found = source_finder(image_fullpath,
+                                methods=['aperture', 'peak'],
                                 ax=ax_select, pbcor=True, central_mask_radius=2.0, **kwargs)
                         if band == focus_band:
                             obj_sourcefound['{}'.format(res)] = sources_found
