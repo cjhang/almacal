@@ -24,7 +24,7 @@ from astropy.convolution import Gaussian2DKernel, convolve
 
 def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
-                  filter_size=None, box_size=None, methods=['aperture','gaussian','peak'],
+                  filter_size=None, box_size=None, methods=['adaptive_aperture','gaussian','peak'],
                   subtract_background=False, figname=None, ax=None, pbfile=True,
                   fov_scale=2.0, mask_threshold=5., second_check=True, baseimage=None,
                   cmap=None, return_flux=True):
@@ -138,15 +138,15 @@ def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True,
         raise ValueError("Unsurport algorithm: {}!".format(algorithm))
    
     # numerical aperture correction
-    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
-                offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
-                theta=theta/180.*np.pi) 
-    flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
-                             methods='aperture', debug=False, aperture_correction=1.0,
-                             beamsize=1.0)
-    aperture_correction = 1/flux_g[0]
-    if debug:
-        print('aperture correction', aperture_correction)
+    # image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
+                # offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
+                # theta=theta/180.*np.pi) 
+    # flux_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+                             # methods='aperture', debug=False, aperture_correction=1.0,
+                             # beamsize=1.0)
+    # aperture_correction = 1/flux_g[0]
+    # if debug:
+        # print('aperture correction', aperture_correction)
 
     # flux measurements
     flux_auto = []
@@ -182,9 +182,8 @@ def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True,
                 data_cutout = s.cutout(data_masked_sub)
             else:
                 data_cutout = s.cutout(data_masked)
-            flux_list = auto_photometry(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
-                                        theta=theta/180*np.pi, debug=False, methods=methods,
-                                        aperture_correction=aperture_correction)
+            flux_list, flux_err_list = auto_photometry2(data_cutout, bmaj=b, bmin=a, beamsize=beamsize,
+                                        theta=theta/180*np.pi, debug=False, methods=methods, rms=std)
             # if pbcor:
                 # data_pbcor_cutout = s.cutout(data_pbcor_masked)
                 # flux_pbcor_list = auto_photometry(data_pbcor_cutout, bmaj=b, bmin=a, 
@@ -210,7 +209,7 @@ def source_finder2(fitsimage, outdir='./', savefile=None, model_background=True,
             if is_true: 
                 sources_found_x.append(sources_found_x_candidates[i])
                 sources_found_y.append(sources_found_y_candidates[i])
-                flux_snr = np.array(flux_list) / std
+                flux_snr = np.array(flux_list) / np.array(flux_err_list)
                 if pbfile:
                     pbcor_pixel = pbcor_map[sources_found_y_candidates[i], 
                                             sources_found_x_candidates[i]]
@@ -376,7 +375,6 @@ def auto_photometry2(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         # print('slopes', slopes)
         slope_selection = slopes < 1.0e-3
         if len(flux_apers[slope_selection])<3:
-            print()
             flux_apers_stable = flux_apers[-2]
             area_apers_stable = area_apers[-2]
             slope_selection_index = -1
