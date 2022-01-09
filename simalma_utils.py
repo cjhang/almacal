@@ -318,7 +318,7 @@ def make_gaussian_image(shape, fwhm=None, sigma=None, area=1., offset=(0,0), the
     return flux
 
 def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False, 
-                    methods=['aperture','gaussian', 'peak'], aperture_correction=1.068,
+                    methods=['adaptive_aperture','gaussian', 'peak'], aperture_correction=1.068,
                     rms=None):
     """automatically measure the flux with different methods
     
@@ -333,7 +333,7 @@ def auto_photometry(image, bmaj=1, bmin=1, theta=0, beamsize=None, debug=False,
         print("Warning: Unit the sum and maximum, without dividing the beam size.")
     sigma2FWHM = 2.35482
     # Aperture Photometry
-    if 'aperture' in methods:
+    if 'single_aperture' in methods:
         aperture_size=1.0
         aperture = EllipticalAperture((x_center, y_center), aperture_size*bmaj, aperture_size*bmin, theta)
         # extract_area = lambda x: x.area()
@@ -649,7 +649,7 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
                 offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
                 theta=theta/180.*np.pi) 
     flux_g, flux_err_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
-                             methods='aperture', debug=False, aperture_correction=1.0,
+                             methods='single_aperture', debug=False, aperture_correction=1.0,
                              beamsize=1.0, rms=std)
     aperture_correction = 1/flux_g[0]
     if debug:
@@ -1067,14 +1067,17 @@ def flux_measure(image, coords_list, methods=['adaptive_aperture', 'gaussian','p
     data_masked_sub = data_masked - background
 
     # numerical aperture correction
-    image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
-                offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
-                theta=theta/180.*np.pi) 
-    flux_g, flux_err_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
-                             methods='aperture', debug=False, aperture_correction=1.0,
-                             beamsize=1.0, rms=std)
-    aperture_correction = 1/flux_g[0]
-    
+    if 'single_aperture' in methods:
+        image_gaussian = make_gaussian_image((2.*np.ceil(a), 2.*np.ceil(a)), fwhm=[b,a], 
+                    offset=[0.5, 0.5], # 0.5 offset comes from central offset of photutils of version 0.5
+                    theta=theta/180.*np.pi) 
+        flux_g, flux_err_g = auto_photometry(image_gaussian, bmaj=b, bmin=a, theta=theta/180.*np.pi, 
+                                 methods='single_aperture', debug=False, aperture_correction=1.0,
+                                 beamsize=1.0, rms=std)
+        aperture_correction = 1./flux_g[0]
+    else:
+        aperture_correction = 1.0
+        
     # print("known_sources_coords", known_sources_coords)
     # print("known_sources_pixel", known_sources_pixel)
     # print("known_sources_center", known_sources_center)
