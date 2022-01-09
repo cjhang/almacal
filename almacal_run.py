@@ -2368,10 +2368,11 @@ def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./',
             if os.path.isfile(os.path.join(obj_outdir, '{}_simulation.txt'.format(obj))):
                 print("Simulation file already exits, delete the {}_simulation.txt to overwrite.".format(obj))
                 continue
-            gen_sim_images(imagefile=imagefile, outdir=obj_outdir, snr=(0.1,20), repeat=repeat)
+            gen_sim_images(mode='image',imagefile=imagefile, outdir=obj_outdir, 
+                           snr=(0.1,20), repeat=repeat)
             calculate_sim_images(obj_outdir, baseimage=imagefile, savefile=os.path.join(
                 obj_outdir,'{}_simulation.txt'.format(obj)), plot=False, repeat=repeat, threshold=5, 
-                second_check=False, snr_mode='peak')
+                second_check=False, snr_mode='peak', mode='image')
 
 def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
