@@ -984,7 +984,7 @@ def flux_interpolate(wavelength, flux, target_wavelength, redshift=2.6,
         print("flux difference: {}".format(f_SED(wavelength)/f_SED(target_wavelength)))
     return scale_factor * f_SED(target_wavelength)
 
-def flux_measure(image, coords_list, methods=['aperture', 'adaptive_aperture', 'gaussian','peak'], pbcor=True, 
+def flux_measure(image, coords_list, methods=['adaptive_aperture', 'gaussian','peak'], pbcor=True, 
                  model_background=False, jackknif=True, target_wave=None,
                  subtract_background=False, debug=False, ax=None, fov_scale=2.0,
                  calculate_radial_distance=False):
@@ -1495,7 +1495,7 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
     #flux_list, flux_peak_list, flux_found_list, completeness_list
 
 def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.2), plot=True,
-                     mode='median', text=''):
+                     mode='median', text='', savefile=None):
     if jsonfile:
         with open(jsonfile) as jf:
             data = json.load(jf)
@@ -1628,7 +1628,17 @@ def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.2), pl
         plt.suptitle(text)
 
         plt.show()
-    return snr_mid, [aperture_mean, gaussian_mean], completeness_list, fake_rate_list
+    if savefile:
+        with open(savefile, 'w+') as fp:
+            fp.write('{} {} {} {} {} {} {}\n'.format('snr', 'aperture_boosting', 
+                'aperture_boosting_err', 'gaussian_boosting', 'gaussian_boosting_err', \
+                'completeness', 'fake_rate'))
+            for i in range(len(snr_mid)):
+                fp.write("{} {} {} {} {} {} {}\n".format(snr_mid[i], aperture_mean[i][0], aperture_mean[i][1], 
+                          gaussian_mean[i][0], gaussian_mean[i][1], 
+                          completeness_list[i], fake_rate_list[i]))
+    else:
+        return snr_mid, [aperture_mean, gaussian_mean], completeness_list, fake_rate_list
 
 def image_sim(image, outdir='./',):
     """calculate the completeness for given fitsfile

@@ -2241,7 +2241,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                         print("Using {} for flux measurements.\n".format(seleted_image_fullpath))
                         sources_flux, sources_flux_snr, sources_radial_distance = flux_measure(
                                 seleted_image_fullpath, coords_unique, target_wave=target_wave,
-                                methods=['aperture', 'gaussian', 'peak'], 
+                                methods=['adaptive_aperture', 'gaussian', 'peak'], 
                                 calculate_radial_distance=True)
                         # sources_flux, sources_flux_snr = sources_flux, sources_flux_snr
                         # print("sources_flux", sources_flux)
@@ -2287,6 +2287,60 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
     except KeyboardInterrupt:
         return 0
     print("Failed files:", failed_files)
+
+def run_gen_catalogue(fluxfile=None, imagedir=None, savefile=None,
+        resolution='0.3arcsec', suffix='combine.ms.auto.cont', target_wave=None,
+        methods=['adaptive_aperture', 'gaussian', 'peak'], 
+        bands=['B3','B4','B5','B6','B7','B8','B9'], ):
+    """generate the catalogue base on the detections at different bands.
+
+    It will read the source coordinates from flux measurement files and complete 
+    their flux density at different bands.
+
+    It also can be used to apply the flux correction by extrapolate the flux density 
+    to a different wavelength.
+
+    """
+    detections = Table.read(fluxfile, format='ascii')
+
+    if resolution == '':
+        res_string = ''
+    else:
+        res_string = resolution+'.'
+    if savefile:
+        with open(savefile, 'w+') as fp:
+            fp.write('obj idx type ra dec radial_distance ')
+            for band in bands:
+                for m in methods:
+                    fp.write("flux_{0}_{1} flux_snr_{0}_{1} ".format(band, m))
+            fp.write('\n')
+    for det in detections:
+        obj = det['obj']
+        ra, dec = det['ra'], det['dec'] # arcsec
+        det_bands = {}
+        for band in bands:
+            obj_band_dir = os.path.join(imagedir, band, obj)
+            image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+            image_fullpath = os.path.join(obj_band_dir, image_name)
+            # print("flux measurement in:")
+            # print(image_fullpath)
+            if os.path.isfile(image_fullpath):
+                source_flux, source_flux_snr = flux_measure(
+                        image_fullpath, [[ra,dec],], target_wave=target_wave,
+                        methods=methods, 
+                        calculate_radial_distance=False)
+                det_bands[band] = np.array([source_flux[0], source_flux_snr[0]])
+            else:
+                det_bands[band] = np.zeros((2, len(methods)))
+        if savefile:
+            with open(savefile, 'a+') as fp:
+                fp.write('{obj} {idx} {type} {ra} {dec} {radial_distance} '.format(
+                    obj=obj, idx=det['idx'], type=det['type'], ra=ra, dec=dec, \
+                    radial_distance=det['radial_distance']))
+                for band in bands:
+                    for i in range(len(methods)):
+                        fp.write("{} {} ".format(*det_bands[band][:,i]))
+                fp.write('\n')
 
 def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./', 
         resolution='0.3arcsec', repeat=1000, suffix='image.fits'):
@@ -2541,7 +2595,7 @@ def run_number_counts_old(flist, detections_file=None, effective_area_file=None,
 def run_number_counts(flist=None, detections_file=None, effective_area_file=None, band='B6',
         simulation_folder=None, ax=None, flux_mode='aperture', completeness_mode='peak',
         default_simulation=None, objs_withdeafultsim=[], n_bootstrap=1000, savefile=None,
-        plot=True, mode='cumulative', perturbation=0.1):
+        plot=True, mode='cumulative', perturbation=0.1, n_points=None):
     """
 
     flist: flux list, [0.2, 0.6, 1.0]
@@ -2576,16 +2630,17 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
 
     if flist is None:
         flux_sorted = np.sort(cat['flux_'+flux_mode][index_SMG + index_Unknow])
+        if not n_points:
+            n_points = int(len(flux_sorted)/10.0)
         if mode == 'cumulative':
+            idx_first = int(0.*len(flux_sorted))
             idx_last = int(0.95*len(flux_sorted))
-            idx_last = int(0.90*len(flux_sorted))
-            flist = np.logspace(np.log10(flux_sorted[0]), np.log10(flux_sorted[idx_last]), 
-                                int(len(flux_sorted)/10.0))
+            flist = np.logspace(np.log10(flux_sorted[idx_first]), np.log10(flux_sorted[idx_last]),n_points)
         if mode == 'differential':
-            idx_first = int(0.1*len(flux_sorted))
-            idx_last = int(0.90*len(flux_sorted))
-            flist = np.logspace(np.log10(flux_sorted[idx_first]), np.log10(flux_sorted[idx_last]), 
-                                int(len(flux_sorted)/15.0))
+            idx_first = int(0.0*len(flux_sorted))
+            idx_last = int(0.95*len(flux_sorted))
+            flist = np.logspace(np.log10(flux_sorted[idx_first]), np.log10(flux_sorted[idx_last]),
+                                n_points)
     # effective area
     effarea = np.loadtxt(effective_area_file, skiprows=1)
     cs_effarea = interpolate.interp1d(effarea[:, 0], effarea[:,1], fill_value="extrapolate")
@@ -2616,25 +2671,24 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         n_smgs_expect = SMG_frac*n_Unknown
         if n_Unknown > 0:
             # pearson possion error:
-            n_unknown_sampling = np.round(n_smgs_expect-0.5-np.random.rand()*np.sqrt(n_smgs_expect+0.25)).astype(int)
-            # print('n_unknown_sampling', n_unknown_sampling)
-            n_unknown_sampling = np.min([n_unknown_sampling,n_Unknown])
-            index_unknown_bootstrap = np.random.choice(index_Unknow, n_unknown_sampling, replace=False).tolist()
+            index_unknown_bootstrap = np.random.choice(index_Unknow, int(n_smgs_expect), 
+                                                       replace=False).tolist()
         else:
             index_unknown_bootstrap = []
+        index_bootstrap = index_unknown_bootstrap + index_SMG 
+        n_select = len(index_bootstrap)
         if perturbation:
-            index_SMG_bootstrap = np.random.choice(index_SMG, int((1-perturbation)*n_SMG), replace=False).tolist()
+            index_SMG_bootstrap = np.random.choice(index_bootstrap, int((1-perturbation)*n_select), 
+                                                   replace=False).tolist()
         else:
-            index_SMG_bootstrap = index_SMG
+            index_SMG_bootstrap = index_bootstrap
         # print("two index:", index_unknown_bootstrap, index_SMG_bootstrap)
-        cat_boostrap = cat[index_unknown_bootstrap + index_SMG_bootstrap]
-        n_select = len(cat_boostrap)
+        cat_bootstrap = cat[index_SMG_bootstrap]
         # print('n select: unknown:{}; SMG:{}'.format(len(index_unknown_bootstrap), len(index_SMG_bootstrap)))
-        # print('selected index:', index_boostrap)
-        flux = cat_boostrap['flux_'+flux_mode]
-        completeness_snr = cat_boostrap['flux_snr_'+completeness_mode]
-        flux_err = flux/cat_boostrap['flux_snr_'+flux_mode]
-        flux_bootstrap = flux + np.random.randn(n_select) * flux_err
+        flux = cat_bootstrap['flux_'+flux_mode]
+        completeness_snr = cat_bootstrap['flux_snr_'+completeness_mode]
+        flux_err = flux/cat_bootstrap['flux_snr_'+flux_mode]
+        flux_bootstrap = flux + np.random.randn(len(index_SMG_bootstrap)) * flux_err
         Ni = 1 / (cs_effarea(flux_bootstrap)/3600.) / cs_comp2(completeness_snr)
         Ni_err = 1/(cs_effarea(flux_bootstrap)**2/3600)/cs_comp2(completeness_snr)\
                  * np.sqrt(cs_effarea(flux_bootstrap))
@@ -2670,9 +2724,12 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         # print('N_number=', N_number)
 
     # print(mode_simu[0])
+    if mode == 'differential':
+        flist = 0.5*(flist[:-1] + flist[1:])
+        mode_simu = mode_simu[:,:,:-1] # remove the last column
     mode_NN_number = np.mean(mode_simu[2], axis=0)
     mode_NN = np.mean(mode_simu[0], axis=0)
-    if mode_NN_number[0] < 10:
+    if mode_NN_number[0] < 20:
         mode_NN_err = np.std(mode_simu[0], axis=0)
     else:
         mode_NN_err = np.sqrt(np.sum(mode_simu[1]**2, axis=0))/n_points
@@ -2687,7 +2744,7 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
                 format='ascii')
 
         # add Poisson Errors
-        for i in range(n_points):
+        for i in range(len(flist)):
             n = int(mode_NN_number[i])
             if n<=30:
                 poisson_select = poisson_error_table['n'] == n
@@ -2705,10 +2762,14 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         print('NN_err_lower', NN_err_lower)
         print('NN_err_upper', NN_err_upper)
         with open(savefile, 'w+') as sf:
-            sf.write('flist NN_number NN NN_err_lower NN_err_upper\n')
+            if mode=='cumulative':
+                sf.write('flist N_number N Nerr_lower Nerr_upper\n')
+            if mode=='differential':
+                sf.write('flist dN_number dN dNerr_lower dNerr_upper\n')
             for i in range(len(flist)):
                 sf.write("{} {} {} {} {}\n".format(flist[i], mode_NN_number[i], mode_NN[i], 
-                                                   NN_err_lower[i], NN_err_upper[i]))
+                                               NN_err_lower[i], NN_err_upper[i]))
+
     if plot:
         plot_number_counts(flist=flist, NN=mode_NN, NN_err=[NN_err_lower, NN_err_upper], ax=ax, band=band)
 
