@@ -2651,7 +2651,7 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
     Ni_comp = np.zeros(n_sources)
     for i in range(n_sources):
         item = cat[i]
-        obj = cat['obj']
+        obj = item['obj']
         # define the completeness function
         if obj in objs_withdeafultsim:
             sim_jsonfile = default_simulation
