@@ -2671,11 +2671,12 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
             print("Using default simulations: {}".format(default_simulation))
         cs_comp = interpolate.interp1d(snr_list, comp_list, fill_value='extrapolate')
         if flux_mode == 'aperture':
-            flux_boosting_idx = 0
+            flux_boosting = np.array(apert_boost_list[0])
         elif flux_mode == 'gaussian':
-            flux_boosting_idx = 1
-        flux_deboosting = interpolate.interp1d(snr_list, apert_boost_list[flux_boosting_idx], 
-                                             fill_value='extrapolate')
+            flux_boosting = np.array(apert_boost_list[1])
+        # print(apert_boost_list)
+        # print(len(snr_list), len(flux_boosting[:,0]))
+        flux_deboosting = interpolate.interp1d(snr_list, flux_boosting[:,0], fill_value='extrapolate')
         def cs_comp2(snr):
             comp_return = cs_comp(snr)
             high_fedelity = (snr>10.0)
