@@ -2649,6 +2649,7 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
    
     # completeness function
     Ni_comp = np.zeros(n_sources)
+    Si_deboosted = np.zeros(n_sources)
     for i in range(n_sources):
         item = cat[i]
         obj = item['obj']
@@ -2669,12 +2670,20 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
                 jsonfile=default_simulation, snr=np.arange(0.2, 11, 0.2), plot=False)
             print("Using default simulations: {}".format(default_simulation))
         cs_comp = interpolate.interp1d(snr_list, comp_list, fill_value='extrapolate')
+        if flux_mode == 'aperture':
+            flux_boosting_idx = 0
+        elif flux_mode == 'gaussian':
+            flux_boosting_idx = 1
+        flux_deboosting = interpolate.interp1d(snr_list, apert_boost_list[flux_boosting_idx], 
+                                             fill_value='extrapolate')
         def cs_comp2(snr):
             comp_return = cs_comp(snr)
             high_fedelity = (snr>10.0)
             comp_return[high_fedelity] = 1
             return comp_return
         Ni_comp[i] = cs_comp2(item['flux_snr_'+completeness_mode])
+        Si_deboosted[i] = item['flux_'+flux_mode] / flux_deboosting(
+                          item['flux_snr_'+completeness_mode])
 
     # sim_jsonfile = os.path.join(simulation_folder, obj, obj+'_simulation.txt')
     ##
@@ -2716,8 +2725,10 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         # print("two index:", index_unknown_bootstrap, index_SMG_bootstrap)
         cat_bootstrap = cat[index_SMG_bootstrap]
         Ni_comp_boostrap = Ni_comp[index_SMG_bootstrap]
+        Si_deboosted_boostrap = Si_deboosted[index_SMG_bootstrap]
         # print('n select: unknown:{}; SMG:{}'.format(len(index_unknown_bootstrap), len(index_SMG_bootstrap)))
-        flux = cat_bootstrap['flux_'+flux_mode]
+        # flux = cat_bootstrap['flux_'+flux_mode]
+        flux = Si_deboosted_boostrap
         completeness_snr = cat_bootstrap['flux_snr_'+completeness_mode]
         flux_err = flux/cat_bootstrap['flux_snr_'+flux_mode]
         flux_bootstrap = flux + np.random.randn(len(index_SMG_bootstrap)) * flux_err
