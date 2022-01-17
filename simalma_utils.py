@@ -699,8 +699,8 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
             #print("flux_list", flux_list)
             is_true = True
             if second_check:
-                if 'aperture' in methods:
-                    if flux_list[methods.index('aperture')] < threshold*std:
+                if 'single_aperture' in methods:
+                    if flux_list[methods.index('single_aperture')] < threshold*std:
                         is_true = False
                 if 'gaussian' in methods:
                     if flux_list[methods.index('gaussian')] < threshold*std:
