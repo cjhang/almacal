@@ -33,8 +33,8 @@ def flatten(t):
     flat_list = [item for sublist in t for item in sublist]
     return flat_list
 
-def gen_filenames(listfile=None, dirname=None, list_array=None, basedir=None, debug=False, exclude_aca=True, 
-                  suffix=''):
+def gen_filenames(listfile=None, dirname=None, list_array=None, basedir=None, debug=False, 
+        exclude_aca=True, suffix='', remove_prefix=True):
     """generate all the valid files names
 
     """
@@ -69,7 +69,10 @@ def gen_filenames(listfile=None, dirname=None, list_array=None, basedir=None, de
         with open(listfile) as f:
             listfile_lines = f.readlines()
         for l in listfile_lines:
-            line = l.strip()
+            if '/' in l:
+                line = l.split('/')[-1].strip()
+            else:
+                line = l.strip()
             if basedir:
                 line = os.path.join(basedir, line)
             file_list.append(line+suffix)
@@ -1616,7 +1619,7 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
 
 def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=None, bad_obs=None, 
         bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, 
-        suffix='good_imgs.txt.updated', exclude_aca=True, 
+        suffix='combine.ms.included.txt', exclude_aca=True, 
         time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
         debug=False, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
@@ -1660,6 +1663,10 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
                 if debug:
                     print('Error load obj:', item)
 
+    for band in bands:
+        band_exptime = {}
+
+
     for i,obj in enumerate(objs):
         obj_exptime = {}
         for band in bands:
@@ -1672,7 +1679,7 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
         if listfile_dir:
             vis_list = []
             for band in bands:
-                obj_band_selectfile = os.path.join(listfile_dir, obj, "{}_{}_{}".format(obj, band, suffix))
+                obj_band_selectfile = os.path.join(listfile_dir, band, obj, "{}_{}_{}".format(obj, band, suffix))
                 if not os.path.isfile(obj_band_selectfile):
                     if debug:
                         print('Warning: {} is not exist'.format(obj_band_selectfile))
