@@ -1617,9 +1617,9 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
             json.dump(searching_info, jf)
     return searching_info
 
-def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=None, bad_obs=None, 
+def run_gen_all_obstime(basedir=None, objs=None, outdir=None, bad_obs=None, 
         bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, 
-        suffix='combine.ms.included.txt', exclude_aca=True, 
+        exclude_aca=True, 
         time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
         debug=False, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
@@ -1644,6 +1644,7 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
     p_obj = re.compile('J\d+[+-]\d')
     p_obs = re.compile('uid___')
 
+    os.system('mkdir -p {}'.format(outdir))
     if bad_obs is not None:
         with open(bad_obs) as f:
             all_bad_obs = f.readlines()
@@ -1653,55 +1654,33 @@ def run_gen_all_obstime(basedir=None, listfile_dir=None, objs=None, output_dir=N
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obj_match = re.compile('J\d{3,4}[-+]\d{3,4}')
 
-
     if objs is None:
         objs = []
         for item in os.listdir(basedir):
-            if obj_match.match(item):
+            if p_obj.match(item):
                 objs.append(item)
             else:
                 if debug:
                     print('Error load obj:', item)
 
-    for band in bands:
-        band_exptime = {}
-
-
-    for i,obj in enumerate(objs):
-        obj_exptime = {}
-        for band in bands:
-            obj_exptime[band] = 0
-        print('index=', i, "obj:", obj)
-            
-        obj_dirname = os.path.join(basedir, obj)
-        obj_output_dir = os.path.join(output_dir, obj)
-        os.system('mkdir -p {}'.format(obj_output_dir))
-        if listfile_dir:
-            vis_list = []
-            for band in bands:
-                obj_band_selectfile = os.path.join(listfile_dir, band, obj, "{}_{}_{}".format(obj, band, suffix))
-                if not os.path.isfile(obj_band_selectfile):
-                    if debug:
-                        print('Warning: {} is not exist'.format(obj_band_selectfile))
-                    continue
-                obj_band_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_dirname)
-                vis_list.append(obj_band_list)
-            vis_list = flatten(vis_list) 
-        else:
-            vis_list = gen_filenames(dirname=obj_dirname)
-        obj_stat = spw_stat(vis=vis_list, debug=debug, savedata=True, exclude_aca=exclude_aca,
-                            bands=bands, filename=obj_output_dir+'/'+ obj+'.json', 
+    for obj in objs:
+        obj_dir = os.path.join(basedir, obj)
+        obj_outdir = os.path.join(outdir, obj)
+        os.system('mkdir -p {}'.format(obj_outdir))
+        vis_list = gen_filenames(dirname=obj_dir)
+        obj_stat = spw_stat(vis=vis_list, debug=debug, exclude_aca=exclude_aca,
+                            bands=bands, savefile=obj_outdir+'/'+ obj+'.json', 
                             time_select=time_select, start_time=start_time, end_time=end_time, 
                             **kwargs)
-    
+        
         if info_file is not None:
             string_stat = '{:<12s}'.format(obj)
-            for band in bands:
+            for band in obj_stat.keys():
                 string_stat += ' {:>8.2f}'.format(np.sum(obj_stat[band]['time']))
             with open(info_file, 'a+') as f_info:
                 f_info.write(string_stat + '\n')
 
-def run_gen_stats(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'], 
+def run_gen_stats_old(basedir=None, listfile_dir=None, objs=None, bands=['B6','B7'], 
         suffix=['good_imgs.txt.updated', 'bad_imgs.txt.updated'],
         exclude_aca=True, debug=False, pickle_file=None,
         func_list=[],
@@ -2147,6 +2126,66 @@ def run_check_SMGs(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.aut
                 plt.close()
     except KeyboardInterrupt:
         return 0
+
+def run_gen_stats(basedir, imagedir=None, outdir=None, savefile='gen_stat.txt',
+        suffix='combine.ms.included.txt', debug=False,
+        bands=['B3','B4','B5','B6','B7','B8','B9','B10'], **kwargs):
+    """This function used to generate the spw statistics of final samle
+    """
+    if not os.path.isdir(outdir):
+        os.system('mkdir {}'.format(outdir))
+
+    band_list = {'B3':[84, 116], 'B4':[125, 163], 'B5':[163, 211], 
+            'B6':[211, 275], 'B7':[275, 373], 'B8':[385, 500], \
+            'B9':[602, 720], 'B10':[787, 950]}
+
+    p_obj = re.compile('J\d+[+-]\d')
+    p_obs = re.compile('uid___')
+
+    band_match = re.compile('_(?P<band>B\d{1,2})$')
+    obj_match = re.compile('J\d{3,4}[-+]\d{3,4}')
+
+    for band in bands:
+        print("\nWorking on {}...\n".format(band))
+        band_imagedir = os.path.join(imagedir, band)
+        band_outdir = os.path.join(outdir, band)
+        os.system('mkdir -p {}'.format(band_outdir))
+        band_summary_file = os.path.join(band_outdir, '{}_obstime.txt'.format(band))
+        
+        if os.path.isfile(band_summary_file):
+            print("Found summary_file, delete it for overwriting!")
+            continue
+
+        band_objs = []
+        for item in os.listdir(band_imagedir):
+            if obj_match.match(item):
+                band_objs.append(item)
+            else:
+                if debug:
+                    print('Error load obj:', item)
+
+        for i,obj in enumerate(band_objs):
+            obj_basedir = os.path.join(basedir, obj)
+            obj_exptime = {}
+            print('index=', i, "obj:", obj)
+                
+            obj_imagedir = os.path.join(band_imagedir, obj)
+            
+            obj_band_selectfile = os.path.join(obj_imagedir, "{}_{}_{}".format(obj, band, suffix))
+            if os.path.isfile(obj_band_selectfile):
+                band_obj_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_basedir)
+                obj_savefile = os.path.join(band_outdir, obj+'.json')
+                if os.path.isfile(obj_savefile):
+                    print("gen_stats file already exists, delete it for overwrite!")
+                    obj_stat = spw_stat(jsonfile=obj_savefile, bands=[band,])
+                else:
+                    obj_stat = spw_stat(vis=band_obj_list, debug=debug,
+                                bands=[band,], savefile=obj_savefile, 
+                                **kwargs)
+                if band_summary_file is not None: 
+                    string_stat = '{:<12s} {:>8.2f}'.format(obj, np.sum(obj_stat[band]['time']))
+                    with open(band_summary_file, 'a+') as f_info:
+                        f_info.write(string_stat + '\n')
 
 def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
                    suffix='combine.ms.auto.cont', target_wave=None,

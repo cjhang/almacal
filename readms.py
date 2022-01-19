@@ -79,7 +79,7 @@ def read_refdir(vis, return_coord=False):
 
     return direction
 
-def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None, 
+def spw_stat(vis=None, jsonfile=None, plot=False, savefile=None, 
         bands=['B3','B4','B5', 'B6', 'B7', 'B8','B9','B10'], figname=None, showfig=False,  
         time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
         z=0, lines=None, lines_names=None, exclude_aca=True, debug=False):
@@ -254,36 +254,40 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savedata=False, filename=None,
             fig.savefig(figname, bbox_inches='tight')
             plt.close(fig)
 
-    if savedata:
-        with open(filename, 'w') as fp:
+    if savefile is not None:
+        with open(savefile, 'w') as fp:
             json.dump(spw_list, fp)
     return spw_list
 
-def discrete_spw(spw_list, return_time=False):
+def discrete_spw(spw_list, bands=None, freq_range=None, width=1, return_time=False):
     """this function used for statistics of the histogram of spw distribution
+
+    The default width is in unit of GHz
     """
     band_list = {'B3':[84, 116], 'B4':[125, 163], 'B5':[163, 211], 
             'B6':[211, 275], 'B7':[275, 373], 'B8':[385, 500], \
             'B9':[602, 720], 'B10':[787, 950]}
-    count_list = {}
-    count_time_list = {'B3':0, 'B4':0, 'B5':0, 'B6':0, 'B7':0, 'B8':0, 'B9':0, 
-                       'B10':0}
-    for band in spw_list.keys():
-        freq_low, freq_high = band_list[band]
-        freq_range = np.linspace(freq_low, freq_high, np.diff(band_list[band])+1, dtype=int)
-        freq_counts = np.zeros_like(freq_range, dtype=int)
-        freq_cumulate_time = np.zeros_like(freq_range, dtype=float)
+    if bands is None:
+        bands = band_list.keys()
+    stats_bands = {}
+
+    for band in bands:
+        if freq_range is None:
+            freq_low, freq_high = band_list[band]
+            freq_array = np.arange(freq_low, freq_high+width, width, dtype=int)
+        else:
+            freq_array = np.arange(freq_range[0], freq_range[-1]+width, width, dtype=int)
+        freq_counts = np.zeros_like(freq_array, dtype=int)
+        freq_cumulate_time = np.zeros_like(freq_array, dtype=float)
         for idx, obs in enumerate(spw_list[band]['freq']):
             for spw in obs:
-                covered_freq = (freq_range >= spw[0]) & (freq_range <= spw[1])
+                covered_freq = (freq_array >= spw[0]) & (freq_array <= spw[1])
                 # freq_counts[covered_freq] = freq_counts[covered_freq] + 1
-                freq_counts[covered_freq] = 1
-                freq_cumulate_time[covered_freq] = freq_cumulate_time[covered_freq] + spw_list[band]['time'][idx]
-        count_list[band] = freq_counts.tolist()
-        count_time_list[band] = freq_cumulate_time
-    if return_time:
-        return count_time_list
-    return count_list
+                freq_counts[covered_freq] += 1
+                freq_cumulate_time[covered_freq] = (freq_cumulate_time[covered_freq] 
+                                                    + spw_list[band]['time'][idx])
+        stats_bands[band] = [freq_counts, freq_cumulate_time]
+    return stats_bands
 
 def readms(vis, bmaj=None, bmin=None):
     """The uniform function to get all the neccessary information for a given visibility
