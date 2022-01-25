@@ -2334,7 +2334,7 @@ def run_measure_flux(basedir, objs=None, bands=['B6','B7'], focus_band=None,
         return 0
     print("Failed files:", failed_files)
 
-def run_gen_catalogue(fluxfile=None, imagedir=None, savefile=None,
+def run_flux_measure(detections=None, imagedir=None, savefile=None,
         resolution='0.3arcsec', suffix='combine.ms.auto.cont', target_wave=None,
         methods=['adaptive_aperture', 'gaussian', 'peak'], 
         bands=['B3','B4','B5','B6','B7','B8','B9'], ):
@@ -2347,7 +2347,7 @@ def run_gen_catalogue(fluxfile=None, imagedir=None, savefile=None,
     to a different wavelength.
 
     """
-    detections = Table.read(fluxfile, format='ascii')
+    detections = Table.read(detections, format='ascii')
 
     if resolution == '':
         res_string = ''
@@ -2387,6 +2387,29 @@ def run_gen_catalogue(fluxfile=None, imagedir=None, savefile=None,
                     for i in range(len(methods)):
                         fp.write("{} {} ".format(*det_bands[band][:,i]))
                 fp.write('\n')
+
+def run_gen_catalogue(fluxfiles=[], savefile=None,
+        bands=['B3','B4','B5','B6','B7','B8','B9'], ):
+    """generate the catalogue base on the flux measurements at different bands.
+    """
+    cat_base = Table.read(fluxfiles[0], format='ascii')
+    cat_base['id'] = int(bands[0][1:])*10 + cat_base['id']
+    cat_base_skcoords = SkyCoord(ra=cat_base['ra'], dec=cat_base['dec'])
+    for ff,band in zip(fluxfiles[1:], bands[1:]):
+        cat_new = Table.read(ff, format='ascii')
+        cat_new['id'] = int(band[1:])*10 + cat_new['id']
+        cat_new_skcoords = SkyCoord(cat_new['ra'], dec=cat_new['dec'])
+        idx_new, idx_base, d2d, d3d = cat_base_skcoords.search_around_sky(cat_new_skcoords, 2*u.arcsec)
+        idx_new_compset = []
+        idx_base_compset = []
+        cat_new[idx_new]['id'] = cat_base[idx_base]['id']
+        matched_cat = join(cat_base[idx_base], cat_new[idx_new], key=['obj', 'id'], 
+             table_names=[], uniq_col_name='{table_names}_{col_name}', join_type='inner')
+        unique_cat = join(cat_base[idx_base_compset], cat_new[idx_new_compset], key=['obj', 'id'], 
+             table_names=[], uniq_col_name='{table_names}_{col_name}', join_type='outer')
+        cat_base = vstack(matched_cat, unique_cat)
+    return cat_base
+
 
 def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./', 
         resolution='0.3arcsec', repeat=1000, suffix='image.fits'):
@@ -2971,6 +2994,7 @@ def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None,
 #   The pipeeline for number counts       #
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 '''
+run_gen_all_obstime('/scratch/ALMACAL', outdir='gen_all_obstime', bands=['B3','B4','B5','B6','B7','B8'], debug=False)
 run_gen_all_images('/jchen/work/ALMACAL', outdir='gen_all_images', bands=['B8',])
 run_auto_classify_goodimags(imagedir='gen_all_images', outdir='make_classifications', bands=['B8',])
 B8_list = np.loadtxt('B8_ordered.txt', dtype=str)
@@ -2979,6 +3003,8 @@ run_make_all_goodimags(classifiedfolder='make_classifications', objlist=B8_list,
                        basedir='/jchen/work/ALMACAL', outdir='make_all_good_images')
 run_check_SMGs('make_all_good_images', objs=None, bands=['B3','B4','B5','B6','B7','B8'], ncol=2,
                 summary_file='check_SMGs.txt', outdir='./check_SMGs')
+run_gen_stats('/scratch/ALMACAL', imagedir='make_all_good_images', outdir='gen_stats', 
+               bands=['B3','B4','B5','B6','B7','B8'], debug=False)
 run_measure_flux('make_all_good_images', objs=None, bands=['B6','B7','B8'], focus_band='B8', 
                  selected_resolution='0.3arcsec', summary_file='B8_SMGs.txt', target_wave=650)
 run_calculate_effarea(imagedir='make_good_images', flux=np.linspace(0.1, 10, 50), objs=B8_list, 
