@@ -2410,6 +2410,50 @@ def run_gen_catalogue(fluxfiles=[], savefile=None,
         cat_base = vstack(matched_cat, unique_cat)
     return cat_base
 
+def combine_catalogues(fluxfiles=[], savefile=None,
+        bands=['B3','B4','B5','B6','B7','B8','B9'], ):
+    """generate the catalogue base on the flux measurements at different bands.
+    """
+    cat_base = Table.read(fluxfiles[0], format='ascii')
+    band_base = bands[0]
+    cat_base['idx'] = int(bands[0][1:])*10 + cat_base['idx']
+    cat_base.rename_columns(cat_base.colnames[2:], [band_base+'_'+str(m) for m in cat_base.colnames[2:]])
+    # add recomment ra and dec
+    cat_base.add_column(cat_base[band_base+'_ra'], name='ra')
+    cat_base.add_column(cat_base[band_base+'_dec'], name='dec')
+    bands_done = [bands[0],]
+    
+    cat_base_skcoords = SkyCoord(ra=cat_base['ra'], dec=cat_base['dec'], unit='arcsec')
+    for ff,band in zip(fluxfiles[1:], bands[1:]):
+        cat_new = Table.read(ff, format='ascii')
+        cat_new['idx'] = int(band[1:])*10 + cat_new['idx']
+        cat_new.rename_columns(cat_new.colnames[2:], [band+'_'+str(m) for m in cat_new.colnames[2:]])
+        cat_new_skcoords = SkyCoord(ra=cat_new[band+'_ra'], dec=cat_new[band+'_dec'], unit='arcsec')
+        idx_new, idx_base, d2d, d3d = cat_base_skcoords.search_around_sky(cat_new_skcoords, 1*u.arcsec)
+        if len(idx_new) > 1:
+            cat_new['idx'][idx_new] = cat_base['idx'][idx_base]
+
+            idx_new_compset = list(set(np.arange(0, len(cat_new))) - set(idx_new))
+            idx_base_compset = list(set(np.arange(0, len(cat_base))) - set(idx_base))
+
+            matched_cat = join(cat_base[idx_base], cat_new[idx_new], keys=['obj', 'idx'], 
+                               join_type='inner')
+            unique_cat = join(cat_base[idx_base_compset], cat_new[idx_new_compset], keys=['obj', 'idx'], 
+                              join_type='outer')
+            cat_base = vstack([matched_cat, unique_cat])
+        else:
+            #cat_base = vstack([cat_base, cat_new])
+            cat_base = join(cat_base, cat_new, keys=['obj', 'idx'], 
+                            join_type='outer')
+        bands_done.append(band)
+        #print(np.ma.masked_invalid([cat_base[b+'_ra'] for b in bands_done]))
+        #print(">>>>>")
+        #print(np.mean(np.ma.masked_invalid([cat_base[b+'_ra'] for b in bands_done]), axis=0))
+        cat_base['ra'][:] = np.ma.mean([cat_base[b+'_ra'] for b in bands_done], axis=0)
+        cat_base['dec'][:] = np.ma.mean([cat_base[b+'_dec'] for b in bands_done], axis=0)
+        cat_base_skcoords = SkyCoord(ra=cat_base['ra'], dec=cat_base['dec'], unit='arcsec')
+    return cat_base
+
 
 def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./', 
         resolution='0.3arcsec', repeat=1000, suffix='image.fits'):
