@@ -1329,7 +1329,7 @@ def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=
         os.system('rm -rf {}'.format(os.path.join(outdir,'uid___*.flagversions')))
 
 def calculate_effectivearea(flux=np.linspace(0.1, 1, 10), snr_threshold=5.0, images=None, 
-        images_pbcorr=None, fovscale=2.0, central_mask_radius=1.0):
+        images_pbcorr=None, fovscale=1.5, central_mask_radius=1.0):
     """calculate the effective area for given images
 
     rlimit: in arcsec
@@ -2454,7 +2454,6 @@ def combine_catalogues(fluxfiles=[], savefile=None,
         cat_base_skcoords = SkyCoord(ra=cat_base['ra'], dec=cat_base['dec'], unit='arcsec')
     return cat_base
 
-
 def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./', 
         resolution='0.3arcsec', repeat=1000, suffix='image.fits'):
     """make simulations for for the seleted calibrators and their bands
@@ -2486,6 +2485,115 @@ def run_make_simulations(imagedir=None, objs=None, band=None, outdir='./',
             calculate_sim_images(obj_outdir, baseimage=imagefile, savefile=os.path.join(
                 obj_outdir,'{}_simulation.txt'.format(obj)), plot=False, repeat=repeat, threshold=5, 
                 second_check=False, snr_mode='peak', mode='image')
+
+def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
+        suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
+        almacal_catalogue=None,
+        snr_threshold=5.0, savefile=None, **kwargs):
+    """calculate the effecitve area for all the usable fields
+    """
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    
+    if objs is None:
+        objs = []
+        for item in os.listdir(imagedir):
+            if obj_match.match(obj):
+                objs.append(item)
+    if almacal_catalogue is not None:
+        almacal_cat = Table.read(almacal_catalogue, format='ascii')
+    effarea = Table()
+    effarea['flux'] = flux
+    effarea[band] = np.zeros_like(flux)
+    for obj in objs:
+        obj_dir = os.path.join(imagedir, obj)
+        image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
+        image_fullpath = os.path.join(obj_dir, image)
+        image_pbcorr = image.replace('image', 'pbcor.image')
+        image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
+        if os.path.isfile(image_fullpath):
+            mask_radius = 0.0
+            if almacal_catalogue is not None:
+                mask_code = almacal_cat[almacal_cat['obj'] == obj]['goodfield_{}'.format(band)].data[0]
+                if mask_code < 0:
+                    mask_radius = -1.0 * mask_code
+            elif objs_nocenter is not None:
+                mask_radius = 2.0
+            _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
+                        images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,],
+                        central_mask_radius=mask_radius,**kwargs)
+            effarea[band] += objarea
+    if savefile:
+        effarea.write(savefile, format='ascii')
+
+def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
+        stats_dir=None, basedir=None,
+        suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
+        almacal_catalogue=None, suffix='combine.ms.included.txt',
+        snr_threshold=5.0, savefile=None, debug=False, **kwargs):
+    """calculate the effecitve area for all the usable fields
+
+    This new version can also calculate the effective wavelength at different sensitivity
+    
+    imagedir : make_good_image/band
+    stats_dir : gen_stats/band
+    basedir : the ALMACAL base directory, where all the calibrated file is
+    """
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    
+    if objs is None:
+        objs = []
+        for item in os.listdir(imagedir):
+            if obj_match.match(obj):
+                objs.append(item)
+    if almacal_catalogue is not None:
+        almacal_cat = Table.read(almacal_catalogue, format='ascii')
+    flux_mean = 0.5*(flux[:-1] + flux[1:])
+    effarea = Table()
+    total_time = 0
+    effarea['flux'] = flux_mean
+    effarea[band] = np.zeros_like(flux_mean)
+    effarea['effecitve_wavelength'] = np.zeros_like(flux_mean)
+
+    for obj in objs:
+        obj_basedir = os.path.join(basedir, obj)
+        obj_dir = os.path.join(imagedir, obj)
+        # find the selected files
+        obj_band_selectfile = os.path.join(obj_dir, "{}_{}_{}".format(obj, band, suffix))
+        band_obj_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_basedir)
+        obj_savefile = os.path.join(stats_dir, obj+'.json')
+        if os.path.isfile(obj_savefile):
+            print("gen_stats file already exists, delete it for overwrite!")
+            obj_stat = spw_stat(jsonfile=obj_savefile, bands=[band,])
+        else:
+            obj_stat = spw_stat(vis=band_obj_list, debug=debug,
+                        bands=[band,], savefile=obj_savefile, 
+                        **kwargs)
+
+        # find the images
+        image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
+        image_fullpath = os.path.join(obj_dir, image)
+        image_pbcorr = image.replace('image', 'pbcor.image')
+        image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
+        if os.path.isfile(image_fullpath):
+            mask_radius = 0.0
+            if almacal_catalogue is not None:
+                mask_code = almacal_cat[almacal_cat['obj'] == obj]['goodfield_{}'.format(band)].data[0]
+                if mask_code < 0:
+                    mask_radius = -1.0 * mask_code
+            elif objs_nocenter is not None:
+                mask_radius = 2.0
+            _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
+                        images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,],
+                        central_mask_radius=mask_radius,**kwargs)
+            effarea[band] += objarea[:-1]
+            
+            objarea_diff = np.diff(objarea)
+            obj_spwstat = discrete_spw(spw_list, bands=['B6',])
+            effarea['effecitve_wavelength'][objarea_diff > 1e-8] += np.sum((band_spwstat[band][0] * band_spwstat[band][2]))
+            total_time += np.sum(band_spwstat[band][2])
+    effarea['effecitve_wavelength'] = effarea['effecitve_wavelength'] / total_time
+    if savefile:
+        effarea.write(savefile, format='ascii')
 
 def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 

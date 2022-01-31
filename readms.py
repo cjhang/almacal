@@ -286,7 +286,7 @@ def discrete_spw(spw_list, bands=None, freq_range=None, width=1, return_time=Fal
                 freq_counts[covered_freq] += 1
                 freq_cumulate_time[covered_freq] = (freq_cumulate_time[covered_freq] 
                                                     + spw_list[band]['time'][idx])
-        stats_bands[band] = [freq_counts, freq_cumulate_time]
+        stats_bands[band] = np.array([freq_array, freq_counts, freq_cumulate_time])
     return stats_bands
 
 def readms(vis, bmaj=None, bmin=None):
