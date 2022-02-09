@@ -1522,6 +1522,28 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         # print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
     return Nr
 
+def flux_scaling(wavelength, target_wavelength, flux=1, SED_template='composite_sed_Lir_01_09.dat', z=2.0,
+                      debug=False):
+    """interpolate the flux at a specified wavelength
+    
+    Params:
+        wavelength : in um
+        flux : any units, self consistent
+    """
+    if 'ALMACAL_NUMBERCOUNTS_HOME' in os.environ.keys():
+        root_path = os.environ['ALMACAL_NUMBERCOUNTS_HOME']
+    else:
+        root_path = os.path.join(os.path.expanduser('~'), 'work/projects/almacal/number_counts')
+    SED_template_file = os.path.join(root_path, 'code/data/', SED_template)
+    SED = np.loadtxt(SED_template_file)
+    f_SED = interpolate.interp1d(SED[:,0]*(1.0+z), SED[:,1]/(1+z)**4)
+    scale_factor = flux / f_SED(wavelength)
+    if debug:
+        print("flux at {}: {}".format(wavelength, f_SED(wavelength)))
+        print("flux at {}: {}".format(target_wavelength, f_SED(target_wavelength)))
+        print("scale_factor: {}".format(scale_factor))
+        print("flux difference: {}".format(f_SED(wavelength)/f_SED(target_wavelength)))
+    return scale_factor * f_SED(target_wavelength)
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
@@ -2526,9 +2548,9 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
         effarea.write(savefile, format='ascii')
 
 def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
-        stats_dir=None, basedir=None,
+        stats_dir=None, basedir=None, included_suffix='combine.ms.included.txt',
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
-        almacal_catalogue=None, suffix='combine.ms.included.txt',
+        almacal_catalogue=None, 
         snr_threshold=5.0, savefile=None, debug=False, **kwargs):
     """calculate the effecitve area for all the usable fields
 
@@ -2549,7 +2571,7 @@ def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs
         almacal_cat = Table.read(almacal_catalogue, format='ascii')
     flux_mean = 0.5*(flux[:-1] + flux[1:])
     effarea = Table()
-    total_time = 0
+    effarea['total_time'] = np.zeros_like(flux_mean)
     effarea['flux'] = flux_mean
     effarea[band] = np.zeros_like(flux_mean)
     effarea['effecitve_wavelength'] = np.zeros_like(flux_mean)
@@ -2558,16 +2580,17 @@ def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs
         obj_basedir = os.path.join(basedir, obj)
         obj_dir = os.path.join(imagedir, obj)
         # find the selected files
-        obj_band_selectfile = os.path.join(obj_dir, "{}_{}_{}".format(obj, band, suffix))
+        obj_band_selectfile = os.path.join(obj_dir, "{}_{}_{}".format(obj, band, included_suffix))
         band_obj_list = gen_filenames(listfile=obj_band_selectfile, basedir=obj_basedir)
         obj_savefile = os.path.join(stats_dir, obj+'.json')
         if os.path.isfile(obj_savefile):
             print("gen_stats file already exists, delete it for overwrite!")
-            obj_stat = spw_stat(jsonfile=obj_savefile, bands=[band,])
+            obj_spw_list = spw_stat(jsonfile=obj_savefile, bands=[band,])
         else:
-            obj_stat = spw_stat(vis=band_obj_list, debug=debug,
+            obj_spw_list = spw_stat(vis=band_obj_list, debug=debug,
                         bands=[band,], savefile=obj_savefile, 
                         **kwargs)
+        obj_spwstat = discrete_spw(obj_spw_list, bands=[band,])
 
         # find the images
         image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
@@ -2586,12 +2609,11 @@ def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs
                         images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,],
                         central_mask_radius=mask_radius,**kwargs)
             effarea[band] += objarea[:-1]
-            
             objarea_diff = np.diff(objarea)
-            obj_spwstat = discrete_spw(spw_list, bands=['B6',])
-            effarea['effecitve_wavelength'][objarea_diff > 1e-8] += np.sum((band_spwstat[band][0] * band_spwstat[band][2]))
-            total_time += np.sum(band_spwstat[band][2])
-    effarea['effecitve_wavelength'] = effarea['effecitve_wavelength'] / total_time
+            effarea['effecitve_wavelength'][objarea_diff > 1e-8] += np.sum((obj_spwstat[band][0] * obj_spwstat[band][2]))
+            effarea['total_time'][objarea_diff > 1e-8] += np.sum(obj_spwstat[band][2])
+            
+    effarea['effecitve_wavelength'] = effarea['effecitve_wavelength'] / effarea['total_time']
     if savefile:
         effarea.write(savefile, format='ascii')
 
@@ -2817,7 +2839,8 @@ def run_number_counts_old(flist, detections_file=None, effective_area_file=None,
 def run_number_counts(flist=None, detections_file=None, effective_area_file=None, band='B6',
         simulation_folder=None, ax=None, flux_mode='aperture', completeness_mode='peak',
         default_simulation=None, objs_withdeafultsim=[], n_bootstrap=1000, savefile=None,
-        plot=True, mode='cumulative', perturbation=0.1, n_points=None):
+        target_wavelength=None,
+        plot=False, mode='cumulative', perturbation=0.1, n_points=None):
     """
 
     flist: flux list, [0.2, 0.6, 1.0]
@@ -2865,8 +2888,13 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
             flist = np.logspace(np.log10(flux_sorted[idx_first]), np.log10(flux_sorted[idx_last]),
                                 n_points)
     # effective area
-    effarea = np.loadtxt(effective_area_file, skiprows=1)
-    cs_effarea = interpolate.interp1d(effarea[:, 0], effarea[:,1], fill_value="extrapolate")
+    effarea = Table.read(effective_area_file, format='ascii')
+    cs_effarea = interpolate.interp1d(effarea['flux'], effarea[band], fill_value="extrapolate")
+    if 'effective_freq' in effarea.colnames:
+        print("Correcting the effective frequency on the fly.")
+        effective_wave = (const.c/(effarea['effective_freq'] * u.GHz)).to(u.um).value
+        wavelength_scaling = flux_scaling(effective_wave, target_wavelength)
+        func_scale = interpolate.interp1d(effarea['flux'], wavelength_scaling)
    
     # completeness function
     Ni_comp = np.zeros(n_sources)
@@ -2897,15 +2925,18 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
             flux_boosting = np.array(apert_boost_list[1])
         # print(apert_boost_list)
         # print(len(snr_list), len(flux_boosting[:,0]))
-        flux_deboosting = interpolate.interp1d(snr_list, flux_boosting[:,0], fill_value='extrapolate')
+        func_deboosting = interpolate.interp1d(snr_list, flux_boosting[:,0], fill_value='extrapolate')
         def cs_comp2(snr):
             comp_return = cs_comp(snr)
-            high_fedelity = (snr>10.0)
+            high_fedelity = (snr>10.0) #to avoid the truncating issue of the simulations
             comp_return[high_fedelity] = 1
             return comp_return
         Ni_comp[i] = cs_comp2(item['flux_snr_'+completeness_mode])
-        Si_deboosted[i] = item['flux_'+flux_mode] / flux_deboosting(
+        Si_deboosted[i] = item['flux_'+flux_mode] / func_deboosting(
                           item['flux_snr_'+completeness_mode])
+
+        if 'effective_freq' in effarea.colnames:
+            Si_deboosted[i] = Si_deboosted[i] * func_scale(item['flux_'+flux_mode])
 
     # sim_jsonfile = os.path.join(simulation_folder, obj, obj+'_simulation.txt')
     ##
@@ -2953,7 +2984,7 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         flux = Si_deboosted_boostrap
         completeness_snr = cat_bootstrap['flux_snr_'+completeness_mode]
         flux_err = flux/cat_bootstrap['flux_snr_'+flux_mode]
-        flux_bootstrap = flux + np.random.randn(len(index_SMG_bootstrap)) * flux_err
+        flux_bootstrap = flux + np.random.randn(len(index_SMG_bootstrap)) * 1.1 * flux_err # add additional 10% error
         Ni = 1 / (cs_effarea(flux_bootstrap)/3600.) / Ni_comp_boostrap#cs_comp2(completeness_snr)
         Ni_err = 1/(cs_effarea(flux_bootstrap)**2/3600)*np.sqrt(cs_effarea(flux_bootstrap))/Ni_comp_boostrap #cs_comp2(completeness_snr)
         
@@ -2971,18 +3002,15 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
                 N_err[j] = np.sqrt(np.sum(Ni_err[fi_select]**2))
                 # N_err[j] = np.std(Ni[fi_select])
                 N_number[j] = np.sum(fi_select)
-            mode_simu[0,i,:] = N
-            mode_simu[1,i,:] = N_err
-            mode_simu[2,i,:] = N_number
         if mode == 'differential':
             for j in range(n_points-1):
-                fi_select = (flux >= flist[j]) & (flux <= flist[j+1])
+                fi_select = (flux > flist[j]) & (flux <= flist[j+1])
                 N[j] = np.sum(Ni[fi_select]) / (flist[j+1] - flist[j])
                 N_err[j] = np.sqrt(np.sum(Ni_err[fi_select]**2)) / (flist[j+1] - flist[j])
                 N_number[j] = np.sum(fi_select)
-            mode_simu[0,i,:] = N
-            mode_simu[1,i,:] = N_err
-            mode_simu[2,i,:] = N_number
+        mode_simu[0,i,:] = N
+        mode_simu[1,i,:] = N_err
+        mode_simu[2,i,:] = N_number
         # print("N err:", N_err/N)
         # print("N=", N)
         # print('N_number=', N_number)
@@ -2992,11 +3020,11 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         flist = 0.5*(flist[:-1] + flist[1:])
         mode_simu = mode_simu[:,:,:-1] # remove the last column
     mode_NN_number = np.mean(mode_simu[2], axis=0)
+    mode_NN_number_err = np.std(mode_simu[2], axis=0)
     mode_NN = np.mean(mode_simu[0], axis=0)
-    if mode_NN_number[0] < 20:
-        mode_NN_err = np.std(mode_simu[0], axis=0)
-    else:
-        mode_NN_err = np.sqrt(np.sum(mode_simu[1]**2, axis=0))/n_points
+    # if 
+    mode_NN_err = np.std(mode_simu[0], axis=0)
+    #mode_NN_err = np.sqrt(np.sum(mode_simu[1]**2, axis=0))/mode_NN_number # another way to calculate the err
     # print('mode_NN', mode_NN)
     # print('mode_NN_err', mode_NN_err)
     # print('mode_NN_number', mode_NN_number)
@@ -3009,14 +3037,15 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
 
         # add Poisson Errors
         for i in range(len(flist)):
+            n_float, n_float_err = mode_NN_number[i], mode_NN_number_err[i]
             n = int(mode_NN_number[i])
-            if n<=30:
-                poisson_select = poisson_error_table['n'] == n
+            if n<=30: # read the Poisson error table
+                poisson_select = (poisson_error_table['n'] == n)
                 poisson_err_upper = (poisson_error_table['upper'][poisson_select].data[0]-n)/n*mode_NN[i]
                 poisson_err_lower = (poisson_error_table['lower'][poisson_select].data[0]-n)/n*mode_NN[i]
-            else:
-                poisson_err_lower = np.sqrt(n)/n*mode_NN[i]
-                poisson_err_upper = np.sqrt(n)/n*mode_NN[i]
+            else: # direct use sqrt(n) as a proxmimation
+                poisson_err_lower = np.sqrt(n_float+0.5*n_float_err/np.sqrt(n_float))/n*mode_NN[i]
+                poisson_err_upper = np.sqrt(n_float+0.5*n_float_err/np.sqrt(n_float))/n*mode_NN[i]
             NN_err_upper[i] = (np.sqrt(mode_NN_err[i]**2 + poisson_err_upper**2)) 
             NN_err_lower[i] = (np.sqrt(mode_NN_err[i]**2 + poisson_err_lower**2))
     if savefile:
@@ -3175,6 +3204,7 @@ run_number_counts(flist=np.logspace(-1.1, 0.4, 15),
   plot=True,
   savefile='B6/B6_number_counts.txt')
 
-
+# flist used for different bands:
+    B5: flist=np.array([0.3,0.7])
 
 '''
