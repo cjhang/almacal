@@ -17,7 +17,7 @@ run_number_counts(flist=np.logspace(-1.1, -0.4, 3),
   default_simulation='./simulations/default.json',
   simulation_folder='simulations/B4',
   flux_mode='gaussian',
-  perturbation=0.1,
+  perturbation=0.2,
   n_points=3,
   savefile='B4/B4_number_counts_fovscale1.5_withperturbation.txt')
 
@@ -66,7 +66,7 @@ run_number_counts(flist=[0.3,0.6],\
   simulation_folder='simulations/B5',
   flux_mode='gaussian',
   mode='cumulative',
-  perturbation=0.1,
+  perturbation=0.2,
   savefile='B5/B5_number_counts_fovscale1.5_withperturbation.txt')
 
 run_number_counts(flist=np.array([0.3,0.6]),\
@@ -87,7 +87,7 @@ run_number_counts(flist=np.array([0.3,0.6]),\
   simulation_folder='simulations/B5',
   flux_mode='gaussian',
   mode='differential',
-  perturbation=0.1,
+  perturbation=0.2,
   savefile='B5/B5_number_counts_fovscale1.5_differential_withperturbation.txt')
 
 
@@ -114,7 +114,7 @@ run_number_counts(#flist=np.logspace(-1.1, 0.3, 8),\
   flux_mode='gaussian',
   mode='cumulative',
   n_points=11,
-  perturbation=0.1,
+  perturbation=0.2,
   savefile='B6/B6_number_counts_fovscale1.5_withperturbation.txt')
 
 run_number_counts(#flist=np.logspace(-1.1, 0.3, 8),\
@@ -137,7 +137,7 @@ run_number_counts(#flist=np.logspace(-1.1, 0.3, 8),\
   flux_mode='gaussian',
   mode='differential',
   n_points=11,
-  perturbation=0.1,
+  perturbation=0.2,
   savefile='B6/B6_number_counts_fovscale1.5_differential_withperturbation.txt')
 
 
@@ -163,7 +163,7 @@ run_number_counts(#flist=np.logspace(-0.7, 0.7, 10),
   simulation_folder='simulations/B7',
   flux_mode='gaussian',
   n_points=9,
-  perturbation=0.1,
+  perturbation=0.2,
   mode='cumulative',
   savefile='B7/B7_number_counts_fovscale1.5_perturbation.txt')
 
@@ -186,7 +186,7 @@ run_number_counts(#flist=np.logspace(-0.7, 0.7, 10),
   simulation_folder='simulations/B7',
   flux_mode='gaussian',
   n_points=9,
-  perturbation=0.1,
+  perturbation=0.2,
   mode='differential',
   savefile='B7/B7_number_counts_fovscale1.5_differential_withperturbation.txt')
 
