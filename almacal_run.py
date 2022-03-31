@@ -89,7 +89,8 @@ def savelist(l, filename=None, outdir='./', file_mode='a+'):
             f.write(item+'\n')
 
 def search_obs(basedir, config='main', band='B6', debug=False, config_select=True,
-        time_select=True, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00',):
+        time_select=True, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00',
+        freq_select=False, star_freq=100, end_freq=101):
     band_match = re.compile('_(?P<band>B\d{1,2})$')
     obs_match = re.compile('^uid___')
     if config == 'main':
@@ -135,6 +136,16 @@ def search_obs(basedir, config='main', band='B6', debug=False, config_select=Tru
                     continue
 
                 if np.abs(antenna_diameter - dish_diameter) > 1e-4:
+                    continue
+
+            if freq_select:
+                is_freq_covered = False
+                spw_list = spw_stat(obs_fullpath)
+                for freq in spw_list[band][0]:
+                    if freq[0] <= star_freq and freq[-1] >= end_freq:
+                        is_freq_covered = True
+                        break
+                if not is_freq_covered:
                     continue
             filelist.append(obs)
     return filelist
