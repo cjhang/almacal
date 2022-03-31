@@ -4,8 +4,8 @@ from scipy import signal, ndimage
 from scipy.interpolate import CubicSpline
 from scipy import interpolate
 from astropy import units as u
-from astropy.coordinates import SkyCoord
-
+from astropy.coordinates import SkyCoord, search_around_sky
+from astropy.table import Table, vstack
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats, sigma_clip, SigmaClip
 from astropy.wcs import WCS
@@ -487,6 +487,83 @@ def read_fitsimage(fitsimage):
     theta = header['BPA']
     beamsize = np.pi*a*b/(4*np.log(2))
 
+def plot_image(fitsimage, ax=None, vmax_scale=10., show_fwhm=True, show_fov=True, fov_scale=1.5,
+              known_sources=None, width=2, height=2, ruller=1,
+              name=''):
+    if not os.path.isfile(fitsimage):
+        print("Cannot find the image.")
+        return
+    with fits.open(fitsimage) as hdu:
+        header = hdu[0].header
+        wcs = WCS(header)
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        freq = header['CRVAL3']
+        lam = (const.c/(freq*u.Hz)).decompose().to(u.um)
+        fov = 1.02 * (lam / (12*u.m)).decompose()* 206264.806
+        fcenter = [header['CRVAL1'], header['CRVAL2']] # in degrees
+        pixel_center = [nx/2., ny/2.]
+        bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+        theta = header['BPA']
+
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0)  
+
+    if ax == None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        
+    ny, nx = data_masked.shape[-2:]
+    scale = np.abs(header['CDELT1'])*3600
+    x_index = (np.arange(0, nx) - nx/2.0) * scale
+    y_index = (np.arange(0, ny) - ny/2.0) * scale
+    #x_map, y_map = np.meshgrid(x_index, y_index)
+    #ax.pcolormesh(x_map, y_map, data_masked)
+    extent = [np.min(x_index), np.max(x_index), np.min(y_index), np.max(y_index)]
+    ax.imshow(data_masked, origin='lower', extent=extent, interpolation='none', vmax=vmax_scale*std, 
+              vmin=-3.0*std)
+    
+    ax.text(0, 0, '+', color='r', fontsize=24, fontweight=100, horizontalalignment='center',
+            verticalalignment='center')
+    if True:
+        ax.axis('off')
+    if show_fwhm:
+        ellipse = patches.Ellipse((0.8*np.min(x_index), 0.8*np.min(y_index)), width=bmin, height=bmaj, 
+                              angle=theta, facecolor='orange', edgecolor=None, alpha=0.8)
+        ax.add_patch(ellipse)
+    if show_fov:    
+        ellipse_fov = patches.Ellipse((0, 0), width=fov_scale*fov, height=fov_scale*fov, 
+                                angle=0, fill=False, facecolor=None, edgecolor='grey', 
+                                alpha=0.8)
+        ax.add_patch(ellipse_fov)
+    if True: # add one 1arcsec ruler
+        ax.plot([0.6*np.max(x_index), 0.6*np.max(x_index)+ruller/scale], 
+                [0.8*np.min(y_index), 0.8*np.min(y_index)], color='lightgrey')
+        ax.text(0.5*(0.6*np.max(x_index)+0.6*np.max(x_index)+ruller/scale), 0.88*np.min(y_index), '{:.1f}arcsec'.format(ruller),
+                horizontalalignment='center', verticalalignment='center', color='lightgrey')
+    if name:
+        ax.text(0.8*np.min(y_index), 0.8*np.max(y_index), name, color='lightgrey')
+    
+    if known_sources is not None:
+        sources_input = np.array(known_sources)
+        sources_input_coords = SkyCoord(ra=sources_input[:,0], dec=sources_input[:,1], unit='arcsec')
+        try:
+            sources_input_flux = sources_input[:,2]
+        except:
+            sources_input_flux = None
+        sources_input_pixels = np.vstack(skycoord_to_pixel(sources_input_coords, wcs)).T
+        i = 0
+        for pixel_coord in sources_input_pixels:
+            print(pixel_coord)
+            ellipse_det = patches.Ellipse(scale*(pixel_coord-np.array([nx/2, ny/2.])), width=width, height=height, 
+                                  angle=0, facecolor=None, edgecolor='violet', alpha=0.8, fill=False)
+            ax.add_patch(ellipse_det)
+            if sources_input_flux is not None:
+                x_text, y_text = scale*(pixel_coord-np.array([nx/2, ny/2.]))+np.array([0.0,0.8*height])
+                ax.text(x_text, y_text, "{:.2f}mJy".format(sources_input_flux[i]), color='violet')
+            i += 1
+    return ax
+
 def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, model_background=True, 
                   threshold=5.0, debug=False, algorithm='DAOStarFinder', return_image=False,
                   filter_size=None, box_size=None, 
@@ -609,8 +686,12 @@ def source_finder(fitsimage, outdir='./', sources_file=None, savefile=None, mode
     
     # find stars
     if algorithm == 'DAOStarFinder': # DAOStarFinder
+        #daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=threshold*std, ratio=ratio, 
+        #                        theta=theta+90, sigma_radius=2.0, sharphi=5.0, sharplo=0.0,
+        #                        roundlo=-5.0, roundhi=5.0,)  
         daofind = DAOStarFinder(fwhm=fwhm_pixel, threshold=0.8*threshold*std, ratio=ratio, 
-                                theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,)  
+                                theta=theta+90, sigma_radius=1.5, sharphi=1.0, sharplo=0.2,
+                                roundlo=-1.0, roundhi=1.0,)  
         sources_found_candidates = daofind(data_masked_sub)#, mask=known_mask)
         # if debug:
             # print("candidates:", sources_found_candidates)
@@ -984,7 +1065,7 @@ def flux_interpolate(wavelength, flux, target_wavelength, redshift=2.6,
         print("flux difference: {}".format(f_SED(wavelength)/f_SED(target_wavelength)))
     return scale_factor * f_SED(target_wavelength)
 
-def flux_measure(image, coords_list, methods=['adaptive_aperture', 'gaussian','peak'], pbcor=True, 
+def flux_measure(image, coords_list, methods=['single_aperture', 'gaussian','peak'], pbcor=True, 
                  model_background=False, jackknif=True, target_wave=None,
                  subtract_background=False, debug=False, ax=None, fov_scale=2.0,
                  calculate_radial_distance=False):
@@ -1041,6 +1122,7 @@ def flux_measure(image, coords_list, methods=['adaptive_aperture', 'gaussian','p
         image_path = os.path.dirname(image)
         image_basename = os.path.basename(image)
         image_pbcor = os.path.join(image_path, image_basename.replace('image', 'pbcor.image'))
+        print('image_pbcor',image_pbcor)
         with fits.open(image_pbcor) as hdu_pbcor:
             data_pbcor = hdu_pbcor[0].data
             data_pbcor_masked = np.ma.masked_invalid(data_pbcor.reshape(ny, nx))
@@ -1148,9 +1230,9 @@ def flux_measure(image, coords_list, methods=['adaptive_aperture', 'gaussian','p
                                       edgecolor='black', alpha=0.8, linewidth=2)
             ax.add_patch(ellipse)
         plt.show()
-
-    print('flux_auto', flux_auto)
-    print('flux_snr_list', flux_snr_list)
+    if debug:
+        print('flux_auto', flux_auto)
+        print('flux_snr_list', flux_snr_list)
 
     if calculate_radial_distance:
         return flux_auto, flux_snr_list, radial_distance
@@ -1334,7 +1416,7 @@ def gen_sim_images(mode='image', vis=None, imagefile=None, n=20, repeat=1,
                         # uvtaper_scale=uvtaper_scale, basename=basename_new, known_file=known_file, 
                         # inverse_image=inverse_image, fluxrange=fluxrange, debug=debug, **kwargs)
 
-def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
+def calculate_sim_images_old(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
         basename=None, savefile=None, fov_scale=1.5, second_check=False,
         threshold=5.0, plot=False, snr_mode='peak', debug=False, 
         mode='image', **kwargs):
@@ -1496,6 +1578,125 @@ def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10,
         plot_sim_results(data_saved)
     # return data_saved
     #flux_list, flux_peak_list, flux_found_list, completeness_list
+
+def calculate_sim_images(simfolder, vis=None, baseimage=None, n=20, repeat=10, 
+        basename=None, savefile=None, fov_scale=1.5, second_check=False,
+        threshold=5.0, plot=False, snr_mode='peak', debug=False, start=0,
+        mode='image', **kwargs):
+    """simulation the completeness of source finding algorithm
+
+    mode:
+        peak: snr is the peak value
+        integrated: snr is the integrated value
+
+    The second_check is set to false to get the completeness across the whole SNR
+    """
+    # one time function
+    f_mean = lambda x: np.mean(x)
+    
+    with fits.open(baseimage) as hdu:
+        header = hdu[0].header
+        data = hdu[0].data
+        ny, nx = data.shape[-2:]
+        data_masked = np.ma.masked_invalid(data.reshape(ny, nx))
+        mean, median, std = sigma_clipped_stats(data_masked, sigma=5.0, iters=5)  
+        pixel_scale = 1/np.abs(header['CDELT1'])
+        bmaj, bmin = header['BMAJ']*3600, header['BMIN']*3600 # convert to arcsec
+        a, b = header['BMAJ']*pixel_scale, header['BMIN']*pixel_scale
+        theta = header['BPA']
+        beamsize = np.pi*a*b/(4*np.log(2))
+
+    if debug:
+        print('beamsize',beamsize) 
+        print('rms_flux',rms_flux)
+
+    mean, median, std = calculate_image_sensitivity(baseimage)
+    rms_flux = std * 1000 # convert to mJy/pixel
+    known_sources = source_finder(baseimage, fov_scale=fov_scale)
+    if basename is None:
+        if mode == 'image':
+            basename = os.path.basename(baseimage)
+        if mode == 'uv':
+            basename = os.path.basename(vis)
+        print('basename', basename)
+
+    flux_input_list = []
+    flux_input_autolist = []
+    flux_input_foundlist = []
+    flux_found_autolist = []
+    snr_input_list = []
+    # snr_inputfound_comp = []
+    detection_input_array = np.array([[0., 0.]])
+    detection_found_array = np.array([[0., 0.]])
+
+    boosting_table = Table(names=['snr_peak','flux_input','flux_aperture','flux_gaussian'],
+                     dtype=['f8', 'f8', 'f8', 'f8'])
+
+    for run in np.arange(start, start+repeat):
+        print("calculating run: {}".format(run))
+        n_input = 0
+        n_found = 0
+        # flux = s*sensitivity
+        # flux_input_list.append(flux)
+        #print('SNR: {}, RUN:{}'.format(s, run))
+        #print('flux:', flux)
+        if mode == 'image':
+            simimage = "{basename}.run{run}.fits".format(basename=basename, run=run)
+        elif mode == 'uv':
+            simimage = "{basename}.run{run}.image.fits".format(basename=basename, run=run)
+        simimage_sourcefile = "{basename}.run{run}.txt".format(basename=basename, run=run)
+        simimage_fullpath = os.path.join(simfolder, simimage)
+        simimage_sourcefile_fullpath = os.path.join(simfolder, simimage_sourcefile)
+        # print("simulated image:", simimage_fullpath)
+        # print("simulated sources:", simimage_sourcefile_fullpath)
+        simimage_sources_input = np.loadtxt(simimage_sourcefile_fullpath, skiprows=1)
+        if len(simimage_sources_input.shape) == 1:
+            print("Skip run{}, too few sources.".format(run))
+            continue
+        sources_input = Table.read(simimage_sourcefile_fullpath, format='ascii')
+        sources_input_coords = SkyCoord(ra=sources_input['ra[arcsec]']*u.arcsec, 
+                                        dec=sources_input['dec[arcsec]']*u.arcsec)
+
+        # try:
+        sf_return = source_finder(simimage_fullpath, known_sources=known_sources, 
+                threshold=threshold, second_check=second_check, **kwargs)
+        # flux_input, flux_input_auto, flux_found_auto, idxs = sf_return 
+        sources_found = sf_return
+        sources_found_ra = []
+        sources_found_dec = []
+        for s in sf_return:
+            sources_found_ra.append(s[0])
+            sources_found_dec.append(s[1])
+        sources_found_coords = SkyCoord(ra=sources_found_ra*u.arcsec, 
+                                        dec=sources_found_dec*u.arcsec)
+        sources_found_ra = np.array(sources_found_ra)
+        sources_found_dec = np.array(sources_found_dec)
+
+        seplimit = 0.5*u.arcsec # in arcsec
+        if len(sources_input) > 0:
+            if len(sf_return) > 0:
+                idx_input, idx_found, d2d, d3d = search_around_sky(sources_input_coords, 
+                                                                   sources_found_coords,
+                                                                   seplimit)
+                idx_input_comp = np.array(list(set(range(len(sources_input))) - set(idx_input)), dtype=int)
+                idx_found_comp = np.array(list(set(range(len(sources_found))) - set(idx_found)), dtype=int)
+                #
+                detections = list(zip(sources_found_ra[idx_found], sources_found_dec[idx_found]))
+
+                flux_auto, flux_auto_snr = flux_measure(simimage_fullpath, detections, pbcor=False)
+                flux_auto = np.array(flux_auto)
+                flux_auto_snr = np.array(flux_auto_snr)
+                flux_input = sources_input['flux[mJy]'][idx_input]
+                flux_aperture = flux_auto[:,0]
+                flux_gaussian = flux_auto[:,1]
+                snr_array = flux_auto_snr[:,2] # peak snr
+                boosting_single = Table([snr_array, flux_input, flux_aperture, flux_gaussian],
+                                    names=['snr_peak','flux_input','flux_aperture','flux_gaussian'])
+                boosting_table = vstack([boosting_table, boosting_single])
+    if savefile:
+        boosting_table.write(savefile, format='ascii')
+                
+    return boosting_table
 
 def plot_sim_results(data=None, jsonfile=None, snr = np.arange(1.0, 10, 0.2), plot=True,
                      mode='median', text='', savefile=None):
