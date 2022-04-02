@@ -141,7 +141,7 @@ def search_obs(basedir, config='main', band='B6', debug=False, config_select=Tru
             if freq_select:
                 is_freq_covered = False
                 spw_list = spw_stat(obs_fullpath)
-                for freq in spw_list[band][0]:
+                for freq in spw_list[band]['freq'][0]:
                     if freq[0] <= star_freq and freq[-1] >= end_freq:
                         is_freq_covered = True
                         break
