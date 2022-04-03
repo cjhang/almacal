@@ -140,11 +140,14 @@ def search_obs(basedir, config='main', band='B6', debug=False, config_select=Tru
 
             if freq_select:
                 is_freq_covered = False
-                spw_list = spw_stat(obs_fullpath)
-                for freq in spw_list[band]['freq'][0]:
-                    if freq[0] <= star_freq and freq[-1] >= end_freq:
-                        is_freq_covered = True
-                        break
+                try:
+                    spw_list = spw_stat(obs_fullpath)
+                    for freq in spw_list[band]['freq'][0]:
+                        if freq[0] <= star_freq and freq[-1] >= end_freq:
+                            is_freq_covered = True
+                            break
+                except:
+                    print("{} faild in spw_stat!".format(obs_fullpath))
                 if not is_freq_covered:
                     continue
             filelist.append(obs)
@@ -3198,7 +3201,7 @@ run_check_SMGs('make_all_good_images', objs=None, bands=['B3','B4','B5','B6','B7
 run_gen_stats('/scratch/ALMACAL', imagedir='make_all_good_images', outdir='gen_stats', 
                bands=['B3','B4','B5','B6','B7','B8'], debug=False)
 run_measure_flux('make_all_good_images', objs=None, bands=['B6','B7','B8'], focus_band='B8', 
-                 selected_resolution='0.3arcsec', summary_file='B8_SMGs.txt', target_wave=650)
+                 selected_resolution='0.3arcsec', summary_file='B8_SMGs.txt', target_wave=None)
 run_calculate_effarea(imagedir='make_good_images', flux=np.linspace(0.1, 10, 50), objs=B8_list, 
                       band='B8', savefile='B8_effarea.txt')
 run_make_simulations(imagedir='make_good_images', objs=B8_dets_uniq, band='B8', outdir='simulations/B8')
