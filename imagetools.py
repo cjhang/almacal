@@ -1,4 +1,5 @@
-# A collection of tools related with image analysis
+# this file is designed for ALMARED
+
 
 # Author: Jianhang Chen
 # Email: cjhastro@gmail.com
