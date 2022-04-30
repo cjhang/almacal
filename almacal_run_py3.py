@@ -12,7 +12,7 @@ import astropy.units as u
 import astropy.constants as const
 
 
-sys.path.append('/home/jchen/work/projects/code_snippets/python3')
+sys.path.append('/home/jchen/work/projects/code_snippets/python')
 from image_tools import FitsImage, source_finder, measure_flux
 
 def combine_detection_py3(dets, units=u.deg, tolerance=0.3*u.arcsec):
@@ -28,10 +28,9 @@ def combine_detection_py3(dets, units=u.deg, tolerance=0.3*u.arcsec):
             dets_ulist.append(det_candidate)
     return vstack(dets_ulist)
 
-
-
 def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms.auto.cont', 
                    resolutions=['0.3arcsec', '0.6arcsec'], ncol=1,
+                   save_obj_summary=False,
                    summary_file=None, view_mode='multiple', focus_bands=None,
                    interactive=True, outdir=None, continue_mode=True, central_mask_radius=2,
                    methods=['aperture','peak'], **kwargs):
@@ -57,10 +56,10 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
             print('Initializing the output file')
             with open(summary_file, 'w+') as f:
                 f.write("obj")
-                for band in focus_bands:
-                    for res in resolutions:
-                        f.write(' ')
-                        f.write(band+'_'+res)
+                # for band in focus_bands:
+                    # for res in resolutions:
+                        # f.write(' ')
+                        # f.write(band+'_'+res)
                 for band in bands:
                     f.write(' detection_{} goodfield_{}'.format(band, band))
                 f.write(' is_SMG')
@@ -90,11 +89,12 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                 # write into summary file
                 if outdir is not None:
                     obj_outdir = os.path.join(outdir, obj)
-                    obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
                     if not os.path.isdir(obj_outdir):
                         os.system('mkdir -p {}'.format(obj_outdir))
                     # open the summary file
-                    obj_summary = open(obj_summary_file, 'w+')
+                    if save_obj_summary:
+                        obj_summary_file = os.path.join(obj_outdir, '{}.sources_found.txt'.format(obj))
+                        obj_summary = open(obj_summary_file, 'w+')
                     summary_plot = os.path.join(obj_outdir, '{}.summary.png'.format(obj))
                 else:
                     obj_summary = None
@@ -108,79 +108,94 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                         obj_sourcefound[band+'_'+res] = []
                 # make a summary plot
                 nrow = int(1.0 * len(bands) / ncol)
-                fig, ax = plt.subplots(nrow, len(resolutions)*ncol, 
-                                       figsize=(ncol*4.2*len(resolutions),4*nrow)) 
-                fig.suptitle(obj)
+                fig = plt.figure(figsize=(ncol*4.2*len(resolutions),4*nrow))
                 #for img in imgs:
                 # sources_number = {}
                 # obj_sourcefound
-                for i,band in enumerate(bands):
-                    i_ax = i // ncol
-                    obj_band_dir = os.path.join(basedir, band, obj)
-                    for j,res in enumerate(resolutions):
-                        j_ax = j + i%ncol*ncol
-                        if len(bands) > 1:
-                            ax_select = ax[i_ax,j_ax]
-                        else:
-                            ax_select = ax[max(i_ax,j_ax)]
-                        if res == '':
-                            res_string = ''
-                        else:
-                            res_string = res+'.'
-                        image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
-                        image_fullpath = os.path.join(obj_band_dir, image_name)
-                        #print('Finding source in:', image_fullpath)
-                        if not os.path.isfile(image_fullpath):
-                            if band in focus_bands:
-                                obj_validbands['{}'.format(band)] = False
-                            continue
-                        savefile = image_name + '.source_found.txt'
-                        fitsimage = FitsImage(image_file=image_fullpath)
-                        sources_found = source_finder(fitsimage, method='sep', plot=False,
-                                                      aperture_scale=3.0, detection_threshold=5.0)
-                        nocenter_dets = sources_found[sources_found['radial_distance'] 
-                                                       > central_mask_radius]
-                        fitsimage.plot(ax=ax_select, show_detections=True, detections=nocenter_dets)
-                        ax_select.set_title('{} {}'.format(band, res))
-                        #try:
-                        #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
-                        #            ax=ax[i,j], pbcor=True)
-                        #except:
-                        #    print("Error found for {}".format(image_name))
-                        #    failed_files.append(image_name)
-                        if len(sources_found) > 0 and obj_summary is not None:
-                            obj_summary.write('# {} {} {}\n'.format(obj, band, res))
-                            obj_sourcefound['{}_{}'.format(band, res)] = sources_found
-                            source_idx = 0
-                            for ra, dec, flux, snr in sources_found['ra','dec','peak_flux', 'peak_snr']:
-                                obj_summary.write('{} {:.6f} {:.6f} '.format(source_idx, ra, dec))
-                                obj_summary.write(" {:.4f} {:.2f} ".format(flux, snr))
-                                obj_summary.write('\n')
-                                source_idx += 1
-                fig.savefig(summary_plot, bbox_inches='tight', dpi=100)
+                if os.path.isfile(summary_plot):
+                    ax = fig.subplots(1,1)
+                    print("Using existing summary plot...")
+                    imagedata = plt.imread(summary_plot)
+                    ax.imshow(imagedata, interpolation='none')
+                    for band in bands:
+                        obj_band_dir = os.path.join(basedir, band, obj)
+                        for res in resolutions:
+                            if res == '':
+                                res_string = ''
+                            else:
+                                res_string = res+'.'
+                            image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+                            image_fullpath = os.path.join(obj_band_dir, image_name)
+                            if not os.path.isfile(image_fullpath):
+                                if band in focus_bands:
+                                    obj_validbands['{}'.format(band)] = False
+                else:
+                    ax = fig.subplots(nrow, len(resolutions)*ncol) 
+                    for i,band in enumerate(bands):
+                        i_ax = i // ncol
+                        obj_band_dir = os.path.join(basedir, band, obj)
+                        for j,res in enumerate(resolutions):
+                            j_ax = j + i%ncol*ncol
+                            if len(bands) > 1:
+                                ax_select = ax[i_ax,j_ax]
+                            else:
+                                ax_select = ax[max(i_ax,j_ax)]
+                            if res == '':
+                                res_string = ''
+                            else:
+                                res_string = res+'.'
+                            image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+                            image_fullpath = os.path.join(obj_band_dir, image_name)
+                            #print('Finding source in:', image_fullpath)
+                            if not os.path.isfile(image_fullpath):
+                                if band in focus_bands:
+                                    obj_validbands['{}'.format(band)] = False
+                                continue
+                            savefile = image_name + '.source_found.txt'
+                            fitsimage = FitsImage(image_file=image_fullpath)
+                            sources_found = source_finder(fitsimage, method='sep', plot=False,
+                                                          aperture_scale=3.0, detection_threshold=5.0)
+                            nocenter_dets = sources_found[sources_found['radial_distance'] 
+                                                           > central_mask_radius]
+                            fitsimage.plot(ax=ax_select, show_detections=True, detections=nocenter_dets)
+                            ax_select.set_title('{} {}'.format(band, res))
+                            #try:
+                            #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
+                            #            ax=ax[i,j], pbcor=True)
+                            #except:
+                            #    print("Error found for {}".format(image_name))
+                            #    failed_files.append(image_name)
+                            if len(sources_found) > 0 and save_obj_summary:
+                                obj_summary.write('# {} {} {}\n'.format(obj, band, res))
+                                # obj_sourcefound['{}_{}'.format(band, res)] = sources_found
+                                source_idx = 0
+                                for ra, dec, flux, snr in sources_found['ra','dec','peak_flux', 'peak_snr']:
+                                    obj_summary.write('{} {:.6f} {:.6f} '.format(source_idx, ra, dec))
+                                    obj_summary.write(" {:.4f} {:.2f} ".format(flux, snr))
+                                    obj_summary.write('\n')
+                                    source_idx += 1
+                    fig.subplots_adjust(wspace=0.2, hspace=0.2)
+                    fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
                 # write into files
-                if obj_summary is not None:
+                if save_obj_summary:
                     obj_summary.close()
                 found_string = obj
-                for band in focus_bands:
-                    for res in resolutions:
+                # for band in focus_bands:
+                    # for res in resolutions:
                         # print(obj_sourcefound[band+'_'+res])
-                        found_string += ' '+str(len(obj_sourcefound[band+'_'+res]))
+                        # found_string += ' '+str(len(obj_sourcefound[band+'_'+res]))
                 # print(found_string)
                 # save figure
-                fig.subplots_adjust(wspace=0.2, hspace=0.2)
-                if summary_plot:
-                    fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
-                if summary_file: 
-                    SMG_input = 0
-                    RG_input = 0
-                    Jet_input = 0
-                    detections = {}
-                    goodfields = {}
-                    for band in bands:
-                        goodfields[band] = 0
-                        detections[band] = 0
-                    if interactive:
+                if interactive:
+                    if summary_file: 
+                        SMG_input = 0
+                        RG_input = 0
+                        Jet_input = 0
+                        detections = {}
+                        goodfields = {}
+                        for band in bands:
+                            goodfields[band] = 0
+                            detections[band] = 0
                         plt.show()
                         print("Single Band:\n") 
                         print("Detection: 0)None +n)N Detections -1)Not Sure")
@@ -203,26 +218,26 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                             RG_input = int(input("Is RG? (integer, 0,1,2,-1) [0]: ") or 0)
                             Jet_input = int(input("Is Jet? (integer, 0,1,2,-1) [0]: ") or 0)
                         plt.close()
-                    for band in focus_bands:
-                        found_string += ' {} {}'.format(detections[band], goodfields[band])
-                    found_string += ' {}'.format(SMG_input)
-                    found_string += ' {}'.format(RG_input)
-                    found_string += ' {}'.format(Jet_input)
-                    with open(summary_file, 'a+') as f:
-                        f.write("{}\n".format(found_string)) 
-                else:
-                    next_one = int(input("Next one [1/0] [1]: ") or 1)
-                    if next_one == 1:
-                        if view_mode == 'single':
-                            plt.close()
-                        elif view_mode == 'multiple':
-                            continue
-                    else:
-                        return 0
-                if (outdir is None) and (view_mode == 'multiple'):
-                    is_close = int(input("Close all windows? (1/0) [1]") or 1)
-                    if is_close == 0:
-                        return 0
+                        for band in focus_bands:
+                            found_string += ' {} {}'.format(detections[band], goodfields[band])
+                        found_string += ' {}'.format(SMG_input)
+                        found_string += ' {}'.format(RG_input)
+                        found_string += ' {}'.format(Jet_input)
+                        with open(summary_file, 'a+') as f:
+                            f.write("{}\n".format(found_string)) 
+                    elif interactive:
+                        next_one = int(input("Next one [1/0] [1]: ") or 1)
+                        if next_one == 1:
+                            if view_mode == 'single':
+                                plt.close()
+                            elif view_mode == 'multiple':
+                                continue
+                        else:
+                            return 0
+                    if (outdir is None) and (view_mode == 'multiple'):
+                        is_close = int(input("Close all windows? (1/0) [1]") or 1)
+                        if is_close == 0:
+                            return 0
                 plt.close()
     except KeyboardInterrupt:
         return 0
