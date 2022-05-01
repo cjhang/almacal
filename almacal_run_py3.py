@@ -62,9 +62,9 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                         # f.write(band+'_'+res)
                 for band in bands:
                     f.write(' detection_{} goodfield_{}'.format(band, band))
-                f.write(' is_SMG')
-                f.write(' is_RG')
-                f.write(' is_Jet')
+                # f.write(' is_SMG')
+                # f.write(' is_RG')
+                # f.write(' is_Jet')
                 f.write('\n')
 
     obj_match = re.compile('^J\d*[+-]\d*$')
@@ -79,6 +79,9 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
     # star to loop over all the objs
     failed_files = []
     try:
+        # make a summary plot
+        nrow = int(1.0 * len(bands) / ncol)
+        fig = plt.figure(figsize=(ncol*4.2*len(resolutions),4*nrow))
         for obj in objs:
             if obj in objs_finished:
                 print("{} already done!".format(obj))
@@ -106,14 +109,12 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                     obj_validbands[band] = True
                     for res in resolutions:
                         obj_sourcefound[band+'_'+res] = []
-                # make a summary plot
-                nrow = int(1.0 * len(bands) / ncol)
-                fig = plt.figure(figsize=(ncol*4.2*len(resolutions),4*nrow))
                 #for img in imgs:
                 # sources_number = {}
                 # obj_sourcefound
                 if os.path.isfile(summary_plot):
-                    ax = fig.subplots(1,1)
+                    ax = fig.add_subplot(111)
+                    ax.axis('off')
                     print("Using existing summary plot...")
                     imagedata = plt.imread(summary_plot)
                     ax.imshow(imagedata, interpolation='none')
@@ -157,7 +158,7 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                                                           aperture_scale=3.0, detection_threshold=5.0)
                             nocenter_dets = sources_found[sources_found['radial_distance'] 
                                                            > central_mask_radius]
-                            fitsimage.plot(ax=ax_select, show_detections=True, detections=nocenter_dets)
+                            fitsimage.plot(ax=ax_select, show_detections=True, detections=nocenter_dets, show_rms=True)
                             ax_select.set_title('{} {}'.format(band, res))
                             #try:
                             #    sources_found = source_finder(image_fullpath, outdir=obj_outdir, 
@@ -175,6 +176,7 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                                     obj_summary.write('\n')
                                     source_idx += 1
                     fig.subplots_adjust(wspace=0.2, hspace=0.2)
+                    # fig.suptitle(obj)
                     fig.savefig(summary_plot, bbox_inches='tight', dpi=400)
                 # write into files
                 if save_obj_summary:
@@ -200,10 +202,10 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                         print("Single Band:\n") 
                         print("Detection: 0)None +n)N Detections -1)Not Sure")
                         print("Usable: 0)No 1)Full -n)exclude central n*FWHM region")
-                        print("General Classification")
-                        print("Is SMG: 0)No 1)Yes +n)Multiple -1)Not Sure")
-                        print("Is RG: 0)No 1)Yes +n)Multiple -1)Not Sure")
-                        print("Is Jet: 0)No 1)Compact +n)Enlongated -1)Not Sure")
+                        # print("General Classification")
+                        # print("Is SMG: 0)No 1)Yes +n)Multiple -1)Not Sure")
+                        # print("Is RG: 0)No 1)Yes +n)Multiple -1)Not Sure")
+                        # print("Is Jet: 0)No 1)Compact +n)Enlongated -1)Not Sure")
                         for band in focus_bands:
                             if not obj_validbands[band]:
                                 continue
@@ -213,18 +215,20 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                                 "Usable for Band:{} (integer, 0,1,2,-1,-2) [0]?: ".format(band)) or 0)
                             detections[band] = detection_input
                             goodfields[band] = goodfield_input
-                        if len(bands) > 0:
-                            SMG_input = int(input("Is SMG? (integer, 0,1,2,-1) [0]: ") or 0)
-                            RG_input = int(input("Is RG? (integer, 0,1,2,-1) [0]: ") or 0)
-                            Jet_input = int(input("Is Jet? (integer, 0,1,2,-1) [0]: ") or 0)
-                        plt.close()
+                        # if have_obs:
+                            # SMG_input = int(input("Is SMG? (integer, 0,1,2,-1) [0]: ") or 0)
+                            # RG_input = int(input("Is RG? (integer, 0,1,2,-1) [0]: ") or 0)
+                            # Jet_input = int(input("Is Jet? (integer, 0,1,2,-1) [0]: ") or 0)
+                        # else:
+                            # SMG_input = 0; RG_input=0; Jet_input=0;
                         for band in focus_bands:
                             found_string += ' {} {}'.format(detections[band], goodfields[band])
-                        found_string += ' {}'.format(SMG_input)
-                        found_string += ' {}'.format(RG_input)
-                        found_string += ' {}'.format(Jet_input)
+                        # found_string += ' {}'.format(SMG_input)
+                        # found_string += ' {}'.format(RG_input)
+                        # found_string += ' {}'.format(Jet_input)
                         with open(summary_file, 'a+') as f:
                             f.write("{}\n".format(found_string)) 
+                        # plt.close()
                     elif interactive:
                         next_one = int(input("Next one [1/0] [1]: ") or 1)
                         if next_one == 1:
@@ -238,8 +242,9 @@ def run_check_SMGs_py3(basedir, objs=None, bands=['B6','B7'], suffix='combine.ms
                         is_close = int(input("Close all windows? (1/0) [1]") or 1)
                         if is_close == 0:
                             return 0
-                plt.close()
+                plt.clf()
     except KeyboardInterrupt:
+        plt.close()
         return 0
 
 def run_measure_flux_py3(basedir, objs=None, bands=['B6','B7'], focus_band=None,
