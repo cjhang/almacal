@@ -16,6 +16,8 @@ from astropy.table import Table
 from astropy.time import Time
 from astropy.wcs import WCS
 from astropy.io import fits
+from astropy import units as u
+from astropy import constants as const
 from matplotlib import pyplot as plt
 from astropy.coordinates import SkyCoord
 from scipy.optimize import curve_fit
@@ -2631,49 +2633,10 @@ def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs
     if savefile:
         effarea.write(savefile, format='ascii')
 
-def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=None, band=None, 
-        suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
-        almacal_catalogue=None,
-        snr_threshold=5.0, savefile=None, **kwargs):
-    """calculate the effecitve area for all the usable fields
-    """
-    obj_match = re.compile('^J\d*[+-]\d*$')
-    
-    if objs is None:
-        objs = []
-        for item in os.listdir(imagedir):
-            if obj_match.match(obj):
-                objs.append(item)
-    if almacal_catalogue is not None:
-        almacal_cat = Table.read(almacal_catalogue, format='ascii')
-    effarea = Table()
-    effarea['flux'] = flux
-    effarea[band] = np.zeros_like(flux)
-    for obj in objs:
-        obj_dir = os.path.join(imagedir, obj)
-        image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
-        image_fullpath = os.path.join(obj_dir, image)
-        image_pbcorr = image.replace('image', 'pbcor.image')
-        image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
-        if os.path.isfile(image_fullpath):
-            mask_radius = 0.0
-            if almacal_catalogue is not None:
-                mask_code = almacal_cat[almacal_cat['obj'] == obj]['goodfield_{}'.format(band)].data[0]
-                if mask_code < 0:
-                    mask_radius = -1.0 * mask_code
-            elif objs_nocenter is not None:
-                mask_radius = 2.0
-            _, objarea = calculate_effectivearea(flux, snr_threshold=snr_threshold, 
-                        images=[image_fullpath,], images_pbcorr=[image_pbcorr_fullpath,],
-                        central_mask_radius=mask_radius,**kwargs)
-            effarea[band] += objarea
-    if savefile:
-        effarea.write(savefile, format='ascii')
-
 def run_mock_observation(radius=np.arange(1.0, 22.,1.5), imagedir=None, fNN=None, objs=None, band=None,
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
         snr_threshold=5.0, savefile=None):
-    """
+    """ make mock observations
     images: the real images accounting primary beam response
     fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
     """
@@ -3035,9 +2998,11 @@ def run_number_counts(flist=None, detections_file=None, effective_area_file=None
         mode_simu = mode_simu[:,:,:-1] # remove the last column
     mode_NN_number = np.mean(mode_simu[2], axis=0)
     mode_NN_number_err = np.std(mode_simu[2], axis=0)
-    mode_NN = np.mean(mode_simu[0], axis=0)
-    # if 
-    mode_NN_err = np.std(mode_simu[0], axis=0)
+    #mode_NN = np.mean(mode_simu[0], axis=0)
+    #mode_NN_err = np.std(mode_simu[0], axis=0)
+    mode_NN = np.ma.mean(np.ma.masked_invalid(mode_simu[0]),axis=0).data
+    mode_NN_err = np.ma.std(np.ma.masked_invalid(mode_simu[0]),axis=0).data
+
     #mode_NN_err = np.sqrt(np.sum(mode_simu[1]**2, axis=0))/mode_NN_number # another way to calculate the err
     # print('mode_NN', mode_NN)
     # print('mode_NN_err', mode_NN_err)
