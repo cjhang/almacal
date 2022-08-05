@@ -1039,7 +1039,7 @@ def calculate_image_sensitivity(image, known_sources=None, central_mask_radius=2
 
     data_field = np.ma.array(data_masked, mask=known_mask) 
     if sigma_clip:
-        mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=5)
+        mean, median, std = sigma_clipped_stats(data_field, sigma=5.0, iters=2)
     else:
         mean = np.ma.mean(data_field)
         median = np.ma.median(data_field)

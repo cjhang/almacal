@@ -7,6 +7,8 @@
 import os
 import glob
 import re
+import json
+from collections import OrderedDict
 import pickle
 import numpy as np
 import scipy
@@ -409,7 +411,19 @@ def show_images(fileglob=None, filelist=None, basedir=None, mode='auto', nrow=3,
         for item in all_select:
             print(item)
 
-def make_combine_obs(obj, basedir=None, band=None, badfiles=None):
+def make_combine_obs(obslist, basedir=None, basename='combined', outdir='./'):
+    if basedir:
+        obslist_fullpath = []
+        for item in obslist:
+            item_fullpath = os.path.join(basedir, item)
+            obslist_fullpath.append(item_fullpath)
+    else:
+        obslist_fullpath = obslist
+    outputvis = os.path.join(outdir, basename+'.ms')
+    concat(vis=obslist_fullpath, concatvis=outputvis)
+    statwt(vis=outputvis, datacolumn='data')
+    
+def make_valid_obs(obj, basedir=None, band=None, badfiles=None):
     badfiles_list = []
     if badfiles is not None:
         with open(badfiles) as f:
@@ -880,9 +894,10 @@ def check_images(imgs, outdir=None, basename='', band=None, debug=False, overwri
                 bad_outfile.write("\n".join(str(item) for item in bad_imgs))
     return good_imgs, bad_imgs
 
-def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False, ncol=1, nrow=3, suffix='.updated'):
+def check_images_manual(imagedir=None, goodfile=None, badfile=None, 
+        goodfile_updated=None, badfile_updated=None,
+        debug=False, ncol=1, nrow=3, suffix='.updated'):
     '''visual inspection of the classification results from check_images
-    
     '''
     if imagedir is None:
         raise ValueError("basedir should be defined along with filelist")
@@ -998,16 +1013,20 @@ def check_images_manual(imagedir=None, goodfile=None, badfile=None, debug=False,
         print("list_updated")
         print(list_updated)
     else:
+        if goodfile_updated is None:
+            goodfile_updated = goodfile + suffix
+        if badfile_updated is None:
+            badfile_updated = badfile + suffix
         # obsname_match = re.compile('(?P<obsname>uid___\w*\.ms\.split\.cal\.J\d*[+-]+\d*_B\d+)')
         # fix the problem with naming issue
         obsname_match = re.compile('(?P<obsname>uid___\w*\.ms[\.split\.cal]*\.J\d*[+-]+\d*_B\d+)')
-        for desc, f in zip(['good', 'bad'], [goodfile, badfile]):
+        for desc, file_updated in zip(['good', 'bad'], [goodfile_updated, badfile_updated]):
             # if not os.path.isfile(f):
                 # print("Warning! {} doesn't exist!".format(f))
                 # continue
             if len(list_updated[desc]) < 1:
                 continue
-            with open(f+suffix, 'w+') as f:
+            with open(file_updated, 'w+') as f:
                 for item in list_updated[desc]:
                     try:
                         obsname = obsname_match.search(item).groupdict()['obsname']
@@ -1207,7 +1226,7 @@ def vis_clone(vis, outdir='./', drop_FDM=True, computwt=True):
 
 def make_good_image(vis=None, basename='', basedir=None, outdir='./', concatvis=None, debug=False, 
                     only_fits=True, niter=1000, clean=True, pblimit=-0.01, fov_scale=2.0, 
-                    computwt=True, drop_FDM=True, save_psf=True, check_sensitivity=True,
+                    computwt=True, drop_FDM=True, save_psf=True, check_sensitivity=False,
                     uvtaper_list=['0.3arcsec', '0.6arcsec'], make_jackknif=False,
                     uvtaper_scale=None,#[1.5, 2.0], 
                     **kwargs):
@@ -1434,7 +1453,7 @@ def search_band_detection(basedir=None, band='B3', outdir='./', debug=False, **k
         # selected_files = os.path.join(image_dir, 'seleted.txt')
         # show_images(fileglob=image_dir+'/*.fits', savefile=selected_files)
         check_images(os.path.join(image_dir,'*.fits'), outdir=goodimage_dir, band=band, 
-                basename=basename, plot=True, savefig=True)
+                basename=baseame, plot=True, savefig=True)
         band_imagedir = os.path.join(goodimage_dir, band)
         goodfile = os.path.join(goodimage_dir, "{}_good_imgs.txt".format(basename))
         badfile = os.path.join(goodimage_dir, "{}_bad_imgs.txt".format(basename))
@@ -1468,8 +1487,20 @@ def combine_sources(coords_list, units=u.arcsec, tolerance=0.3*u.arcsec):
             coords_unique.append(coord1)
     return coords_unique
 
+def fNN(s, area2=None):
+    """cumulative number counts from ASPECS
+    Args:
+        s: the flux density, in mJy
+        area2: (optional), area, in deg2
+    """
+    NN = 4.1e3/0.09 * ((s/0.09)**1.94 + (s/0.09)**0.16)**(-1) # in deg^-2
+    if area2 is None:
+        return NN # in #/deg^-2
+    else: 
+        return NN * area2 # in #/N
+
 def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, step=1.0,
-        fNN=None, snr_threshold=5.0, fovscale=2.0, central_mask_radius=1.0):
+        fNN=None, snr_threshold=5.0, fovscale=1.8, central_mask_radius=1.0):
     """
     images: the real images accounting primary beam response
     fNN: callable, the cumulative function give the number of detections at a give sensitivity and area
@@ -1509,7 +1540,7 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         rlimit = 0.5 * fovscale * fov.value
         pbcor[r > rlimit] = 0.0
     if central_mask_radius > 1e-8:
-        pbcor[r < central_mask_radius*a] = 0.0
+        pbcor[r < central_mask_radius] = 0.0
     Nr = []
     # std_map = std / (pbcor + 1e-8)
     # print('r map shape:', r.shape)
@@ -1521,7 +1552,7 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         r_select = (r > r_lower) & (r < r_upper) 
         #r_select = r < r_upper 
         area = np.pi*(r_upper**2-r_lower**2)
-        area2 = np.sum(r_select) * pix2area
+        area2 = np.sum(r_select) * pix2area / 3600**2 # convert into deg2
         # print('area1:', area, "area2:", area2)
         #print('pixels:', np.sum(r_select))
         pb_select = r_select & (pbcor > 1e-8)
@@ -1533,7 +1564,7 @@ def mock_observation(image=None, image_pbcorr=None, radius=None, max_radius=16, 
         # print('beam size', beamsize)
         # flux_sensitivity = snr_threshold * std * 1000 / beamsize / pb_mean #change to mJy
         flux_sensitivity = snr_threshold * std * 1000 / pb_mean #change to mJy
-        Nr.append(fNN(flux_sensitivity, area))
+        Nr.append(fNN(flux_sensitivity, area2))
         # print('std', std, 'pb_median', pb_mean)
         # print('flux', flux_sensitivity, 'r_lower', r_lower, 'r_upper', r_upper, 'area', area, 'area2', np.pi*(r_upper**2-r_lower**2))
     return Nr
@@ -1560,6 +1591,29 @@ def flux_scaling(wavelength, target_wavelength, flux=1, SED_template='composite_
         print("scale_factor: {}".format(scale_factor))
         print("flux difference: {}".format(f_SED(wavelength)/f_SED(target_wavelength)))
     return scale_factor * f_SED(target_wavelength)
+
+def make_lucky_image(vis_list, fraction=0.5, n_repeat=10, outdir='./', basename='', 
+                     only_fits=True, beamname='BMAJ'):
+    """make lucky image by only use a subset of the observations.
+    """
+    for i in range(n_repeat):
+        n_select = int(len(vis_list) * fraction)
+        vis = np.random.choice(vis_list, n_select)
+        if os.path.isdir(outdir):
+            os.system('mkdir -p {}'.format(outdir))
+        make_good_image(vis=vis, basename=basename+'_test{}'.format(i),
+                        outdir=os.path.join(outdir,'test{}'.format(i)), 
+                        save_psf=False, only_fits=only_fits,
+                        uvtaper_list=['0.3arcsec',])
+
+def check_beamsize(fitsimages, beamname='BMAJ'):
+    if isinstance(fitsimages, str):
+        fitsimages = [fitsimages,]
+    beamsizes = []
+    for f in fitsimages:
+        with fits.open(f) as hdu:
+            beamsizes.append(hdu[0].header[beamname])
+    return beamsizes
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # The ALMA run automatic pipeline section #
@@ -1872,7 +1926,7 @@ def run_auto_classify_goodimags(imagedir=None, objlist=None, outdir='./', bands=
                 print(good_imgs)
 
 def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7'], 
-        suffix='imgs.txt'):
+        suffix='imgs.txt', outdir=None):
     """manually checking all the images
     """
     if isinstance(objlist, str):
@@ -1889,21 +1943,29 @@ def run_manual_inspection(classifiedfolder=None, objlist=None, bands=['B6','B7']
                     objlist.append(obj)
         objlist = np.unique(objlist)
         #raise ValueError("Unsupported objlist!")
+    if outdir is None:
+        outdir = classifiedfolder
     for obj in objlist:
         for band in bands:
             obj_classified_folder = os.path.join(classifiedfolder, band, obj)
             obj_classified_imagedir = os.path.join(obj_classified_folder, band)
+            obj_outdir = os.path.join(outdir, band, obj)
+            if not os.path.isdir(obj_outdir):
+                os.system('mkdir -p {}'.format(obj_outdir))
             goodfile = os.path.join(obj_classified_folder, "{}_{}_good_{}".format(obj, band, suffix))
             badfile = os.path.join(obj_classified_folder, "{}_{}_bad_{}".format(obj, band, suffix))
+            goodfile_updated = os.path.join(obj_outdir, os.path.basename(goodfile)+'.updated')
+            badfile_updated = os.path.join(obj_outdir, os.path.basename(badfile)+'.updated')
 
-            if os.path.isfile(goodfile+'.updated') or os.path.isfile(badfile+'.updated'):
+            if os.path.isfile(goodfile_updated) or os.path.isfile(badfile_updated):
                 print('{} of {} already done'.format(band, obj))
                 continue
             else:
                 print(obj_classified_imagedir)
                 print(">goodfile: {}\n>badfile: {}".format(goodfile, badfile))
                 check_images_manual(imagedir=obj_classified_imagedir, goodfile=goodfile, 
-                                    badfile=badfile, debug=False, ncol=1, nrow=3)
+                        goodfile_updated=goodfile_updated, badfile_updated=badfile_updated,
+                        badfile=badfile, debug=False, ncol=1, nrow=3)
 
 def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7'], basedir=None, 
         outdir='./', debug=False, only_fits=True, update=True, imagefile_suffix='combine',
@@ -1957,6 +2019,154 @@ def run_make_all_goodimages(classifiedfolder=None, objlist=None, bands=['B6','B7
                 make_good_image(combined_vis, concatvis=concatvis, only_fits=only_fits, 
                         outdir=obj_outdir, computwt=computwt, make_jackknif=make_jackknif, 
                         basedir=os.path.join(basedir, obj), **kwargs)
+
+def run_check_all_beamsize(imagedir=None, bands=None, suffix='combine.ms.auto.cont', resolution='0.3arcsec',
+                           beamname='BMAJ', check_sensitivity=True, savefile=None):
+    """get all the beamsize of the images
+    """
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    beamsize_list = []
+    if check_sensitivity:
+        sensitivity_list = []
+    if isinstance(bands, str):
+        bands = [bands,]
+    for band in bands:
+        band_imagedir = os.path.join(imagedir, band)
+        band_objs = []
+        for item in os.listdir(band_imagedir):
+            if obj_match.match(item):
+                band_objs.append(item)
+        band_images = []
+        for obj in band_objs:
+            obj_dir = os.path.join(band_imagedir, obj)
+            image = "{}_{}_{}.{}.image.fits".format(obj, band, suffix, resolution)
+            image_fullpath = os.path.join(obj_dir, image)
+            if os.path.isfile(image_fullpath):
+                band_images.append(image_fullpath)
+        beamsize_list.append(check_beamsize(band_images, beamname=beamname))
+        if check_sensitivity:
+            sensitivity_band_list = []
+            for image in band_images:
+                mean, median, std = calculate_image_sensitivity(image, sigma_clip=True)
+                sensitivity_band_list.append(std)
+            sensitivity_list.append(sensitivity_band_list)
+    if savefile is not None:
+        jsondata = {}
+        for idx,band in enumerate(bands):
+            banddata = {'beams': beamsize_list[idx], 'sensitivity': sensitivity_list[idx]}
+            jsondata[band] = banddata
+        with open(savefile, 'w+') as fp:
+            json.dump(jsondata, fp)
+    else:
+        return beamsize_list
+
+def run_check_valid_selections(classifiedfolder=None, objlist=None, bands=['B6','B7'], basedir=None, 
+        outdir='./', debug=False, only_fits=True, update=True, imagefile_suffix='combine',
+        computwt=True, listfile_suffix='good_imgs.txt.updated', overwrite=False, 
+        **kwargs):
+    """This function will go over all the selected observations
+    calculate the image sensitivity and visibility sensitivity
+    spot the problematic images with wrong flux scaling
+    """
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    for band in bands:
+        band_indir = os.path.join(classifiedfolder, band)
+        band_outdir = os.path.join(outdir, band)
+        if objlist is None:
+            objlist = []
+            for obj in os.listdir(band_indir):
+                if obj_match.match(obj):
+                    objlist.append(obj)
+        for obj in objlist:
+            unusable_vis = []
+            obj_indir = os.path.join(band_indir, obj)
+            obj_outdir = os.path.join(band_outdir, obj)
+            print(obj)
+            print(obj_outdir)
+            if not os.path.isdir(obj_outdir):
+                os.system('mkdir -p {}'.format(obj_outdir))
+            good_image_file = os.path.join(obj_indir, "{}_{}_{}".format(obj, band, listfile_suffix))
+            if debug:
+                print("good image file: {}".format(good_image_file))
+            
+            if os.path.isfile(good_image_file):
+                combined_vis = gen_filenames(listfile=good_image_file, basedir=os.path.join(basedir, obj))
+                for uid in combined_vis:
+                    try:
+                        v_cloned = vis_clone(v, outdir=obj_outdir, computwt=True, drop_FDM=True)
+                        is_usable = check_vis2image(v_cloned, tmpdir=obj_outdir)
+                    except:
+                        is_usable = False
+                    if not is_usable:
+                        unusable_vis.append(uid)
+            print(obj, unusable_vis)
+
+def run_check_valid_images(imagedir=None, objlist=None, bands=['B6','B7'], basedir=None, 
+        listfile_suffix='combine.ms.included.txt', 
+        resolution='0.3arcsec', suffix='combine.ms.auto.cont',
+        savefile=None, debug=False, overwrite=False, **kwargs):
+    """This function will go over all the selected observations
+    calculate the image sensitivity and visibility sensitivity
+    spot the problematic images with wrong flux scaling
+
+    Example:
+        run_check_valid_images(imagedir='make_all_good_images/', objlist=obj['obj'], 
+                               bands=['B3','B4','B5','B6','B7','B8','B9','B10'], 
+                               basedir='/home/jchen/work/ALMACAL/', 
+                               savefile='data/check_valid_image.txt')
+    """
+    if savefile:
+        measure_string = 'obj'
+        for band in bands:
+            measure_string = measure_string +' {0}_time {0}_sensitivity'.format(band)
+        measure_string += '\n'
+        with open(savefile, 'w+') as fp:
+            fp.write(measure_string)
+    obj_match = re.compile('^J\d*[+-]\d*$')
+    if resolution == '':
+        res_string = ''
+    else:
+        res_string = resolution+'.'
+
+    for obj in objlist:
+        obj_check = OrderedDict()
+        obj_basedir = os.path.join(basedir, obj)
+        for band in bands:
+            band_dir = os.path.join(imagedir, band)
+            unusable_vis = []
+            obj_dir = os.path.join(band_dir, obj)
+            included_vis = os.path.join(obj_dir, "{}_{}_{}".format(obj, band, listfile_suffix))
+            image_name = "{}_{}_{}.{}image.fits".format(obj, band, suffix, res_string)
+            image_fullpath = os.path.join(band_dir, obj, image_name)
+            if debug:
+                print("image file: {}".format(image_fullpath))
+                print("good vis file: {}".format(included_vis))
+            # the image sensitivity
+            # check the total integration time
+            if os.path.isfile(included_vis):
+                band_vis = gen_filenames(included_vis, basedir=obj_basedir)
+                band_onsourcetime = np.sum(read_onSourceTime(band_vis))
+            else:
+                band_onsourcetime = 0.0
+            if os.path.isfile(image_fullpath):
+                image_stat = calculate_image_sensitivity(image_fullpath, sigma_clip=True)
+            else:
+                image_stat = [0.0, 0.0, 0.0]
+            obj_check[band+'_time'] = band_onsourcetime
+            obj_check[band+'_sensitivity'] = image_stat[-1]*1e6
+        if debug:
+            print(obj_check)
+        if savefile:
+            measure_string = obj
+            for band in bands:
+                measure_string = measure_string +' {:.2f} {:.2f}'.format(obj_check[band+'_time'], 
+                                                            obj_check[band+'_sensitivity'])
+
+            measure_string += '\n'
+            with open(savefile, 'a+') as fp:
+                fp.write(measure_string)
+            
+
 
 def run_make_all_jeckknifimages():
     pass
@@ -2535,7 +2745,7 @@ def run_calculate_effarea(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs=
     if objs is None:
         objs = []
         for item in os.listdir(imagedir):
-            if obj_match.match(obj):
+            if obj_match.match(item):
                 objs.append(item)
     if almacal_catalogue is not None:
         almacal_cat = Table.read(almacal_catalogue, format='ascii')
@@ -2633,7 +2843,7 @@ def run_calculate_effarea2(imagedir=None, flux=np.linspace(0.01, 10, 500),  objs
     if savefile:
         effarea.write(savefile, format='ascii')
 
-def run_mock_observation(radius=np.arange(1.0, 22.,1.5), imagedir=None, fNN=None, objs=None, band=None,
+def run_mock_observation(radius=np.arange(1.0, 22.,2.0), imagedir=None, fNN=None, objs=None, band=None,
         suffix='combine.ms.auto.cont', resolution='0.3arcsec', objs_nocenter=None, 
         snr_threshold=5.0, savefile=None):
     """ make mock observations
@@ -2647,7 +2857,7 @@ def run_mock_observation(radius=np.arange(1.0, 22.,1.5), imagedir=None, fNN=None
     if objs is None:
         objs = []
         for item in os.listdir(imagedir):
-            if obj_match.match(obj):
+            if obj_match.match(item):
                 objs.append(item)
     radius_mean = 0.5*(radius[:-1] + radius[1:])
     Nr_array = np.zeros_like(radius_mean)
@@ -2657,6 +2867,7 @@ def run_mock_observation(radius=np.arange(1.0, 22.,1.5), imagedir=None, fNN=None
         image_fullpath = os.path.join(obj_dir, image)
         image_pbcorr = image.replace('image', 'pbcor.image')
         image_pbcorr_fullpath = os.path.join(obj_dir, image_pbcorr)
+        # print(image_fullpath, image_pbcorr_fullpath)
         if os.path.isfile(image_fullpath):
             Nr = mock_observation(radius=radius, image=image_fullpath, 
                     image_pbcorr=image_pbcorr_fullpath, fNN=fNN, snr_threshold=snr_threshold,)
@@ -3149,6 +3360,19 @@ def plot_number_counts(datafile=None, flist=None, NN=None, NN_err=None, ax=None,
 
         ax.legend()
 
+def run_make_cube(objs, basedir=None, outdir='./', bands=['B3','B4','B5','B6','B7','B8']):
+    for obj in objs:
+        for band in bands:
+            print("start with {}:{}".format(obj, band))
+            obs_list_band = search_obs(os.path.join(basedir, obj), band=band)
+            if len(obs_list_band)<1:
+                continue
+            basename = obj+'_'+band+'_combined'
+            make_combine_obs(obs_list_band, basedir=os.path.join(basedir,obj),
+                             basename=basename)
+            make_cube(basename+'.ms',  outdir=outdir, clean=True, niter=1000,
+                      intent='*ON_SOURCE')
+            os.system('rm -rf {0}.ms {0}.ms.flagversions'.format(basename))
 
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #   The pipeeline for number counts       #

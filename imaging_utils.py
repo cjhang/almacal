@@ -38,7 +38,7 @@ except:
 
 # from ms_utils import read_spw
 
-def calculate_sensitivity(vis, debug=True, band_width=None, elevation=45.0, pwv=[0.472, 5.186]):
+def calculate_sensitivity(vis, debug=True, band_width=None, elevation=55.0, pwv=[0.472, 5.186]):
     """calculate the sensitivity of ALMA data, wrapper of analysisUtils.sensitivity
 
     """
@@ -106,7 +106,7 @@ def check_vis2image(vis, imagefile=None, tmpdir='./_tmp', debug=False):
         rms = iminfo['rms'][0] # 
         print('visibility sensitivity:', sensitivity)
         print('image rms:', rms)
-        if (rms >= sensitivity[0]*0.1) and (rms <= 10.*sensitivity[1]):
+        if (rms >= sensitivity[0]*0.5) and (rms <= 10.*sensitivity[1]):
             return True
         else:
             return False
@@ -141,14 +141,14 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
                   weighting='natural', niter=1000, interactive=False, usemask='auto-multithresh', 
                   threshold=None, only_fits=False, save_psf=True, save_pb=True,
                   suffix='', uvtaper_scale=None, debug=False, threshold_scale=5.0, **kwargs):
-
     """This function is used to make the continuum image
     
     dirty_image: generate the dirty image
 
     clean_image: make the clean image with tclean
         You need to specify: weighting, niter, interactive
-        The imagename, imsize, cell and restfreq will be set automatically if no value is provided by kwargs
+        The imagename, imsize, cell and restfreq will be set automatically 
+        if no value is provided by kwargs
     """
     if isinstance(vis, list):
         if basename:
@@ -212,13 +212,15 @@ def make_cont_img(vis=None, basename=None, clean=False, myimagename=None, baseli
     # calculate frequecy
     myrestfreq = str(freq_mean)+'GHz'
     # calcuate threshold
-    if not threshold and niter > 0:
-        if has_analysisUtils:
-            threshold = "{}mJy".format(threshold_scale * 1000.0 * calculate_sensitivity(vis, pwv=pwv))
-        else:
-            print("Warning: no analysisUtils found, set threshold to 0.0!")
-            threshold = 0.0
-    else:
+    # if not threshold and niter > 0:
+        # if has_analysisUtils:
+            # threshold = "{}mJy".format(threshold_scale * 1000.0 * calculate_sensitivity(vis, pwv=pwv))
+        # else:
+            # print("Warning: no analysisUtils found, set threshold to 0.0!")
+            # threshold = 0.0
+    # else:
+        # threshold = 0.0
+    if not threshold:
         threshold = 0.0
 
     if basename is None:
@@ -392,11 +394,15 @@ def image_selfcal(vis=None, ncycle=3, ):
 def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80, 
         mycell=None, myimsize=None, mychanwidth=None, mynchan=None, outdir='./',
         cellsize_scale=1, datacolumn="corrected", specmode='cube', outframe="LSRK", 
-        weighting='natural', niter=0, interactive=False, usemask='auto-multithresh', 
+        weighting='natural', niter=100, interactive=False, usemask='auto-multithresh', 
         suffix='.cube', clean=True, pbcor=False, uvtaper=[], freq_range=None,
         save_psf=True, save_pb=True, imgsize_scale=1.0, only_fits=False,
-        fov_scale=2.0, threshold=None, auto_threshold=5.0, debug=False, **kwargs):
+        fov_scale=2.0, threshold=None, auto_threshold=5.0, debug=False, 
+        minchanwidth=32, **kwargs):
     """function to make cubes
+
+    Args:
+     minchanwidth: the minimal channel width to get the cube
     """
     if isinstance(vis, list):
         if basename:
@@ -460,6 +466,7 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
                        np.array(chanfreq_list) < freq_range[1]*1e9)
         chanwidth_list_select = np.array(chanwidth_list)[chan_select]
         chanwidth = np.ceil(np.max(chanwidth_list_select)/1e6)
+        chanwidth = np.max([chanwidth, minchanwidth])
         mychanwidth = "{}MHz".format(chanwidth)
         print('>>> chanwidth: {}MHz'.format(chanwidth))
     if mynchan is None:
