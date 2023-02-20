@@ -468,7 +468,9 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
         chanwidth = np.ceil(np.max(chanwidth_list_select)/1e6)
         chanwidth = np.max([chanwidth, minchanwidth])
         mychanwidth = "{}MHz".format(chanwidth)
-        print('>>> chanwidth: {}MHz'.format(chanwidth))
+    else:
+        chanwidth = u.Quantity(mychanwidth).to(u.MHz).value
+    print('>>> chanwidth: {}MHz'.format(chanwidth))
     if mynchan is None:
         mynchan = int(np.diff(freq_range) * 1000.0 / chanwidth)
         print('>>> mynchan:', mynchan)
@@ -552,8 +554,6 @@ def make_cube(vis=None, myimagename=None, basename=None, baseline_percent=80,
                     pbimage=myimagename+'.pb',
                     outfile=myimagename+'.pbcor.image')
 
-    if isinstance(vis, list):
-        os.system('rm -rf vis_combined.ms')
     if only_fits:
         for image in glob.glob(myimagename+'*.image'):
             exportfits(imagename=image, fitsimage=image+'.fits')

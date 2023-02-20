@@ -146,6 +146,7 @@ def search_obs(basedir, config='main', band='B6', debug=False, config_select=Tru
                 is_freq_covered = False
                 try:
                     spw_list = spw_stat(obs_fullpath)
+                    print(spw_list)
                     for freq in spw_list[band]['freq'][0]:
                         if freq[0] <= star_freq and freq[-1] >= end_freq:
                             is_freq_covered = True
@@ -154,7 +155,7 @@ def search_obs(basedir, config='main', band='B6', debug=False, config_select=Tru
                     print("{} faild in spw_stat!".format(obs_fullpath))
                 if not is_freq_covered:
                     continue
-            filelist.append(obs)
+            filelist.append(os.path.join(basedir, obs))
     return filelist
 
 def gen_image(vis=None, band=None, outdir='./', niter=0, suffix='.cont.auto',
@@ -1711,7 +1712,6 @@ def run_line_search(basedir=None, almacal_z=None, zrange=None, lines=None, debug
 
 def run_gen_all_obstime(basedir=None, objs=None, outdir=None, bad_obs=None, 
         bands=['B3','B4','B5','B6','B7','B8','B9','B10'], info_file=None, 
-        exclude_aca=True, 
         time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
         debug=False, **kwargs):
     """generate the on-source time and spw distribution for the whole almacal
@@ -1760,7 +1760,7 @@ def run_gen_all_obstime(basedir=None, objs=None, outdir=None, bad_obs=None,
         obj_outdir = os.path.join(outdir, obj)
         os.system('mkdir -p {}'.format(obj_outdir))
         vis_list = gen_filenames(dirname=obj_dir)
-        obj_stat = spw_stat(vis=vis_list, debug=debug, exclude_aca=exclude_aca,
+        obj_stat = spw_stat(vis=vis_list, debug=debug, 
                             bands=bands, savefile=obj_outdir+'/'+ obj+'.json', 
                             time_select=time_select, start_time=start_time, end_time=end_time, 
                             **kwargs)

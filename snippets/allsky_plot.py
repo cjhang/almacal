@@ -6,8 +6,7 @@ from astropy import units as u
 
 plt.style.use('dark_background')
 
-almacal_info_file = os.path.join(os.path.expanduser('~'), 
-        'Documents/projects/almacal/data/almacal_timeOnSource.txt')
+almacal_info_file = '/Users/jchen/projects/almacal/number_counts/code/data/all_obstime.txt'
 
 data = np.loadtxt(almacal_info_file, skiprows=1,
         dtype={'names': ('obj', 'B3','B4','B5','B6','B7','B8','B9','B10'), 

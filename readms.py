@@ -82,7 +82,7 @@ def read_refdir(vis, return_coord=False):
 def spw_stat(vis=None, jsonfile=None, plot=False, savefile=None, 
         bands=['B3','B4','B5', 'B6', 'B7', 'B8','B9','B10'], figname=None, showfig=False,  
         time_select=False, start_time='2010-01-01T00:00:00', end_time='2050-01-01T00:00:00', 
-        z=0, lines=None, lines_names=None, exclude_aca=True, debug=False):
+        z=0, lines=None, lines_names=None, select_ant_diameter=True, ant_diameter=12.0, debug=False):
     """make the statistics about one calibrator
 
     Args:
@@ -139,14 +139,14 @@ def spw_stat(vis=None, jsonfile=None, plot=False, savefile=None,
             if band not in bands:
                 continue
 
-            if exclude_aca:
+            if select_ant_diameter:
                 try:
                     tb.open(obs + '/ANTENNA')
                     antenna_diameter = np.mean(tb.getcol('DISH_DIAMETER'))
                     tb.close()
                 except:
                     continue
-                if antenna_diameter < 12.0:
+                if abs(antenna_diameter - ant_diameter) < 1e-4:
                     if debug:
                         print("Excuding data from {}".format(antenna_diameter))
                     continue
